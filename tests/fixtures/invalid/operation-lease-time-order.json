@@ -1,0 +1,20 @@
+{
+  "acquired_at_unix_ms": 4102444700100,
+  "attempt": {
+    "attempt_id": "attempt-demo-1",
+    "attempt_no": 1,
+    "operation": {
+      "type": "operation",
+      "value": "operation-demo"
+    },
+    "schema_version": "aar.operation-continuity.v1"
+  },
+  "dispatcher_generation": 1,
+  "expires_at_unix_ms": 4102444700199,
+  "heartbeat_at_unix_ms": 4102444700200,
+  "lease_epoch": 1,
+  "owner_digest": "sha256:c9b12afff617d62855255292636e2610ce6162f3d5534bbfa563897c6ee31055",
+  "released_at_unix_ms": null,
+  "runtime_generation": 1,
+  "schema_version": "aar.operation-continuity.v1"
+}

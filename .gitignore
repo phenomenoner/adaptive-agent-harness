@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Environments and builds
+.venv/
+venv/
+build/
+dist/
+.release-build/
+target/
+*.whl
+*.tar.gz
+
+# Local tooling
+.codegraph/
+.debug/
+.idea/
+.vscode/
+/README.local.md
+/roadmap.local.html
+
+# Runtime-local state and secrets
+.env
+.env.*
+!.env.example
+.aar/
+*.sqlite
+*.sqlite3

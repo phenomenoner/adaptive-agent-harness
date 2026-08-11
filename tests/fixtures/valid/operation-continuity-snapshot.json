@@ -1,0 +1,44 @@
+{
+  "certainty": "certain",
+  "control": {
+    "cancellation_requested": false,
+    "control_revision": 0,
+    "operation": {
+      "type": "operation",
+      "value": "operation-demo"
+    },
+    "reason_code": null,
+    "requested_at_unix_ms": null,
+    "requested_by_digest": null,
+    "schema_version": "aar.operation-continuity.v1"
+  },
+  "current_attempt": {
+    "attempt_id": "attempt-demo-1",
+    "attempt_no": 1,
+    "operation": {
+      "type": "operation",
+      "value": "operation-demo"
+    },
+    "schema_version": "aar.operation-continuity.v1"
+  },
+  "dispatcher_state": "running",
+  "last_attempt": {
+    "attempt_id": "attempt-demo-1",
+    "attempt_no": 1,
+    "operation": {
+      "type": "operation",
+      "value": "operation-demo"
+    },
+    "schema_version": "aar.operation-continuity.v1"
+  },
+  "last_event_sequence": 1,
+  "operation": {
+    "type": "operation",
+    "value": "operation-demo"
+  },
+  "operation_state": "running",
+  "reconciliation_required": false,
+  "record_revision": 1,
+  "recovery_reason": null,
+  "schema_version": "aar.operation-continuity.v1"
+}

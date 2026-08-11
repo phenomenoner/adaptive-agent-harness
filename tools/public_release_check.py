@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Fail closed on public-release hygiene and documentation portability."""
+
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import unicodedata
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+EXPECTED_TRANSLATIONS = {
+    "README.ar.md",
+    "README.cs.md",
+    "README.de.md",
+    "README.es.md",
+    "README.fi.md",
+    "README.fr.md",
+    "README.it.md",
+    "README.ja.md",
+    "README.ko.md",
+    "README.lt.md",
+    "README.no.md",
+    "README.pt-BR.md",
+    "README.ru.md",
+    "README.th.md",
+    "README.vi.md",
+    "README.zh-CN.md",
+    "README.zh-TW.md",
+}
+
+BYTE_PATTERNS = {
+    "private-key": re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"),
+    "github-token": re.compile(rb"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
+    "openai-style-key": re.compile(rb"\bsk-[A-Za-z0-9_-]{20,}\b"),
+    "slack-token": re.compile(rb"\bxox[baprs]-[A-Za-z0-9-]{12,}\b"),
+    "aws-access-key": re.compile(rb"\bAKIA[0-9A-Z]{16}\b"),
+    "authorization-header": re.compile(
+        rb"authorization\s*:\s*(?:bearer|token)\s+\S+", re.IGNORECASE
+    ),
+    "machine-local-path": re.compile(
+        rb"/home/" + rb"phenomenoner"
+        + rb"|[A-Z]:\\Users\\" + rb"user"
+        + rb"|D:\\" + rb"Warehouse"
+        + rb"|/mnt/[cd]/" + rb"Warehouse",
+        re.IGNORECASE,
+    ),
+    "private-message-id": re.compile(rb"\b1536612665" + rb"181339668\b"),
+}
+
+PROHIBITED_PATH = re.compile(
+    r"(^|/)(?:\.env(?:$|\.)|\.data(?:/|$)|\.private(?:/|$)|secrets?(?:/|$)|"
+    r"credentials?(?:/|$)|rollback(?:/|$)|runtime-workspace(?:/|$)|"
+    r"[^/]*\.(?:sqlite3?|pem|key))$",
+    re.IGNORECASE,
+)
+MARKDOWN_LINK = re.compile(r"\]\(([^)]+)\)")
+
+
+def tracked_files() -> list[Path]:
+    result = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    )
+    return [ROOT / item.decode() for item in result.stdout.split(b"\0") if item]
+
+
+def github_slug(heading: str) -> str:
+    heading = re.sub(r"<[^>]+>", "", heading)
+    heading = re.sub(r"!\[([^]]*)\]\([^)]+\)", r"\1", heading)
+    heading = re.sub(r"\[([^]]+)\]\([^)]+\)", r"\1", heading)
+    heading = (
+        heading.replace("`", "")
+        .replace("*", "")
+        .replace("_", "")
+        .replace("~", "")
+        .strip()
+        .lower()
+    )
+    output: list[str] = []
+    for character in heading:
+        category = unicodedata.category(character)
+        if character.isspace():
+            output.append("-")
+        elif character == "-" or category[0] in {"L", "N", "M"}:
+            output.append(character)
+    return "".join(output)
+
+
+def main() -> int:
+    files = tracked_files()
+    failures: list[dict[str, str]] = []
+
+    if len(files) < 150:
+        failures.append({"kind": "tracked-file-floor", "detail": str(len(files))})
+
+    for required in ("LICENSE", "README.md", "SECURITY.md", "CONTRIBUTING.md"):
+        if not (ROOT / required).is_file():
+            failures.append({"kind": "missing-required-file", "detail": required})
+
+    translation_dir = ROOT / "docs" / "i18n"
+    actual_translations = {path.name for path in translation_dir.glob("README.*.md")}
+    if actual_translations != EXPECTED_TRANSLATIONS:
+        failures.append(
+            {
+                "kind": "translation-set",
+                "detail": json.dumps(
+                    {
+                        "missing": sorted(EXPECTED_TRANSLATIONS - actual_translations),
+                        "extra": sorted(actual_translations - EXPECTED_TRANSLATIONS),
+                    }
+                ),
+            }
+        )
+
+    for path in files:
+        relative = path.relative_to(ROOT).as_posix()
+        if PROHIBITED_PATH.search(relative):
+            failures.append({"kind": "prohibited-path", "detail": relative})
+            continue
+        data = path.read_bytes()
+        if b"\0" in data[:8192]:
+            failures.append({"kind": "binary-file", "detail": relative})
+            continue
+        for name, pattern in BYTE_PATTERNS.items():
+            if pattern.search(data):
+                failures.append({"kind": name, "detail": relative})
+        if path.suffix.lower() != ".md":
+            continue
+        text = data.decode("utf-8")
+        slugs: set[str] = set()
+        slug_counts: dict[str, int] = {}
+        for line in text.splitlines():
+            heading = re.match(r"^#{1,6}\s+(.+?)\s*#*$", line)
+            if not heading:
+                continue
+            base = github_slug(heading.group(1))
+            occurrence = slug_counts.get(base, 0)
+            slug_counts[base] = occurrence + 1
+            slugs.add(base if occurrence == 0 else f"{base}-{occurrence}")
+        for target in MARKDOWN_LINK.findall(text):
+            target = target.strip()
+            if target.startswith("#"):
+                if target[1:] not in slugs:
+                    failures.append(
+                        {
+                            "kind": "broken-heading-anchor",
+                            "detail": f"{relative} -> {target}",
+                        }
+                    )
+                continue
+            target = target.split("#", 1)[0]
+            if not target or target.startswith(("http://", "https://", "mailto:")):
+                continue
+            if not (path.parent / target).resolve().exists():
+                failures.append(
+                    {"kind": "broken-relative-link", "detail": f"{relative} -> {target}"}
+                )
+
+    report = {
+        "tracked_files": len(files),
+        "translations": len(actual_translations),
+        "failures": failures,
+    }
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

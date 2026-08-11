@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Public release hygiene
+        run: python3 tools/public_release_check.py
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: Sync locked environment
+        run: uv sync --locked --python ${{ matrix.python-version }}
+      - name: Verify contracts
+        run: uv run --python ${{ matrix.python-version }} aar-contract verify
+      - name: Lint
+        run: uv run --python ${{ matrix.python-version }} ruff check .
+      - name: Test
+        run: uv run --python ${{ matrix.python-version }} pytest -q

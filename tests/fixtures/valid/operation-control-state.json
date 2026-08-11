@@ -1,0 +1,12 @@
+{
+  "cancellation_requested": false,
+  "control_revision": 0,
+  "operation": {
+    "type": "operation",
+    "value": "operation-demo"
+  },
+  "reason_code": null,
+  "requested_at_unix_ms": null,
+  "requested_by_digest": null,
+  "schema_version": "aar.operation-continuity.v1"
+}

@@ -1,0 +1,33 @@
+{
+  "created_at_unix_ms": 4102444700250,
+  "environment_digest": "sha256:48c6b65f10adece111b7408ffaf25a1d0c9b45ef862c087e24b87f5657a32408",
+  "operation": {
+    "type": "operation",
+    "value": "operation-demo"
+  },
+  "operation_kind": "rlm.execute",
+  "policy": {
+    "allow_partial_checkpoint": false,
+    "allowed_decisions": [
+      "needs_user",
+      "quarantine",
+      "reconcile_effect",
+      "start_successor",
+      "terminal_from_receipt"
+    ],
+    "broker_uncertainty_policy": "receipt-or-park",
+    "cancellation_policy": "block-successor",
+    "checkpoint_required": false,
+    "deadline_policy": "preserve-original",
+    "effect_reconcile_required": true,
+    "environment_compatibility": "capability-exact",
+    "max_successor_attempts": 3,
+    "operation_kind": "rlm.execute",
+    "policy_id": "rlm.step-boundary.v1",
+    "policy_version": 1,
+    "safe_replay_no_effect": false,
+    "schema_version": "aar.operation-continuity.v1"
+  },
+  "policy_digest": "sha256:c0dbde3db631b31654823ae084e0ddd74fc91c819c24e2d3622676269c939d2e",
+  "schema_version": "aar.operation-continuity.v1"
+}

@@ -1,0 +1,33 @@
+{
+  "attempt": {
+    "attempt_id": "attempt-demo-1",
+    "attempt_no": 1,
+    "operation": {
+      "type": "operation",
+      "value": "operation-demo"
+    },
+    "schema_version": "aar.operation-continuity.v1"
+  },
+  "checkpoint": {
+    "artifact": {
+      "type": "artifact",
+      "value": "artifact-demo"
+    },
+    "created_by": {
+      "type": "operation",
+      "value": "operation-demo"
+    },
+    "digest": "sha256:ecf59a2696ca44a417e20e2a7eabb1b26e82c779f8546bea354a2cc80e8e1eed",
+    "media_type": "application/json",
+    "redacted": false,
+    "schema_version": "aar.artifact.v1",
+    "size_bytes": 13
+  },
+  "created_at_unix_ms": 4102444700300,
+  "environment_digest": "sha256:254dcaf518bd37a958a527fc904dd7452e0dee2dc16684e69d46dd50abc40254",
+  "operation": {
+    "type": "operation",
+    "value": "operation-demo"
+  },
+  "schema_version": "aar.operation-continuity.v1"
+}

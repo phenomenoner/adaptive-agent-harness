@@ -1,0 +1,6 @@
+{
+  "max_steps": 1,
+  "query": "Summarize the retained evidence.",
+  "schema_version": "aar.rlm.v1",
+  "strategy": "evidence_synthesis"
+}

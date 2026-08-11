@@ -1,0 +1,18 @@
+{
+  "category": "stale",
+  "certainty": "certain",
+  "code": "STALE_WORKSPACE_GENERATION",
+  "details": [
+    {
+      "name": "observed_generation",
+      "value": 2
+    }
+  ],
+  "message": "workspace generation does not match",
+  "operation": {
+    "type": "operation",
+    "value": "operation-demo"
+  },
+  "retryable": false,
+  "schema_version": "aar.envelope.v1"
+}

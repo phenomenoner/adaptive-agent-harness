@@ -1,0 +1,34 @@
+{
+  "boundary_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "broker_trace_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "capability_digest": "sha256:9ec524929c9d4a8eb6f5bbc8e22688f8ec0c21434409af1aea4f98094efee72d",
+  "committed_step_count": 0,
+  "created_at_unix_ms": 4102444700275,
+  "deadline_unix_ms": 4102444790000,
+  "dispatcher_generation": 1,
+  "environment_digest": "sha256:48c6b65f10adece111b7408ffaf25a1d0c9b45ef862c087e24b87f5657a32408",
+  "input_digest": "sha256:85111b362e2e538b12b2214dc4476d959fa1370c9ab034a27b09cd63a225c551",
+  "last_step_digest": null,
+  "last_step_index": null,
+  "lease_epoch": 1,
+  "operation": {
+    "type": "operation",
+    "value": "operation-demo"
+  },
+  "policy_digest": "sha256:c0dbde3db631b31654823ae084e0ddd74fc91c819c24e2d3622676269c939d2e",
+  "prior_attempt": {
+    "attempt_id": "attempt-demo-1",
+    "attempt_no": 1,
+    "operation": {
+      "type": "operation",
+      "value": "operation-demo"
+    },
+    "schema_version": "aar.operation-continuity.v1"
+  },
+  "runtime_generation": 1,
+  "schema_version": "aar.operation-continuity.v1",
+  "steps_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "strategy": "evidence_synthesis",
+  "strategy_digest": "sha256:e7a3c673171aa998272150a437fafbb5839c1113b587621904ca46128cb8fdf7",
+  "usage_digest": "sha256:ba8222c0b44f798e850e904557a6b497e83c62e740c006b5089b9c9df20696c7"
+}

@@ -1,0 +1,6 @@
+mcp_servers:
+  aar:
+    command: aar-mcp
+    args: []
+    connect_timeout: 30
+    timeout: 60

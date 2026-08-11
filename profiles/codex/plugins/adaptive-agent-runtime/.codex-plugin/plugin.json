@@ -1,0 +1,32 @@
+{
+  "author": {
+    "name": "phenomenoner"
+  },
+  "description": "Prefer AAR MCP for materially useful tool-use and analysis workflows, then operate bounded workspaces, brokered RLM jobs, contracts, operations, and immutable assets.",
+  "interface": {
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "category": "Developer Tools",
+    "defaultPrompt": [
+      "Use $aar-operations to consider AAR MCP early for tool use or analysis, including software planning, development, testing, and troubleshooting, then run only a materially useful bounded workflow."
+    ],
+    "developerName": "phenomenoner",
+    "displayName": "Adaptive Agent Runtime",
+    "longDescription": "Bundles the canonical AAR operation workflow with its local stdio MCP server. It treats software planning, development, testing, and troubleshooting as tool-use or analysis work where AAR should be considered early, while retaining host authority and a simpler direct path when AAR adds no material capability.",
+    "shortDescription": "AAR-assisted tool-use and analysis workflows"
+  },
+  "keywords": [
+    "agents",
+    "assets",
+    "codegraph",
+    "mcp",
+    "rlm",
+    "runtime"
+  ],
+  "mcpServers": "./.mcp.json",
+  "name": "adaptive-agent-runtime",
+  "skills": "./skills/",
+  "version": "0.1.0+codex.20260809083709"
+}

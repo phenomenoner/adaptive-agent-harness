@@ -1,0 +1,68 @@
+{
+  "bundle_digest": "sha256:c85cff89ef53bf8cc42c55d0018c338a3b5f9ff2e33cfffd8b934a96db8a5e96",
+  "documents": [
+    {
+      "body": {
+        "asset_kind": "agent_fingerprint",
+        "capability_digest": "sha256:9ec524929c9d4a8eb6f5bbc8e22688f8ec0c21434409af1aea4f98094efee72d",
+        "policy_digest": "sha256:bbbb7bc24b9d882b6a78d6a74a1a033721bff7f2141f9b9efad430be1b583df2",
+        "runtime_digest": "sha256:cbb20ffa383ebfcc8ab0b82ca1c3439eecc997e9037906fff6009fcaf3a909d0",
+        "schema_version": "aar.agent-fingerprint.v1",
+        "tool_surface_digest": null
+      },
+      "manifest": {
+        "asset": {
+          "digest": "sha256:5031839e5a167171afe75ccb495fa3dead8b23abb3b4b5f594c59f5457bd6f8d",
+          "kind": "agent_fingerprint",
+          "schema_version": "aar.adaptive-asset.v1"
+        },
+        "body_digest": "sha256:698eccfebd2507870885a6864d5d10595d73e63098318667d88cef49be05c769",
+        "body_schema_version": "aar.agent-fingerprint.v1",
+        "dependencies": [],
+        "manifest_digest": "sha256:5031839e5a167171afe75ccb495fa3dead8b23abb3b4b5f594c59f5457bd6f8d",
+        "previous": null,
+        "schema_version": "aar.adaptive-asset.v1"
+      }
+    },
+    {
+      "body": {
+        "agent": {
+          "digest": "sha256:5031839e5a167171afe75ccb495fa3dead8b23abb3b4b5f594c59f5457bd6f8d",
+          "kind": "agent_fingerprint",
+          "schema_version": "aar.adaptive-asset.v1"
+        },
+        "asset_kind": "episode",
+        "operation": {
+          "type": "operation",
+          "value": "operation-demo"
+        },
+        "request_digest": "sha256:85111b362e2e538b12b2214dc4476d959fa1370c9ab034a27b09cd63a225c551",
+        "result_digest": null,
+        "schema_version": "aar.episode.v1",
+        "selected_assets": [],
+        "used_assets": []
+      },
+      "manifest": {
+        "asset": {
+          "digest": "sha256:ef9767c0910135e4152d53b5a4b268693ef3ab88ae5a44d47188c3d27568d07b",
+          "kind": "episode",
+          "schema_version": "aar.adaptive-asset.v1"
+        },
+        "body_digest": "sha256:2c8d7f3eab10794aca18a2449ab71fc1328c450e6e7cf96916767474a85e4179",
+        "body_schema_version": "aar.episode.v1",
+        "dependencies": [
+          {
+            "digest": "sha256:5031839e5a167171afe75ccb495fa3dead8b23abb3b4b5f594c59f5457bd6f8d",
+            "kind": "agent_fingerprint",
+            "schema_version": "aar.adaptive-asset.v1"
+          }
+        ],
+        "manifest_digest": "sha256:ef9767c0910135e4152d53b5a4b268693ef3ab88ae5a44d47188c3d27568d07b",
+        "previous": null,
+        "schema_version": "aar.adaptive-asset.v1"
+      }
+    }
+  ],
+  "events": [],
+  "schema_version": "aar.asset-bundle.v1"
+}

@@ -1,0 +1,253 @@
+{
+  "fixture_set_digest": "sha256:9823b46de44475ad864df1bc234d44372ffe64747228b19526098fbd52f4f1ce",
+  "fixtures": [
+    {
+      "document_digest": "sha256:c552dc91ca381fa91c9e826f4f02485cc9c85668c566a5dd62770a0515b3cb8d",
+      "model": "adaptive_asset_bundle",
+      "path": "invalid/asset-body-digest-mismatch.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:924a92439b73129a11194fa66c92ca5f9d63ae899b83688472a17c950e0da0c9",
+      "model": "adaptive_asset_bundle",
+      "path": "invalid/asset-bundle-digest-mismatch.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:b10caa1867c6d4141015413c204859b5c534030d91aed93d9bdf04f77e8c3c8a",
+      "model": "capability_set",
+      "path": "invalid/capability-digest-mismatch.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:abc10057b441c7fdbfa5c6b8ff30baa50f82c394dc22c85ef74c8f3599e5eb7a",
+      "model": "operation_event_page",
+      "path": "invalid/operation-event-page-cursor.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:15d8d5c7c6476c6abb9ba3b03ce59f787045289b5775408fd71ad9dbf2635216",
+      "model": "operation_event_envelope",
+      "path": "invalid/operation-event-payload-digest-mismatch.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:fe956810a9a3ef7260add3e9d270502cdaa4ab68f96bc1e8f2085635982d5125",
+      "model": "operation_lease_record",
+      "path": "invalid/operation-lease-time-order.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:e719445cea3e2712c010ec0ec2ca37556a1e30c51fbd2271e811dcd570077514",
+      "model": "operation_recovery_policy_binding",
+      "path": "invalid/operation-recovery-policy-binding-digest-mismatch.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:25a5e5925fafb7ec911064e2e72caff6b7e95dc4a6f94bf41e00f5c860e3bf90",
+      "model": "operation_rlm_step_boundary",
+      "path": "invalid/operation-rlm-step-boundary-digest-mismatch.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:5e4303efc1d6977da7ad0682337ad727dc739cf25342603fdc83649f15ed347b",
+      "model": "request_envelope",
+      "path": "invalid/request-budget-negative.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:e1ff18d01fea1735229dc61fe2f4ec3bf4c67c2b593449f14bfa09aa0148a4a6",
+      "model": "request_envelope",
+      "path": "invalid/request-digest.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:90c035428810b53adc205bd0f871b6bcc37f39c26b653c70f48ad2b9b206ed2f",
+      "model": "request_envelope",
+      "path": "invalid/request-extra-field.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:e5c7e604423abb04f7176aa360815fd91ea23caad7770c5227461a5982d5b04b",
+      "model": "request_envelope",
+      "path": "invalid/request-generation-zero.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:8e7c8ebae1c0e67496a432a558c22b2d7d8c3416bc9645062ed8075fd3b59a31",
+      "model": "request_envelope",
+      "path": "invalid/request-grant-principal.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:5ae656a394b65ef6489add1290028d43bb0ddeaf0dba0cb1036519c69d806913",
+      "model": "request_envelope",
+      "path": "invalid/request-identity-path.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:ab6e7c482a18ccf194c7ab35b94e4673dfae84d26c84415220f92d850ec7b827",
+      "model": "request_envelope",
+      "path": "invalid/request-revision-negative.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:b3f2933fd4f0ecf601a47569febc1e086d700661ef67a003474c0ffa3bc53a57",
+      "model": "request_envelope",
+      "path": "invalid/request-version.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:5025335c5c3afe6e0b529e16d76b6d223ca72cca6bdd90218b419779260a5f07",
+      "model": "rlm_job_spec",
+      "path": "invalid/rlm-strategy-step-bound.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:e850c70db917fd31f465e9c88e1b2e16018922d191de25017db9ace4b49626a2",
+      "model": "rlm_job_spec",
+      "path": "invalid/rlm-unknown-strategy.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:fe675ac5a1cc06031d8985ea3036124444d00a676a67cd6fff0329c55dda71b1",
+      "model": "adaptive_asset_bundle",
+      "path": "valid/adaptive-asset-bundle.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:671c937ede054e3a1cca0412d97fc0debf3db20dbffa4eb080704194d2e765d3",
+      "model": "artifact_reference",
+      "path": "valid/artifact-reference.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:cfbb282dbb39af1e49ae66d536f5627dfcf5a2a9b25d4d8372357f5f8782b44e",
+      "model": "broker_catalog",
+      "path": "valid/broker-catalog.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:b72d300058062dc719fd7b440867ffbaffe1591ae16bd6158653850c4f291ac8",
+      "model": "capability_set",
+      "path": "valid/capability-set.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:a587b7deaf0a2b8851be95fceab1db65a78b36e2f814caa2cbdcb3c25243f8da",
+      "model": "failure_envelope",
+      "path": "valid/failure-envelope.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:f0c77faeb106df4abd72c9f4f8f59731cacd7bffd22a4f8d7e479b6af99ab51a",
+      "model": "operation_attempt_record",
+      "path": "valid/operation-attempt-record.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:13a0b491dbe9ecb0a2a57d70fcfbd7166443fe5306223ef7875ba721b8dfa180",
+      "model": "operation_checkpoint_binding",
+      "path": "valid/operation-checkpoint-binding.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:78de92b1a206c487889578ea8e82368e41675a35875a1a6323ffa52a34ebd209",
+      "model": "operation_continuity_snapshot",
+      "path": "valid/operation-continuity-snapshot.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:fb29076c6c100766ac2e034139c563e647846d81d8511a4b32ee93806e4b12d2",
+      "model": "operation_control_state",
+      "path": "valid/operation-control-state.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:d0f32dc22cf45c1564d6495c809a4603da5d3eaa0f8efd4d4359b211d49c974d",
+      "model": "operation_event_envelope",
+      "path": "valid/operation-event-envelope.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:d236b0ad3ce2aeec8ff202ab13b8faac4786c7b7ad412c80fed3cfb02fae9b72",
+      "model": "operation_event_page",
+      "path": "valid/operation-event-page.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:e2288db29ca4acf0a8363fc0ddd92c7bb626c5bf659d966ebf3cbb86878d0e40",
+      "model": "operation_lease_record",
+      "path": "valid/operation-lease-record.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:96c32132ddd88ab2fa5a9ee9d0e971c096e9f7149c3785d4c2c351b054189602",
+      "model": "operation_recovery_decision",
+      "path": "valid/operation-recovery-decision.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:0aae0097473d2b3b04a85e313b33768b7404050ee5c9a8d8afdaf1c12ed08440",
+      "model": "operation_recovery_policy_binding",
+      "path": "valid/operation-recovery-policy-binding.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:c0dbde3db631b31654823ae084e0ddd74fc91c819c24e2d3622676269c939d2e",
+      "model": "operation_recovery_policy",
+      "path": "valid/operation-recovery-policy.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:3007615c5aa1f4e6bb6657d583d04cb5ea4faf747795a0547b68a16b1bc9dbcd",
+      "model": "operation_rlm_step_boundary",
+      "path": "valid/operation-rlm-step-boundary.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:f3efb42df9054a20e1ca0b427f73750b7ee29e4f27024583540dd08008022f9c",
+      "model": "reconciliation_report",
+      "path": "valid/reconciliation-report.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:2bc6d25cc07422fc9d5db0bb1ea414704d51a0d205b18a0c66751067b2ab802f",
+      "model": "request_envelope",
+      "path": "valid/request-envelope.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:e7a3c673171aa998272150a437fafbb5839c1113b587621904ca46128cb8fdf7",
+      "model": "rlm_job_spec",
+      "path": "valid/rlm-job-spec.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:d515c30c28c8b3705ef1653a9e41f50caec2d8f044fbedd84903b8b13d37aa09",
+      "model": "security_boundary",
+      "path": "valid/security-boundary.json",
+      "valid": true
+    }
+  ],
+  "integrations": [
+    {
+      "document_digest": "sha256:25e0e727a75e73634595651454cad21fb8d38a647256bf31ac8a06ddaed0c0fb",
+      "path": "integration/ahc/rlm-contract-v1.json"
+    },
+    {
+      "document_digest": "sha256:2ea5182280987ab0f5f414aa7b42cf309e0cc52abf011c8ab30b7597fefa7581",
+      "path": "integration/ahc/continuity-contract-v1.json"
+    }
+  ],
+  "schema_versions": {
+    "adaptive_asset": "aar.adaptive-asset.v1",
+    "artifact": "aar.artifact.v1",
+    "broker": "aar.broker.v1",
+    "envelope": "aar.envelope.v1",
+    "operation_continuity": "aar.operation-continuity.v1",
+    "rlm": "aar.rlm.v1",
+    "runtime": "aar.runtime.v1",
+    "workspace": "aar.workspace.v1"
+  }
+}

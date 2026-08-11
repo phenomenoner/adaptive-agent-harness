@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling>=1.26,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "adaptive-agent-runtime"
+version = "0.3.0a0"
+description = "Host-neutral programmable execution and adaptation runtime for agent harnesses"
+readme = "README.md"
+requires-python = ">=3.11,<3.15"
+authors = [
+  { name = "phenomenoner", email = "80816280+phenomenoner@users.noreply.github.com" },
+]
+dependencies = [
+  "ipython>=9.16,<10",
+  "mcp==2.0.0",
+  "numpy>=2,<3",
+  "pandas>=2.2,<4",
+  "pydantic>=2.12,<3",
+]
+
+[project.scripts]
+aar-contract = "aar.contract:main"
+aar-mcp = "aar.mcp.server:main"
+aar-supervisor = "aar.runtime.supervisor:main"
+aar-mcp-assets = "aar.mcp.assets:main"
+aar-host-assets = "aar.compat.assets:main"
+aar-compat-smoke = "aar.compat.smoke:main"
+aar-codex-setup = "aar.compat.codex_setup:main"
+aar-rlm-benchmark = "aar.benchmark:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=9,<10",
+  "ruff>=0.14,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aar"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"skills/aar-operations" = "aar/bundled/aar-operations"
+"profiles" = "aar/bundled/profiles"
+"schemas" = "aar/bundled/schemas"
+"tests/fixtures" = "aar/bundled/fixtures"
+"benchmarks" = "aar/bundled/benchmarks"
+"docs/CODEX-INSTALL.md" = "aar/bundled/docs/CODEX-INSTALL.md"
+"integration" = "aar/bundled/integration"
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]

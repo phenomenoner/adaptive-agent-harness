@@ -1,0 +1,152 @@
+{
+  "authority": {
+    "effect_execution_available": false,
+    "final_delivery_available": false,
+    "outer_operation_is_authoritative": true,
+    "provider_credentials_available": false,
+    "retained_child_requires_explicit_result": true
+  },
+  "broker_methods": [
+    {
+      "method": "evidence.query",
+      "required_capability": "evidence.query"
+    },
+    {
+      "method": "model.request",
+      "required_capability": "model.request"
+    }
+  ],
+  "capabilities": {
+    "capabilities": [
+      {
+        "access": "read",
+        "limits": [],
+        "name": "evidence.query"
+      },
+      {
+        "access": "write",
+        "limits": [],
+        "name": "model.request"
+      },
+      {
+        "access": "write",
+        "limits": [],
+        "name": "operation.cancel"
+      },
+      {
+        "access": "write",
+        "limits": [],
+        "name": "rlm.execute"
+      },
+      {
+        "access": "write",
+        "limits": [],
+        "name": "rlm.reconcile"
+      },
+      {
+        "access": "read",
+        "limits": [],
+        "name": "rlm.status"
+      }
+    ],
+    "digest": "sha256:1a35461888c824948836997a7aed453ba9dbf54fb86d36d91775d765bfed059a",
+    "schema_version": "aar.runtime.v1"
+  },
+  "contract_version": "aar.ahc-integration.v1",
+  "native_adapter_may_strengthen": [
+    "cancellation_propagation",
+    "restart_reconciliation",
+    "session_binding"
+  ],
+  "native_adapter_must_preserve": [
+    "artifact_identity",
+    "broker_grants",
+    "budget_accounting",
+    "operation_certainty",
+    "terminal_receipt"
+  ],
+  "request_envelope": {
+    "artifact_schema_version": "aar.artifact.v1",
+    "broker_schema_version": "aar.broker.v1",
+    "budget": {
+      "artifact_bytes": 0,
+      "child_operations": 0,
+      "input_tokens": 8192,
+      "model_requests": 1,
+      "output_tokens": 1024,
+      "schema_version": "aar.runtime.v1",
+      "wall_time_ms": 30000
+    },
+    "capability_digest": "sha256:1a35461888c824948836997a7aed453ba9dbf54fb86d36d91775d765bfed059a",
+    "deadline_unix_ms": 4102444790000,
+    "expected_workspace_revision": null,
+    "grants": [
+      {
+        "capability": "evidence.query",
+        "constraints": [],
+        "expires_at_unix_ms": 4102444790000,
+        "grant_id": "grant-evidence-query",
+        "issued_to": {
+          "type": "principal",
+          "value": "principal-ahc-fixture"
+        },
+        "schema_version": "aar.broker.v1"
+      },
+      {
+        "capability": "model.request",
+        "constraints": [],
+        "expires_at_unix_ms": 4102444790000,
+        "grant_id": "grant-model-request",
+        "issued_to": {
+          "type": "principal",
+          "value": "principal-ahc-fixture"
+        },
+        "schema_version": "aar.broker.v1"
+      },
+      {
+        "capability": "rlm.execute",
+        "constraints": [],
+        "expires_at_unix_ms": 4102444790000,
+        "grant_id": "grant-rlm-execute",
+        "issued_to": {
+          "type": "principal",
+          "value": "principal-ahc-fixture"
+        },
+        "schema_version": "aar.broker.v1"
+      }
+    ],
+    "host": {
+      "type": "host",
+      "value": "ahc-host"
+    },
+    "idempotency_key": "idempotency-ahc-rlm-fixture",
+    "input_digest": "sha256:7d69078cef6116ee174468786f80d3d53e7d2628a86caa021fdb1d359efbffc7",
+    "lane": {
+      "type": "lane",
+      "value": "rlm"
+    },
+    "parent_operation": null,
+    "principal": {
+      "type": "principal",
+      "value": "principal-ahc-fixture"
+    },
+    "request_id": "request-ahc-rlm-fixture",
+    "runtime_generation": 1,
+    "runtime_schema_version": "aar.runtime.v1",
+    "schema_version": "aar.envelope.v1",
+    "session": {
+      "type": "session",
+      "value": "session-ahc-fixture"
+    },
+    "trace_id": "trace-ahc-rlm-fixture",
+    "workspace": null,
+    "workspace_generation": null,
+    "workspace_schema_version": "aar.workspace.v1"
+  },
+  "rlm_job": {
+    "max_steps": 2,
+    "query": "Summarize the evidence retained by the host.",
+    "schema_version": "aar.rlm.v1",
+    "strategy": "evidence_synthesis"
+  }
+}

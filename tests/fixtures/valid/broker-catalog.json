@@ -1,0 +1,19 @@
+{
+  "methods": [
+    {
+      "access": "read",
+      "capability": "evidence.query",
+      "description": "Query host-owned evidence without provider credentials.",
+      "name": "evidence.query",
+      "schema_version": "aar.broker.v1"
+    },
+    {
+      "access": "write",
+      "capability": "model.request",
+      "description": "Request a model result through the host broker.",
+      "name": "model.request",
+      "schema_version": "aar.broker.v1"
+    }
+  ],
+  "schema_version": "aar.broker.v1"
+}

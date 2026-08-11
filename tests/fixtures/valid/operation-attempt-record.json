@@ -1,0 +1,20 @@
+{
+  "certainty": "certain",
+  "created_at_unix_ms": 4102444700000,
+  "dispatcher_generation": 1,
+  "ended_at_unix_ms": null,
+  "recovery_reason": null,
+  "ref": {
+    "attempt_id": "attempt-demo-1",
+    "attempt_no": 1,
+    "operation": {
+      "type": "operation",
+      "value": "operation-demo"
+    },
+    "schema_version": "aar.operation-continuity.v1"
+  },
+  "runtime_generation": 1,
+  "schema_version": "aar.operation-continuity.v1",
+  "started_at_unix_ms": 4102444700100,
+  "state": "running"
+}

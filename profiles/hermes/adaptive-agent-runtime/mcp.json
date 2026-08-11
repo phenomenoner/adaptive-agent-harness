@@ -1,0 +1,8 @@
+{
+  "aar": {
+    "args": [],
+    "command": "aar-mcp",
+    "connect_timeout": 30,
+    "timeout": 60
+  }
+}

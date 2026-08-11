@@ -1,0 +1,16 @@
+{
+  "fixture_set_digest": "sha256:d9fe836b884fcae09fed9377042664f3dc9df3f5bde6f8dc78f424df389c1820",
+  "protocol_versions": [
+    "2026-07-28",
+    "2025-11-25",
+    "2025-06-18",
+    "2025-03-26",
+    "2024-11-05"
+  ],
+  "schema_bundle_digest": "sha256:8f8e456e3af25d66063469e3b4722ccf7768b0b1b2d0c37ca897002c5385ef22",
+  "skill_digest": "sha256:b48d014ca89809a1d710a5208036e6df6b3f348a9f86c42586989aaff60fb9c9",
+  "skill_name": "aar-operations",
+  "skill_version": "0.8.0",
+  "tool_surface_digest": "sha256:c3032f942269c8705e6c8e918a6ca934fb392441264194adc0db2d36cc8133c0",
+  "tool_surface_version": "aar.mcp-tools.v7"
+}

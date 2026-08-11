@@ -1,0 +1,15 @@
+{
+  "artifact": {
+    "type": "artifact",
+    "value": "artifact-demo"
+  },
+  "created_by": {
+    "type": "operation",
+    "value": "operation-demo"
+  },
+  "digest": "sha256:ecf59a2696ca44a417e20e2a7eabb1b26e82c779f8546bea354a2cc80e8e1eed",
+  "media_type": "application/json",
+  "redacted": false,
+  "schema_version": "aar.artifact.v1",
+  "size_bytes": 13
+}

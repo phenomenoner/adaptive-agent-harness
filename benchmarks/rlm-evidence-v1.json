@@ -1,0 +1,40 @@
+{
+  "schema_version": "aar.rlm-benchmark.v1",
+  "name": "portable-evidence-retrieval-v1",
+  "cases": [
+    {
+      "case_id": "portable-recovery",
+      "query": "portable",
+      "evidence_records": [
+        "portable checkpoints retain digest-bound scalar values",
+        "worker sockets are not portable artifacts"
+      ],
+      "expected_matches": [
+        "portable checkpoints retain digest-bound scalar values",
+        "worker sockets are not portable artifacts"
+      ]
+    },
+    {
+      "case_id": "grant-boundary",
+      "query": "grant",
+      "evidence_records": [
+        "broker calls require a current host grant",
+        "provider credentials never enter the RLM kernel"
+      ],
+      "expected_matches": [
+        "broker calls require a current host grant"
+      ]
+    },
+    {
+      "case_id": "artifact-identity",
+      "query": "artifact",
+      "evidence_records": [
+        "artifact identity binds digest media type size and creating operation",
+        "health alone does not prove final delivery"
+      ],
+      "expected_matches": [
+        "artifact identity binds digest media type size and creating operation"
+      ]
+    }
+  ]
+}

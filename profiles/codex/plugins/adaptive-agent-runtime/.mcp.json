@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "aar": {
+      "args": [],
+      "command": "aar-mcp",
+      "startup_timeout_sec": 30,
+      "tool_timeout_sec": 60
+    }
+  }
+}

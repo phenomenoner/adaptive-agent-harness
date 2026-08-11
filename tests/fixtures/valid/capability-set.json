@@ -1,0 +1,21 @@
+{
+  "capabilities": [
+    {
+      "access": "read",
+      "limits": [],
+      "name": "artifact.read"
+    },
+    {
+      "access": "write",
+      "limits": [
+        {
+          "name": "output_bytes",
+          "value": 65536
+        }
+      ],
+      "name": "workspace.execute"
+    }
+  ],
+  "digest": "sha256:9ec524929c9d4a8eb6f5bbc8e22688f8ec0c21434409af1aea4f98094efee72d",
+  "schema_version": "aar.runtime.v1"
+}

@@ -1,0 +1,20 @@
+{
+  "interface": {
+    "displayName": "AAR Local"
+  },
+  "name": "aar-local",
+  "plugins": [
+    {
+      "category": "Developer Tools",
+      "name": "adaptive-agent-runtime",
+      "policy": {
+        "authentication": "ON_USE",
+        "installation": "AVAILABLE"
+      },
+      "source": {
+        "path": "./plugins/adaptive-agent-runtime",
+        "source": "local"
+      }
+    }
+  ]
+}

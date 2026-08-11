@@ -1,0 +1,154 @@
+{
+  "attempt": {
+    "certainty": "certain",
+    "created_at_unix_ms": 4102444700000,
+    "dispatcher_generation": 1,
+    "ended_at_unix_ms": null,
+    "recovery_reason": null,
+    "ref": {
+      "attempt_id": "attempt-ahc-continuity-1",
+      "attempt_no": 1,
+      "operation": {
+        "type": "operation",
+        "value": "operation-ahc-continuity"
+      },
+      "schema_version": "aar.operation-continuity.v1"
+    },
+    "runtime_generation": 1,
+    "schema_version": "aar.operation-continuity.v1",
+    "started_at_unix_ms": 4102444700100,
+    "state": "running"
+  },
+  "authority": {
+    "aar_owns_ahc_task_state": false,
+    "aar_owns_delivery": false,
+    "operation_id_is_bearer_authority": false,
+    "shared_ig_gate_added": false
+  },
+  "contract_version": "aar.ahc-continuity.v1",
+  "control": {
+    "cancellation_requested": false,
+    "control_revision": 0,
+    "operation": {
+      "type": "operation",
+      "value": "operation-ahc-continuity"
+    },
+    "reason_code": null,
+    "requested_at_unix_ms": null,
+    "requested_by_digest": null,
+    "schema_version": "aar.operation-continuity.v1"
+  },
+  "event_page": {
+    "after_sequence": 0,
+    "events": [
+      {
+        "at_unix_ms": 4102444700100,
+        "attempt": {
+          "attempt_id": "attempt-ahc-continuity-1",
+          "attempt_no": 1,
+          "operation": {
+            "type": "operation",
+            "value": "operation-ahc-continuity"
+          },
+          "schema_version": "aar.operation-continuity.v1"
+        },
+        "certainty": "certain",
+        "event_kind": "attempt_claimed",
+        "operation": {
+          "type": "operation",
+          "value": "operation-ahc-continuity"
+        },
+        "payload": {
+          "attempt_no": 1,
+          "lease_epoch": 1,
+          "logical_operation": "operation-ahc-continuity"
+        },
+        "payload_digest": "sha256:0e6086ce48b73d8af62975c68d606912c233a4f09390a7fb5a55a729712953ad",
+        "record_revision": 1,
+        "schema_version": "aar.operation-continuity.v1",
+        "sequence": 1,
+        "state": "running"
+      }
+    ],
+    "has_more": false,
+    "next_sequence": 1,
+    "operation": {
+      "type": "operation",
+      "value": "operation-ahc-continuity"
+    },
+    "schema_version": "aar.operation-continuity.v1",
+    "terminal_snapshot": null
+  },
+  "lease": {
+    "acquired_at_unix_ms": 4102444700100,
+    "attempt": {
+      "attempt_id": "attempt-ahc-continuity-1",
+      "attempt_no": 1,
+      "operation": {
+        "type": "operation",
+        "value": "operation-ahc-continuity"
+      },
+      "schema_version": "aar.operation-continuity.v1"
+    },
+    "dispatcher_generation": 1,
+    "expires_at_unix_ms": 4102444730200,
+    "heartbeat_at_unix_ms": 4102444700200,
+    "lease_epoch": 1,
+    "owner_digest": "sha256:f262f500ce1acc1cc2137e0cf638e1c73ffb17688a2c2755ec3ac5a25656f1aa",
+    "released_at_unix_ms": null,
+    "runtime_generation": 1,
+    "schema_version": "aar.operation-continuity.v1"
+  },
+  "profile": "operation.continuity.v1",
+  "semantic_mapping": {
+    "attempt": "one execution owner generation",
+    "event_cursor": "ordered evidence projection; arrival order is not authority",
+    "lease": "backend-neutral owner fence; AHC retains host authority",
+    "operation": "durable logical intent; never a delivery receipt",
+    "terminal_result": "child execution evidence only"
+  },
+  "snapshot": {
+    "certainty": "certain",
+    "control": {
+      "cancellation_requested": false,
+      "control_revision": 0,
+      "operation": {
+        "type": "operation",
+        "value": "operation-ahc-continuity"
+      },
+      "reason_code": null,
+      "requested_at_unix_ms": null,
+      "requested_by_digest": null,
+      "schema_version": "aar.operation-continuity.v1"
+    },
+    "current_attempt": {
+      "attempt_id": "attempt-ahc-continuity-1",
+      "attempt_no": 1,
+      "operation": {
+        "type": "operation",
+        "value": "operation-ahc-continuity"
+      },
+      "schema_version": "aar.operation-continuity.v1"
+    },
+    "dispatcher_state": "running",
+    "last_attempt": {
+      "attempt_id": "attempt-ahc-continuity-1",
+      "attempt_no": 1,
+      "operation": {
+        "type": "operation",
+        "value": "operation-ahc-continuity"
+      },
+      "schema_version": "aar.operation-continuity.v1"
+    },
+    "last_event_sequence": 1,
+    "operation": {
+      "type": "operation",
+      "value": "operation-ahc-continuity"
+    },
+    "operation_state": "running",
+    "reconciliation_required": false,
+    "record_revision": 1,
+    "recovery_reason": null,
+    "schema_version": "aar.operation-continuity.v1"
+  }
+}

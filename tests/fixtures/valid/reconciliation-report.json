@@ -1,0 +1,13 @@
+{
+  "certainty": "indeterminate",
+  "observed_revision": 0,
+  "operation": {
+    "type": "operation",
+    "value": "operation-demo"
+  },
+  "reconciliation_required": true,
+  "runtime_generation": 1,
+  "schema_version": "aar.runtime.v1",
+  "state": "indeterminate",
+  "workspace_generation": 1
+}

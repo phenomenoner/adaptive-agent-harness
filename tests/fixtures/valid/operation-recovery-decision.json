@@ -1,0 +1,27 @@
+{
+  "checkpoint_digest": null,
+  "continuation_boundary_digest": null,
+  "created_at_unix_ms": 4102444700400,
+  "decision": "needs_user",
+  "decision_no": 1,
+  "effect_receipt_digest": null,
+  "input_digest": "sha256:85111b362e2e538b12b2214dc4476d959fa1370c9ab034a27b09cd63a225c551",
+  "operation": {
+    "type": "operation",
+    "value": "operation-demo"
+  },
+  "policy_digest": "sha256:c0dbde3db631b31654823ae084e0ddd74fc91c819c24e2d3622676269c939d2e",
+  "policy_version": 1,
+  "prior_attempt": {
+    "attempt_id": "attempt-demo-1",
+    "attempt_no": 1,
+    "operation": {
+      "type": "operation",
+      "value": "operation-demo"
+    },
+    "schema_version": "aar.operation-continuity.v1"
+  },
+  "reason_code": "effect_receipt_missing",
+  "schema_version": "aar.operation-continuity.v1",
+  "successor_attempt": null
+}

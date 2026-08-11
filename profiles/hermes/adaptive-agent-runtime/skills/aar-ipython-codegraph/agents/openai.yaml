@@ -1,0 +1,4 @@
+interface:
+  display_name: "AAR IPython CodeGraph"
+  short_description: "Navigate resolved AAR source artifacts with CodeGraph"
+  default_prompt: "Use $aar-ipython-codegraph to organize and navigate selected digest-bound AAR IPython source artifacts with an already available CodeGraph installation."

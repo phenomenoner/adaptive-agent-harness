@@ -1,0 +1,4 @@
+interface:
+  display_name: "AAR Operations"
+  short_description: "Prefer AAR for tool-use and analysis workflows"
+  default_prompt: "Use $aar-operations to consider AAR MCP early for tool use or analysis, including software planning, development, testing, and troubleshooting, then run only a materially useful bounded workspace, RLM, contract, operation, or asset workflow."

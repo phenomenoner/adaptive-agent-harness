@@ -1,0 +1,64 @@
+{
+  "artifact_schema_version": "aar.artifact.v1",
+  "broker_schema_version": "aar.broker.v1",
+  "budget": {
+    "artifact_bytes": 1048576,
+    "child_operations": 1,
+    "input_tokens": 8192,
+    "model_requests": 2,
+    "output_tokens": 4096,
+    "schema_version": "aar.runtime.v1",
+    "wall_time_ms": 30000
+  },
+  "capability_digest": "sha256:9ec524929c9d4a8eb6f5bbc8e22688f8ec0c21434409af1aea4f98094efee72d",
+  "deadline_unix_ms": 4102444790000,
+  "expected_workspace_revision": 0,
+  "grants": [
+    {
+      "capability": "workspace.execute",
+      "constraints": [
+        {
+          "name": "network",
+          "value": false
+        }
+      ],
+      "expires_at_unix_ms": 4102444800000,
+      "grant_id": "grant-workspace-execute",
+      "issued_to": {
+        "type": "principal",
+        "value": "principal-demo"
+      },
+      "schema_version": "aar.broker.v1"
+    }
+  ],
+  "host": {
+    "type": "host",
+    "value": "reference-host"
+  },
+  "idempotency_key": "idem-demo-0001",
+  "input_digest": "sha256:85111b362e2e538b12b2214dc4476d959fa1370c9ab034a27b09cd63a225c551",
+  "lane": {
+    "type": "lane",
+    "value": "execute"
+  },
+  "parent_operation": null,
+  "principal": {
+    "type": "principal",
+    "value": "principal-demo"
+  },
+  "request_id": "request-demo",
+  "runtime_generation": 1,
+  "runtime_schema_version": "aar.runtime.v1",
+  "schema_version": "aar.envelope.v1",
+  "session": {
+    "type": "session",
+    "value": "session-demo"
+  },
+  "trace_id": "trace-demo",
+  "workspace": {
+    "type": "workspace",
+    "value": "workspace-demo"
+  },
+  "workspace_generation": 1,
+  "workspace_schema_version": "aar.workspace.v1"
+}

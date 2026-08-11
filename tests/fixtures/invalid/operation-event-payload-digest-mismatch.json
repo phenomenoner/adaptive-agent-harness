@@ -1,0 +1,27 @@
+{
+  "at_unix_ms": 4102444700100,
+  "attempt": {
+    "attempt_id": "attempt-demo-1",
+    "attempt_no": 1,
+    "operation": {
+      "type": "operation",
+      "value": "operation-demo"
+    },
+    "schema_version": "aar.operation-continuity.v1"
+  },
+  "certainty": "certain",
+  "event_kind": "execution_started",
+  "operation": {
+    "type": "operation",
+    "value": "operation-demo"
+  },
+  "payload": {
+    "attempt_no": 2,
+    "kind": "execution_started"
+  },
+  "payload_digest": "sha256:00b45e7577194fb38c555f689efb4428a5c6af76c1d5b492718b0e35e3a8f0ab",
+  "record_revision": 1,
+  "schema_version": "aar.operation-continuity.v1",
+  "sequence": 1,
+  "state": "running"
+}

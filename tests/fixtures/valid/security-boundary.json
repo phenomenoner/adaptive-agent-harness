@@ -1,0 +1,18 @@
+{
+  "forbidden_in_runtime": [
+    "credential.provider",
+    "effect.direct",
+    "final.deliver"
+  ],
+  "host_authority": [
+    "admission.decide",
+    "effect.authorize",
+    "final.deliver"
+  ],
+  "runtime_responsibilities": [
+    "artifact.produce",
+    "operation.reconcile",
+    "workspace.execute"
+  ],
+  "schema_version": "aar.runtime.v1"
+}

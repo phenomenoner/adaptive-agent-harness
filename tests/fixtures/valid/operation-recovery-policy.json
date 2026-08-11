@@ -1,0 +1,22 @@
+{
+  "allow_partial_checkpoint": false,
+  "allowed_decisions": [
+    "needs_user",
+    "quarantine",
+    "reconcile_effect",
+    "start_successor",
+    "terminal_from_receipt"
+  ],
+  "broker_uncertainty_policy": "receipt-or-park",
+  "cancellation_policy": "block-successor",
+  "checkpoint_required": false,
+  "deadline_policy": "preserve-original",
+  "effect_reconcile_required": true,
+  "environment_compatibility": "capability-exact",
+  "max_successor_attempts": 3,
+  "operation_kind": "rlm.execute",
+  "policy_id": "rlm.step-boundary.v1",
+  "policy_version": 1,
+  "safe_replay_no_effect": false,
+  "schema_version": "aar.operation-continuity.v1"
+}

@@ -1,0 +1,40 @@
+{
+  "contract_version": "aar.host-profiles.v1",
+  "mcp": {
+    "protocol_versions": [
+      "2026-07-28",
+      "2025-11-25",
+      "2025-06-18",
+      "2025-03-26",
+      "2024-11-05"
+    ],
+    "tool_surface_digest": "sha256:c3032f942269c8705e6c8e918a6ca934fb392441264194adc0db2d36cc8133c0",
+    "tool_surface_version": "aar.mcp-tools.v7",
+    "transport": "stdio"
+  },
+  "operation_skill": {
+    "digest": "sha256:b48d014ca89809a1d710a5208036e6df6b3f348a9f86c42586989aaff60fb9c9",
+    "name": "aar-operations",
+    "version": "0.8.0"
+  },
+  "package": {
+    "command": "aar-mcp",
+    "name": "adaptive-agent-runtime",
+    "python_requires": ">=3.11,<3.15",
+    "version": "0.3.0a0"
+  },
+  "profiles": {
+    "codex": {
+      "bundle": "profiles/codex/plugins/adaptive-agent-runtime",
+      "config_digest": "sha256:94d2e67b919c375a8b03ed2f79014451727c3275ad2d051612cee54b4ea6423c",
+      "config_file": ".mcp.json",
+      "format": "codex-plugin"
+    },
+    "hermes": {
+      "bundle": "profiles/hermes/adaptive-agent-runtime",
+      "config_digest": "sha256:49d3ef8a0e4e2a1e7b76fec5e2a9f1f8ccb37b89af55427e4151f41bc3639585",
+      "config_file": "config.yaml",
+      "format": "hermes-profile-distribution"
+    }
+  }
+}
