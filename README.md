@@ -16,9 +16,7 @@
 
 </div>
 
-[**繁中**](docs/i18n/README.zh-TW.md) · [English](README.md) · [简中](docs/i18n/README.zh-CN.md) · [Español](docs/i18n/README.es.md) · [Português](docs/i18n/README.pt-BR.md) · [Français](docs/i18n/README.fr.md) · [Deutsch](docs/i18n/README.de.md) · [日本語](docs/i18n/README.ja.md) · [한국어](docs/i18n/README.ko.md) · [Русский](docs/i18n/README.ru.md) · [العربية](docs/i18n/README.ar.md) · [Italiano](docs/i18n/README.it.md) · [Tiếng Việt](docs/i18n/README.vi.md) · [ไทย](docs/i18n/README.th.md) · [Čeština](docs/i18n/README.cs.md) · [Suomi](docs/i18n/README.fi.md) · [Norsk](docs/i18n/README.no.md) · [Lietuvių](docs/i18n/README.lt.md)
-
-> The canonical README is English. The language switcher intentionally places Traditional Chinese first.
+[English](README.md) · [**繁中**](docs/i18n/README.zh-TW.md) · [简中](docs/i18n/README.zh-CN.md) · [Español](docs/i18n/README.es.md) · [Português](docs/i18n/README.pt-BR.md) · [Français](docs/i18n/README.fr.md) · [Deutsch](docs/i18n/README.de.md) · [日本語](docs/i18n/README.ja.md) · [한국어](docs/i18n/README.ko.md) · [Русский](docs/i18n/README.ru.md) · [العربية](docs/i18n/README.ar.md) · [Italiano](docs/i18n/README.it.md) · [Tiếng Việt](docs/i18n/README.vi.md) · [ไทย](docs/i18n/README.th.md) · [Čeština](docs/i18n/README.cs.md) · [Suomi](docs/i18n/README.fi.md) · [Norsk](docs/i18n/README.no.md) · [Lietuvių](docs/i18n/README.lt.md)
 
 ---
 
