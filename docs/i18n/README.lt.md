@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#projekto-būsena)
 
@@ -188,11 +188,11 @@ Išsamesnį projektavimo pagrindimą ir šaltinių pastabas rasite [Why RLM + IP
 
 > **Viešoji alfa:** naudokite prisegtą žymą, peržiūrėkite savo hosto grąžinamas galimybes ir pradėkite nuo vienkartinių darbo sričių. Šis projektas vykdo modelio parašytą Python kodą ir **nėra saugumo smėlio dėžė**.
 
-### Diegimas iš pirmosios viešos žymos
+### Diegimas iš naujausios viešos žymos
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### Codex App sąranka
@@ -259,14 +259,14 @@ MCP frontend'as sąmoningai pakeičiamas. Jis nevaldo tęstinumo duomenų bazės
 
 ## Projekto būsena
 
-Dabartinė viešoji alfa: **`0.3.0a0`**.
+Dabartinė viešoji alfa: **`0.3.0a1`**.
 
 Šiame viešajame kandidate atkurta:
 
 - Python 3.11–3.14 palaikymas;
 - 30 įrankių MCP v7 paviršius;
 - papildanti SQLite schema iki v5;
-- visas saugyklos paleidimas: **245 išlaikyti testai, 1 nuo platformos priklausantis praleidimas**;
+- visas saugyklos paleidimas: **249 išlaikyti testai, 1 nuo platformos priklausantis praleidimas**;
 - švarus exact-wheel supervisor/frontend bandymas Linux/WSL aplinkoje;
 - patvaraus prižiūrėtojo, frontend'o pakeitimo, proceso praradimo, pasenusio rašytojo, kvito pakartotinio panaudojimo ir su politika susieto RLM įpėdinio scenarijai.
 

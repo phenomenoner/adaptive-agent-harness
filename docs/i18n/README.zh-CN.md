@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#项目状态)
 
@@ -188,11 +188,11 @@ Adaptive Agent Harness 很适合：
 
 > **公开 alpha：** 使用 pinned tag，检查 host 返回的 capabilities，并从 disposable workspaces 开始。此项目会执行模型编写的 Python，且**不是安全沙箱**。
 
-### 从第一个公开 tag 安装
+### 从最新公开 tag 安装
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### Codex App 设置
@@ -259,14 +259,14 @@ MCP frontend 刻意可以替换。它不拥有 continuity database 或 worker li
 
 ## 项目状态
 
-当前公开 alpha：**`0.3.0a0`**。
+当前公开 alpha：**`0.3.0a1`**。
 
 从这个公开 candidate 中重现的结果：
 
 - Python 3.11 至 3.14 覆盖范围；
 - 30-tool MCP v7 surface；
 - 直到 v5 的 additive SQLite schema；
-- 完整 repository 运行：**245 passed, 1 platform-gated skip**；
+- 完整 repository 运行：**249 passed, 1 platform-gated skip**；
 - 在 Linux/WSL 上通过 clean exact-wheel supervisor/frontend probe；
 - durable supervisor、frontend replacement、process-loss、stale-writer、receipt-reuse 和 policy-bound RLM successor 场景。
 

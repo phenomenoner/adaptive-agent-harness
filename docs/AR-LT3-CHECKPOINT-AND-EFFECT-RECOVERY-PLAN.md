@@ -1,7 +1,7 @@
 # AR-LT3 — Checkpoint- and Effect-Aware Continuation Implementation Plan
 
-**Status:** in progress; first bounded RLM policy/successor slice installed and verified, full phase open
-**Updated:** 2026-08-11
+**Status:** verified and installed; schema v5, runtime/dispatcher generation 13
+**Updated:** 2026-08-12
 **Owning workstream:** [LONG-TASK-CONTINUITY-PLAN.md](LONG-TASK-CONTINUITY-PLAN.md)
 **Cross-project coordination:** maintained in the separate AHC-by-AAR planning workspace; not normative to AAR core
 
@@ -102,6 +102,62 @@ This installed closeout verifies only the first bounded policy-bound RLM success
 complete LT3-C/D workspace restore, LT3-E general broker/effect reconciliation, generic exactly-once
 effects, arbitrary running-cell resurrection, activation, final delivery, or AHC managed-host
 admission.
+
+### Source implementation closeout candidate — 2026-08-11
+
+The current source candidate completes the bounded LT3-C/D/E implementation while the installed
+supervisor remains on the earlier schema-v4 wheel described above. The candidate is not a live
+cutover claim until fresh repository, package, rollback, supervisor, and MCP readback gates pass.
+
+- additive schema v5 persists an exact predecessor-bound workspace checkpoint selection before
+  restore and records the verified new-generation boundary before atomic successor admission;
+- plain-Python and IPython recovery reject stale session, generation, revision, backend,
+  environment, manifest, artifact, exclusion, or selection evidence; they converge across a
+  restore-before-admission process loss, and real IPython worker loss recovers on both the same live
+  host and a restarted host without reusing a lost predecessor receipt or creating multiple
+  successor generations;
+- the broker journal retains canonical request bytes and reconciliation evidence; authoritative
+  artifact and subagent receipts are recovered without replay, while any provider-backed safe-read
+  recovery first requires the persisted envelope capability digest to match the current host
+  profile; unknown model/effect outcomes remain pending or quarantined without replaying a
+  write-class `effect.propose` call;
+- compensation requires explicit caller intent, original-envelope provenance, and a separate
+  unexpired current `effect.propose` grant in addition to current `operation.reconcile` authority;
+  its journal admission first obtains a SQLite write reservation, then rechecks the effective
+  authority deadline, durable cancellation flag, and exact control revision before inserting the
+  intent. The deadline is checked again immediately after intent commit and before provider
+  invocation. Expiry while waiting for the reservation creates no intent and invokes no provider;
+  expiry after intent commit records an explicit failed intent and still invokes no provider. It is
+  forbidden after cancellation or deadline expiry, and no reconciliation path exposes or executes
+  `effect_execute`;
+- durable startup orders effect reconciliation before RLM and workspace successor planning, so a
+  continuation decision never precedes authoritative receipt classification; capability-profile
+  drift parks the affected RLM as `needs_user` with
+  `recovery_capability_digest_mismatch`, performs zero provider calls, and does not abort dispatcher
+  startup for unrelated operations.
+
+Source verification includes real IPython worker loss, restore/admission crash convergence, exact
+workspace policy drift and partial-checkpoint cases, broker authority/deadline/cancellation/tamper
+and reconnect cases, persisted-v4-to-v5 and interrupted migration recovery, schema/contract asset
+readback, Ruff, and compile smoke. Exact full-suite and package evidence is appended to `WAL.md`
+only after the final candidate bytes pass and are frozen.
+
+### Complete installed cutover and public-maintenance closeout — 2026-08-12
+
+Exact source `aabbcfc76c9ba1b2e837fc4c0f01e743fa455479` completed the bounded standalone
+AR-LT3 implementation and passed independent review before live cutover. The host-managed supervisor
+then migrated additively through schema v5 and read back runtime/dispatcher generation 13 with one
+ready owner and no active work. Workspace process-loss, checkpoint restore, stale-handle rejection,
+installed-wheel stdio, and duplicate-owner fail-closed canaries passed. The live package remains
+`0.3.0a0`; this installed claim does not extend to managed AHC admission, generic exactly-once
+effects, activation, or final delivery.
+
+The subsequent `0.3.0a1` maintenance candidate gives the final source a new public identity rather
+than rewriting the immutable `v0.3.0a0` tag. It includes the compensation deadline-admission fence:
+authority is rechecked after acquiring the SQLite write reservation and again after durable intent
+commit immediately before provider invocation. Expiry in either window produces zero provider calls.
+The exact candidate repository suite passed 240 tests with one platform-gated Windows skip before
+public staging projection.
 
 ## 2. Continuation classes
 

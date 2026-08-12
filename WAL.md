@@ -1686,3 +1686,33 @@ Cutover and installed verification:
 Portable workspace checkpoint selection and new-generation restore, broad broker/effect reconciliation,
 generic exactly-once effects, arbitrary running-cell resurrection, provider credentials, activation,
 final delivery, and managed-host AHC admission remain outside the claim.
+
+---
+
+## 2026-08-12 — sanitized schema-v5 cutover and public maintenance projection
+
+The complete standalone AR-LT3 source at
+`aabbcfc76c9ba1b2e837fc4c0f01e743fa455479` passed independent review and was installed as
+package `0.3.0a0` behind the existing host-managed supervisor. Sanitized installed readback recorded
+additive schema versions 1 through 5, runtime/dispatcher generation `13 / 13`, one ready owner,
+`quick_check=ok`, and zero active operations, dispatch rows, unreleased leases, or workers.
+Workspace process-loss, checkpoint restore, stale-handle, duplicate-owner fail-closed, and
+installed-wheel stdio canaries passed. Host-local process identifiers, rollback paths, runtime
+database, receipts, and private artifacts are intentionally not published here.
+
+A later source audit found that the first public tree had retained the same `0.3.0a0` display version
+but did not include the final compensation deadline-admission fence. The old public source reproduced
+a provider invocation after authority expired behind a held SQLite write reservation. The exact live
+source invoked no provider. The maintenance fix acquires the write reservation before revalidating
+authority and checks the deadline again after durable intent commit immediately before provider
+invocation. Two regressions cover both windows.
+
+The public maintenance candidate therefore uses the new identity `0.3.0a1`; it does not rewrite the
+immutable `v0.3.0a0` tag. Public focused verification passed 45 tests and the complete public suite
+passed `249 passed, 1 skipped` in `343.98s`; the skip remains the platform-guarded Windows
+`GetProcessTimes` path. Generated contract, MCP, and host-profile assets verify against executable
+source. Exact wheel, isolated install, hygiene, fresh-clone, remote-readback, tag, and release results
+are appended only after those gates run.
+
+This public synchronization does not modify live AAR, grant provider authority, execute external
+effects, activate managed AHC, or deliver user messages.

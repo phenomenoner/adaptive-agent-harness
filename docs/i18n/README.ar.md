@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#حالة-المشروع)
 
@@ -188,11 +188,11 @@ flowchart LR
 
 > **ألفا عامة:** استخدم وسمًا مثبتًا، وافحص القدرات التي يعيدها مضيفك، وابدأ بمساحات عمل مؤقتة. ينفّذ هذا المشروع كود Python الذي يؤلّفه النموذج، وهو **ليس صندوق حماية أمنيًا**.
 
-### التثبيت من أول وسم عام
+### التثبيت من أحدث وسم عام
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### إعداد Codex App
@@ -259,14 +259,14 @@ Plain Python / IPython workers and host-authorized brokers
 
 ## حالة المشروع
 
-الإصدار العام الحالي من الألفا: **`0.3.0a0`**.
+الإصدار العام الحالي من الألفا: **`0.3.0a1`**.
 
 تمت إعادة إنتاج ما يلي من هذا المرشح العام:
 
 - تغطية Python من 3.11 إلى 3.14؛
 - سطح MCP v7 ذي 30 أداة؛
 - مخطط SQLite تزايدي حتى v5؛
-- تشغيل المستودع بالكامل: **245 passed, 1 platform-gated skip**؛
+- تشغيل المستودع بالكامل: **249 passed, 1 platform-gated skip**؛
 - فحص exact-wheel نظيف للمشرف والواجهة الأمامية على Linux/WSL؛
 - سيناريوهات المشرف الدائم، واستبدال الواجهة الأمامية، وفقدان العملية، والكاتب القديم، وإعادة استخدام الإيصال، وسيناريوهات محاولات RLM اللاحقة المقيّدة بالسياسة؛
 

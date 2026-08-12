@@ -1,9 +1,22 @@
 # Adaptive Agent Runtime
 
-> **Public repository note (2026-08-11):** this file preserves the detailed technical status that was
-> frozen before the first Adaptive Agent Harness GitHub publication. Historical statements such as
-> “no package or release published” describe that verification checkpoint. Use [`README.md`](README.md)
-> and [`CHANGELOG.md`](CHANGELOG.md) for the current public release surface.
+> **Public repository note (2026-08-12):** this file preserves detailed historical phase evidence.
+> Generation-12/schema-v4 and “no release published” statements below describe their original
+> checkpoints. The current delta immediately below, [`README.md`](README.md), and
+> [`CHANGELOG.md`](CHANGELOG.md) define the present public surface.
+
+## Current public delta — 2026-08-12
+
+- complete standalone AR-LT3 source is verified at
+  `aabbcfc76c9ba1b2e837fc4c0f01e743fa455479`;
+- installed AAR remains package `0.3.0a0` but has completed the additive schema-v5 cutover and reads
+  runtime/dispatcher generation `13 / 13` through one ready supervisor;
+- `0.3.0a1` is the source-parity maintenance prerelease and does not replace the installed runtime;
+- it adds the final compensation deadline-admission fence and regressions, refreshes package-bound
+  generated assets, and preserves MCP v7 with 30 tools;
+- public repository verification is `249 passed, 1 platform-gated skip`;
+- managed AHC admission, provider credentials, generic exactly-once effects, activation, and final
+  delivery remain outside the claim.
 
 Adaptive Agent Runtime (AAR) is a Python-first programmable execution and adaptation runtime for agent harnesses.
 

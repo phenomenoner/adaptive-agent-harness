@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#สถานะโครงการ)
 
@@ -188,11 +188,11 @@ Adaptive Agent Harness เหมาะอย่างยิ่งกับ:
 
 > **อัลฟาสาธารณะ:** ใช้แท็กที่ pin ไว้ ตรวจสอบความสามารถที่โฮสต์ส่งคืน และเริ่มต้นด้วย workspace ที่ใช้แล้วทิ้ง โปรเจกต์นี้เรียกใช้ Python ที่โมเดลเขียน และ **ไม่ใช่แซนด์บ็อกซ์ด้านความปลอดภัย**
 
-### ติดตั้งจากแท็กสาธารณะแรก
+### ติดตั้งจากแท็กสาธารณะล่าสุด
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### ตั้งค่า Codex App
@@ -259,14 +259,14 @@ Plain Python / IPython workers and host-authorized brokers
 
 ## สถานะโครงการ
 
-อัลฟาสาธารณะปัจจุบัน: **`0.3.0a0`**
+อัลฟาสาธารณะปัจจุบัน: **`0.3.0a1`**
 
 ทำซ้ำได้จาก candidate สาธารณะนี้:
 
 - รองรับ Python 3.11 ถึง 3.14;
 - พื้นผิว MCP v7 จำนวน 30 เครื่องมือ;
 - schema SQLite แบบเพิ่มต่อเนื่องจนถึง v5;
-- การรันรีโพซิทอรีทั้งหมด: **ผ่าน 245 รายการ ข้าม 1 รายการตามเงื่อนไขแพลตฟอร์ม**;
+- การรันรีโพซิทอรีทั้งหมด: **ผ่าน 249 รายการ ข้าม 1 รายการตามเงื่อนไขแพลตฟอร์ม**;
 - การตรวจสอบ supervisor/frontend แบบ exact-wheel ที่สะอาดบน Linux/WSL;
 - สถานการณ์ supervisor ที่คงทน การแทนที่ frontend การสูญเสียกระบวนการ writer ที่ล้าสมัย การนำใบเสร็จ (receipt) กลับมาใช้ซ้ำ และ successor ของ RLM ที่ผูกกับ policy
 

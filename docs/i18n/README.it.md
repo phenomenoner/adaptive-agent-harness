@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#stato-del-progetto)
 
@@ -188,11 +188,11 @@ Vedi [Perché RLM + IPython](../../docs/WHY-RLM-AND-IPYTHON.md) per la motivazio
 
 > **Alfa pubblica:** usa un tag fissato, esamina le capacità restituite dal tuo host e inizia con spazi di lavoro usa e getta. Questo progetto esegue Python scritto dal modello e **non è un sandbox di sicurezza**.
 
-### Installare dal primo tag pubblico
+### Installare dall'ultimo tag pubblico
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### Configurazione di Codex App
@@ -259,14 +259,14 @@ Il frontend MCP è intenzionalmente sostituibile. Non possiede il database della
 
 ## Stato del progetto
 
-Alfa pubblica attuale: **`0.3.0a0`**.
+Alfa pubblica attuale: **`0.3.0a1`**.
 
 Riprodotto da questo candidato pubblico:
 
 - copertura da Python 3.11 a 3.14;
 - superficie MCP v7 con 30 strumenti;
 - schema SQLite additivo fino a v5;
-- esecuzione completa del repository: **245 superati, 1 saltato per vincolo di piattaforma**;
+- esecuzione completa del repository: **249 superati, 1 saltato per vincolo di piattaforma**;
 - un probe pulito del supervisore/frontend con wheel esatto su Linux/WSL;
 - supervisore durevole, sostituzione del frontend, perdita di processo, writer obsoleto, riutilizzo delle ricevute e scenari di successori RLM vincolati da policy;
 

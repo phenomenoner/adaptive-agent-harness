@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#estado-del-proyecto)
 
@@ -188,11 +188,11 @@ Consulta [Por qué RLM + IPython](../../docs/WHY-RLM-AND-IPYTHON.md) para conoce
 
 > **Alfa pública:** usa una etiqueta fijada, inspecciona las capacidades que devuelve tu host y empieza con espacios de trabajo desechables. Este proyecto ejecuta Python escrito por el modelo y **no es un sandbox de seguridad**.
 
-### Instalar desde la primera etiqueta pública
+### Instalar desde la etiqueta pública más reciente
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### Configuración de Codex App
@@ -259,14 +259,14 @@ El frontend MCP se puede sustituir deliberadamente. No es dueño de la base de d
 
 ## Estado del proyecto
 
-Alfa pública actual: **`0.3.0a0`**.
+Alfa pública actual: **`0.3.0a1`**.
 
 Reproducido a partir de este candidato público:
 
 - cobertura de Python 3.11 a 3.14;
 - superficie MCP v7 de 30 herramientas;
 - esquema SQLite aditivo hasta v5;
-- ejecución completa del repositorio: **245 pasaron, 1 omitida por condiciones de plataforma**;
+- ejecución completa del repositorio: **249 pasaron, 1 omitida por condiciones de plataforma**;
 - una prueba limpia del supervisor/frontend con wheel exacto en Linux/WSL;
 - supervisor duradero, sustitución del frontend, pérdida de procesos, escritor obsoleto, reutilización de recibos y escenarios de sucesores RLM ligados a políticas;
 

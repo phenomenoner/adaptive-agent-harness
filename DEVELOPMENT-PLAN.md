@@ -246,10 +246,10 @@ Exit evidence:
 
 ### AR-LT — Durable Long-Operation Continuity
 
-**Status:** AR-LT0 through AR-LT2 verified at the standalone reference-host boundary. The first
-bounded AR-LT3 RLM policy/successor slice is installed for Hermes through the explicit host-managed
-supervisor while the full phase remains open. This
-does not reopen or expand the verified AR-0 through AR-3
+**Status:** AR-LT0 through AR-LT3 are source-verified at the standalone reference-host boundary and
+the complete schema-v5 boundary is installed for Hermes through the explicit host-managed
+supervisor at runtime/dispatcher generation 13. The `0.3.0a1` work is a public source-parity
+maintenance prerelease, not a new live cutover. This does not reopen or expand the verified AR-0 through AR-3
 candidates. The owning architecture plan is
 [`docs/LONG-TASK-CONTINUITY-PLAN.md`](docs/LONG-TASK-CONTINUITY-PLAN.md).
 
@@ -258,7 +258,7 @@ candidates. The owning architecture plan is
 | [`AR-LT0`](docs/AR-LT0-CONTRACT-AND-FAILURE-MODEL-PLAN.md) | AR-0 verified; explicit approval | versioned attempts, leases, recovery decisions, cursor events, migrations, authority and failure fixtures | verified; additive v1 continuity contract and SQLite v2 migration |
 | [`AR-LT1`](docs/AR-LT1-DURABLE-ASYNC-DISPATCH-PLAN.md) | AR-LT0 verified | durable dispatcher, atomic claim/lease, RLM async handler, reconnect/status/events/cancel | verified; standalone single-runtime durable `rlm.execute` |
 | [`AR-LT2`](docs/AR-LT2-DURABLE-SUPERVISOR-PLAN.md) | AR-LT1 verified | durable supervisor, ephemeral frontends, private IPC, process/worker ownership and restart recovery | verified; exact wheel installed for Hermes under a host-managed supervisor |
-| [`AR-LT3`](docs/AR-LT3-CHECKPOINT-AND-EFFECT-RECOVERY-PLAN.md) | AR-LT2 plus applicable AR-1/AR-2 primitives | RLM next-step successors, new-generation workspace restore and effect-aware reconciliation | in progress; initial policy-bound RLM successor slice installed from `9b7a1d9`, workspace/effect packages open |
+| [`AR-LT3`](docs/AR-LT3-CHECKPOINT-AND-EFFECT-RECOVERY-PLAN.md) | AR-LT2 plus applicable AR-1/AR-2 primitives | RLM next-step successors, new-generation workspace restore and effect-aware reconciliation | verified and installed; schema v5, runtime/dispatcher generation 13 |
 
 The bounded first target is reconnectable durable async execution rather than a distributed workflow
 engine:
@@ -274,12 +274,12 @@ engine:
 - keep all schemas transport-neutral and preserve host ownership of identity, provider credentials,
   external effects, activation, and final delivery.
 
-AR-LT0 through AR-LT2 acceptance is bounded to the versioned fixtures, standalone reference host,
+AR-LT0 through AR-LT3 source acceptance is bounded to the versioned fixtures, standalone reference host,
 durable RLM handler, private supervisor/frontend transport, process/worker identity, compatibility
-checks, and T3 process-loss scenarios that were executed. AR-LT3 additionally verifies only the
-policy-bound RLM step-successor slice described in its installed closeout. Workspace checkpoint
-restore, general effect reconciliation, managed AHC use, and package-registry publication remain
-unverified. The AHC mapping is planning-only and creates no new IG gate.
+checks, workspace checkpoint/new-generation restore, broker reconciliation, and T3 process-loss
+scenarios that were executed. The installed Hermes row verifies the complete standalone schema-v5
+boundary; managed AHC use and package-registry publication remain unverified.
+The AHC mapping is planning-only and creates no new IG gate.
 
 ### AR-4 — Shadow Adaptation
 
@@ -362,12 +362,12 @@ Health, config presence, catalog visibility, or a successful initialize/discover
 
 ## 6. Immediate implementation backlog
 
-AR-2, AR-3, and AR-LT0 through AR-LT2 are complete at the local AAR boundary. The next work is
+AR-2, AR-3, and AR-LT0 through AR-LT3 are complete at the local AAR source boundary. The next work is
 dependency-gated and must
 not silently expand this acceptance:
 
-1. begin the bounded `AR-LT3` checkpoint/effect-aware continuation slices without extending AAR into
-   effect execution, provider credentials, activation, or delivery authority;
+1. publish the source-complete `0.3.0a1` maintenance prerelease without extending AAR into effect
+   execution, provider credentials, activation, or delivery authority;
 2. consume the transport-neutral AHC broker/operation fixture from the Rust side and bind exact
    Python/Rust fixture digests before claiming an AHC compatibility row;
 3. decide whether a native AHC adapter is required for stronger identity, budget, cancellation,

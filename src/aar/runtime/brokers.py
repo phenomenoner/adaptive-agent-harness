@@ -154,9 +154,18 @@ class BrokerJournal:
         call: Callable[[], StrictModel],
         expected_control_revision: int | None = None,
         require_not_cancelled: bool = False,
+        admission_check: Callable[[], None] | None = None,
     ) -> StrictModel:
         request_digest = canonical_sha256(request)
         with self._lock, self._connection:
+            if admission_check is not None:
+                # A no-op DML acquires the configured IMMEDIATE write reservation before
+                # authority is revalidated. The later intent insert therefore cannot trail
+                # a lock wait that outlived its admission authority.
+                self._connection.execute(
+                    "UPDATE broker_calls SET sequence = sequence WHERE 0"
+                )
+                admission_check()
             if expected_control_revision is not None or require_not_cancelled:
                 self._connection.execute(
                     """
@@ -248,6 +257,8 @@ class BrokerJournal:
                 ),
             )
         try:
+            if admission_check is not None:
+                admission_check()
             response = call()
             if not isinstance(response, response_type):
                 raise TypeError(
@@ -1191,6 +1202,13 @@ class BoundBrokerFacade:
         )
         if now >= deadline:
             raise BrokerDeadlineExpired("compensation authority deadline has expired")
+
+        def require_current_deadline() -> None:
+            if self._facade._now_ms() >= deadline:
+                raise BrokerDeadlineExpired(
+                    "compensation authority deadline expired during broker admission"
+                )
+
         if (
             grant.capability != "effect.propose"
             or grant.issued_to != self._envelope.principal
@@ -1232,6 +1250,7 @@ class BoundBrokerFacade:
                 ),
                 expected_control_revision=control_revision,
                 require_not_cancelled=True,
+                admission_check=require_current_deadline,
             ),
         )
 

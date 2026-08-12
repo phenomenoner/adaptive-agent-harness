@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import tomllib
 import unicodedata
 from pathlib import Path
 
@@ -106,6 +107,52 @@ def github_slug(heading: str) -> str:
     return "".join(output)
 
 
+def release_identity_failures(
+    root: Path, translation_names: set[str]
+) -> list[dict[str, str]]:
+    """Bind the current public docs to the package version without rewriting history."""
+    failures: list[dict[str, str]] = []
+    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    version = str(project["project"]["version"])
+    tag = f"v{version}"
+    required_markers = {
+        root / "README.md": (
+            f"releases/tag/{tag}",
+            f"@{tag}",
+            f"**`{version}`**",
+        ),
+        root / "CHANGELOG.md": (
+            f"## [{version}]",
+            f"releases/tag/{tag}",
+        ),
+        root / "docs" / f"RELEASE-{tag}.md": (
+            f"# Adaptive Agent Harness {tag}",
+            f"@{tag}",
+        ),
+    }
+    for name in sorted(translation_names):
+        required_markers[root / "docs" / "i18n" / name] = (
+            f"releases/tag/{tag}",
+            f"@{tag}",
+            f"**`{version}`**",
+        )
+    for path, markers in required_markers.items():
+        relative = path.relative_to(root).as_posix()
+        if not path.is_file():
+            failures.append({"kind": "release-identity-file", "detail": relative})
+            continue
+        text = path.read_text(encoding="utf-8")
+        for marker in markers:
+            if marker not in text:
+                failures.append(
+                    {
+                        "kind": "release-identity-marker",
+                        "detail": f"{relative} -> {marker}",
+                    }
+                )
+    return failures
+
+
 def main() -> int:
     files = tracked_files()
     failures: list[dict[str, str]] = []
@@ -131,6 +178,7 @@ def main() -> int:
                 ),
             }
         )
+    failures.extend(release_identity_failures(ROOT, actual_translations))
 
     for path in files:
         relative = path.relative_to(ROOT).as_posix()

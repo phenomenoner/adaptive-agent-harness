@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#プロジェクトのステータス)
 
@@ -188,11 +188,11 @@ Adaptive Agent Harness は次の用途に適しています。
 
 > **公開 alpha：** pinned tag を使い、host が返す capabilities を調べ、disposable workspaces から始めてください。このプロジェクトはモデルが作成した Python を実行するものであり、**security sandbox ではありません**。
 
-### 最初の公開 tag からインストール
+### 最新の公開 tag からインストール
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### Codex App のセットアップ
@@ -259,14 +259,14 @@ MCP frontend は意図的に交換可能です。continuity database や worker 
 
 ## プロジェクトのステータス
 
-現在の公開 alpha：**`0.3.0a0`**。
+現在の公開 alpha：**`0.3.0a1`**。
 
 この公開 candidate から再現した項目：
 
 - Python 3.11 から 3.14 までの coverage；
 - 30-tool MCP v7 surface；
 - v5 までの additive SQLite schema；
-- repository 全体の実行：**245 passed, 1 platform-gated skip**；
+- repository 全体の実行：**249 passed, 1 platform-gated skip**；
 - Linux/WSL での clean exact-wheel supervisor/frontend probe；
 - durable supervisor、frontend replacement、process-loss、stale-writer、receipt-reuse、policy-bound RLM successor scenarios。
 

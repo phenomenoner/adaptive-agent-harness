@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#статус-проекта)
 
@@ -188,11 +188,11 @@ Adaptive Agent Harness хорошо подходит для:
 
 > **Публичная альфа-версия:** используйте закреплённый тег, изучите возможности, возвращаемые вашим хостом, и начните с одноразовых рабочих областей. Этот проект выполняет Python-код, созданный моделью, и **не является песочницей безопасности**.
 
-### Установка из первого публичного тега
+### Установка из последнего публичного тега
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### Настройка Codex App
@@ -259,14 +259,14 @@ Plain Python / IPython workers and host-authorized brokers
 
 ## Статус проекта
 
-Текущая публичная альфа-версия: **`0.3.0a0`**.
+Текущая публичная альфа-версия: **`0.3.0a1`**.
 
 Воспроизведено в этом публичном кандидате:
 
 - поддержка Python с 3.11 по 3.14;
 - поверхность MCP v7 из 30 инструментов;
 - аддитивная схема SQLite до v5;
-- полный запуск репозитория: **245 пройдено, 1 пропуск по условию платформы**;
+- полный запуск репозитория: **249 пройдено, 1 пропуск по условию платформы**;
 - чистая проверка супервизора и фронтенда с точным wheel-пакетом в Linux/WSL;
 - сценарии долговечного супервизора, замены фронтенда, потери процесса, устаревшего писателя, повторного использования квитанции и преемника RLM с привязкой к политике.
 

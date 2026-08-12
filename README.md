@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#project-status)
 
@@ -188,11 +188,11 @@ See [Why RLM + IPython](docs/WHY-RLM-AND-IPYTHON.md) for the deeper design ratio
 
 > **Public alpha:** use a pinned tag, inspect the capabilities returned by your host, and start with disposable workspaces. This project executes model-authored Python and is **not a security sandbox**.
 
-### Install from the first public tag
+### Install from the latest public tag
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### Codex App setup
@@ -259,14 +259,14 @@ The MCP frontend is intentionally replaceable. It does not own the continuity da
 
 ## Project status
 
-Current public alpha: **`0.3.0a0`**.
+Current public alpha: **`0.3.0a1`**.
 
 Reproduced from this public candidate:
 
 - Python 3.11 through 3.14 coverage;
 - 30-tool MCP v7 surface;
 - additive SQLite schema through v5;
-- full repository run: **245 passed, 1 platform-gated skip**;
+- full repository run: **249 passed, 1 platform-gated skip**;
 - a clean exact-wheel supervisor/frontend probe on Linux/WSL;
 - durable supervisor, frontend replacement, process-loss, stale-writer, receipt-reuse, and policy-bound RLM successor scenarios.
 

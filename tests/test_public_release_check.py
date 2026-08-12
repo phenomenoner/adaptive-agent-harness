@@ -60,3 +60,51 @@ def test_public_release_guard_matches_opaque_task_ids_and_local_receipts() -> No
     receipt_pattern = PUBLIC_RELEASE_CHECK.BYTE_PATTERNS["local-receipt-path"]
     local_receipt = b".aar/" + b"codex-run-summary.json"
     assert receipt_pattern.search(b"retained `" + local_receipt + b"`")
+
+
+def test_public_release_guard_accepts_current_release_identity() -> None:
+    assert (
+        PUBLIC_RELEASE_CHECK.release_identity_failures(
+            ROOT, PUBLIC_RELEASE_CHECK.EXPECTED_TRANSLATIONS
+        )
+        == []
+    )
+
+
+def test_public_release_guard_rejects_localized_release_identity_drift(
+    tmp_path: Path,
+) -> None:
+    version = "1.2.3a1"
+    tag = f"v{version}"
+    (tmp_path / "pyproject.toml").write_text(
+        f'[project]\nname = "example"\nversion = "{version}"\n', encoding="utf-8"
+    )
+    (tmp_path / "README.md").write_text(
+        f"releases/tag/{tag}\n@{tag}\n**`{version}`**\n", encoding="utf-8"
+    )
+    (tmp_path / "CHANGELOG.md").write_text(
+        f"## [{version}]\nreleases/tag/{tag}\n", encoding="utf-8"
+    )
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / f"RELEASE-{tag}.md").write_text(
+        f"# Adaptive Agent Harness {tag}\n@{tag}\n", encoding="utf-8"
+    )
+    translation_dir = tmp_path / "docs" / "i18n"
+    translation_dir.mkdir()
+    locale = translation_dir / "README.de.md"
+    locale.write_text(
+        f"releases/tag/{tag}\n@{tag}\n**`{version}`**\n", encoding="utf-8"
+    )
+    assert PUBLIC_RELEASE_CHECK.release_identity_failures(
+        tmp_path, {locale.name}
+    ) == []
+
+    locale.write_text(locale.read_text(encoding="utf-8").replace(tag, "v1.2.3a0"))
+    failures = PUBLIC_RELEASE_CHECK.release_identity_failures(
+        tmp_path, {locale.name}
+    )
+    assert any(
+        failure["kind"] == "release-identity-marker"
+        and failure["detail"].startswith("docs/i18n/README.de.md")
+        for failure in failures
+    )

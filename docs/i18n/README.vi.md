@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#trạng-thái-dự-án)
 
@@ -188,11 +188,11 @@ Xem [Why RLM + IPython](../../docs/WHY-RLM-AND-IPYTHON.md) để đọc phần l
 
 > **Alpha công khai:** dùng tag đã ghim, kiểm tra các capability mà host trả về và bắt đầu với workspace dùng một lần. Project này thực thi Python do model viết và **không phải sandbox bảo mật**.
 
-### Cài đặt từ tag công khai đầu tiên
+### Cài đặt từ tag công khai mới nhất
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### Thiết lập Codex App
@@ -259,14 +259,14 @@ Frontend MCP được thiết kế để có thể thay thế. Nó không sở h
 
 ## Trạng thái dự án
 
-Alpha công khai hiện tại: **`0.3.0a0`**.
+Alpha công khai hiện tại: **`0.3.0a1`**.
 
 Được tái hiện từ candidate công khai này:
 
 - hỗ trợ Python 3.11 đến 3.14;
 - bề mặt MCP v7 gồm 30 công cụ;
 - schema SQLite mang tính bổ sung đến v5;
-- chạy toàn bộ repository: **245 đạt, 1 bỏ qua do điều kiện nền tảng**;
+- chạy toàn bộ repository: **249 đạt, 1 bỏ qua do điều kiện nền tảng**;
 - probe supervisor/frontend exact-wheel sạch trên Linux/WSL;
 - các kịch bản supervisor lâu bền, thay thế frontend, mất tiến trình, writer cũ, tái sử dụng biên nhận và successor RLM gắn với policy.
 

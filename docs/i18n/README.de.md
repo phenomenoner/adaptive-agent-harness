@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#projektstatus)
 
@@ -188,11 +188,11 @@ Siehe [Warum RLM + IPython](../../docs/WHY-RLM-AND-IPYTHON.md) für die ausführ
 
 > **Öffentliche Alpha:** Verwende einen getaggten, festgelegten Stand, prüfe die von deinem Host zurückgegebenen Fähigkeiten und beginne mit wegwerfbaren Arbeitsbereichen. Dieses Projekt führt vom Modell verfassten Python-Code aus und ist **keine Sicherheits-Sandbox**.
 
-### Installation vom ersten öffentlichen Tag
+### Installation vom neuesten öffentlichen Tag
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### Codex-App einrichten
@@ -259,14 +259,14 @@ Das MCP-Frontend ist absichtlich austauschbar. Es besitzt weder die Kontinuität
 
 ## Projektstatus
 
-Aktuelle öffentliche Alpha: **`0.3.0a0`**.
+Aktuelle öffentliche Alpha: **`0.3.0a1`**.
 
 Aus diesem öffentlichen Kandidaten reproduziert:
 
 - Abdeckung von Python 3.11 bis 3.14;
 - MCP-v7-Oberfläche mit 30 Tools;
 - additive SQLite-Schemata bis v5;
-- vollständiger Repository-Lauf: **245 bestanden, 1 plattformbedingt übersprungen**;
+- vollständiger Repository-Lauf: **249 bestanden, 1 plattformbedingt übersprungen**;
 - ein sauberer Exact-Wheel-Probe für Supervisor/Frontend unter Linux/WSL;
 - Szenarien für dauerhaften Supervisor, Frontend-Ersatz, Prozessverlust, veraltete Schreiber, Wiederverwendung von Quittungen und richtliniengebundene RLM-Folgeversuche.
 

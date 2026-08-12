@@ -2,6 +2,33 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
+## [0.3.0a1] — 2026-08-12
+
+### Fixed
+
+- recheck compensation authority after waiting for the SQLite write reservation and again after
+  durable intent commit immediately before provider invocation;
+- refuse provider invocation when the effective compensation deadline expires in either admission
+  window, with regressions for both the lock-wait and post-commit seams;
+- synchronize public executable source with the exact standalone AR-LT3 source used for the verified
+  schema-v5 cutover instead of reusing the earlier `0.3.0a0` identity for different bytes.
+
+### Documentation and packaging
+
+- publish the maintenance source under a new prerelease identity without rewriting `v0.3.0a0`;
+- update current-state projections to schema v5 and runtime/dispatcher generation 13 while retaining
+  older generation-12/schema-v4 records as historical evidence;
+- refresh package-bound schema, MCP tool-surface, host-profile, Codex cachebuster, and operation-skill
+  metadata for `0.3.0a1`;
+- update all 17 localized README files to the current tag and verified public test count.
+
+### Verified
+
+- public repository suite: 249 passed, 1 platform-gated skip;
+- 30-tool MCP v7 surface;
+- generated contract, MCP, and host-profile assets agree with executable source;
+- source hygiene, Ruff, exact-wheel build/install, and fresh-clone readback are release gates.
+
 ## [0.3.0a0] — 2026-08-11
 
 ### Added
@@ -39,3 +66,4 @@ All notable public changes are documented here. The project is in public alpha; 
 - automatic broad IPython workspace restoration remains in progress.
 
 [0.3.0a0]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0
+[0.3.0a1]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1

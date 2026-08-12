@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#stav-projektu)
 
@@ -188,11 +188,11 @@ Podrobnější odůvodnění návrhu a poznámky ke zdrojům najdete v části [
 
 > **Veřejná alfa:** používejte přesně určený tag, prohlédněte si capabilities vrácené hostitelem a začněte s dočasnými pracovními prostory. Tento projekt spouští Python vytvořený modelem a **nejde o bezpečnostní sandbox**.
 
-### Instalace z prvního veřejného tagu
+### Instalace z nejnovějšího veřejného tagu
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### Nastavení Codex App
@@ -259,14 +259,14 @@ Frontend MCP je záměrně vyměnitelný. Nevlastní databázi kontinuity ani ž
 
 ## Stav projektu
 
-Aktuální veřejná alfa: **`0.3.0a0`**.
+Aktuální veřejná alfa: **`0.3.0a1`**.
 
 Reprodukováno z tohoto veřejného kandidáta:
 
 - pokrytí Pythonu 3.11 až 3.14;
 - plocha MCP v7 s 30 nástroji;
 - aditivní schéma SQLite až do v5;
-- úplný běh repozitáře: **245 úspěšných testů, 1 přeskočený test kvůli platformě**;
+- úplný běh repozitáře: **249 úspěšných testů, 1 přeskočený test kvůli platformě**;
 - čisté exact-wheel probe supervisoru/frontendu na Linuxu/WSL;
 - scénáře trvalého supervisoru, náhrady frontendu, ztráty procesu, zastaralého zapisovatele, opětovného použití potvrzení a následníků RLM vázaných na zásady.
 

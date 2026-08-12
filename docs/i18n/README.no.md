@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#prosjektstatus)
 
@@ -188,11 +188,11 @@ Se [Hvorfor RLM + IPython](../../docs/WHY-RLM-AND-IPYTHON.md) for en dypere begr
 
 > **Offentlig alfa:** bruk en fastlåst tagg, inspiser capabilities som verten returnerer, og start med arbeidsområder som kan kastes. Dette prosjektet kjører Python skrevet av modellen og er **ikke en sikkerhetssandkasse**.
 
-### Installer fra den første offentlige taggen
+### Installer fra den nyeste offentlige taggen
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### Sett opp Codex App
@@ -259,14 +259,14 @@ MCP-frontenden kan byttes ut med vilje. Den eier ikke kontinuitetsdatabasen elle
 
 ## Prosjektstatus
 
-Gjeldende offentlige alfa: **`0.3.0a0`**.
+Gjeldende offentlige alfa: **`0.3.0a1`**.
 
 Reprodusert fra denne offentlige kandidaten:
 
 - dekning for Python 3.11 til 3.14;
 - MCP v7-overflate med 30 verktøy;
 - additivt SQLite-skjema gjennom v5;
-- full kjøring av repositoriet: **245 bestått, 1 plattformstyrt hoppet over**;
+- full kjøring av repositoriet: **249 bestått, 1 plattformstyrt hoppet over**;
 - en ren exact-wheel supervisor/frontend-probe på Linux/WSL;
 - scenarier for varig supervisor, frontend-erstatning, prosesstap, utdatert skriver, gjenbruk av kvitteringer og policybundne RLM-etterfølgerforsøk.
 

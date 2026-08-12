@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#status-do-projeto)
 
@@ -188,11 +188,11 @@ Veja [Por que RLM + IPython](../../docs/WHY-RLM-AND-IPYTHON.md) para a justifica
 
 > **Alfa pública:** use uma tag fixada, inspecione as capacidades retornadas pelo seu host e comece com espaços de trabalho descartáveis. Este projeto executa Python escrito pelo modelo e **não é um sandbox de segurança**.
 
-### Instalar a partir da primeira tag pública
+### Instalar a partir da tag pública mais recente
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### Configuração do Codex App
@@ -259,14 +259,14 @@ O frontend MCP é deliberadamente substituível. Ele não é dono do banco de da
 
 ## Status do projeto
 
-Alfa pública atual: **`0.3.0a0`**.
+Alfa pública atual: **`0.3.0a1`**.
 
 Reproduzido a partir deste candidato público:
 
 - cobertura de Python 3.11 a 3.14;
 - superfície MCP v7 com 30 ferramentas;
 - esquema SQLite aditivo até v5;
-- execução completa do repositório: **245 aprovados, 1 ignorado por condição de plataforma**;
+- execução completa do repositório: **249 aprovados, 1 ignorado por condição de plataforma**;
 - uma sondagem limpa do supervisor/frontend com wheel exato no Linux/WSL;
 - supervisor durável, substituição do frontend, perda de processo, gravador obsoleto, reutilização de recibos e cenários de sucessores RLM vinculados a políticas;
 

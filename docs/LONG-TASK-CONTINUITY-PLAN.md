@@ -1,7 +1,7 @@
 # Durable Long-Operation Continuity Plan
 
-**Status:** AR-LT0 through AR-LT2 verified; first bounded AR-LT3 RLM recovery slice installed and verified, full phase open
-**Date:** 2026-08-11
+**Status:** AR-LT0 through AR-LT3 verified and installed; schema v5, runtime/dispatcher generation 13
+**Date:** 2026-08-12
 **Scope:** standalone AAR core, runtime supervisor, MCP/direct adapters, RLM, and programmable workspace
 **Acceptance boundary:** this document does not reopen or expand the verified AR-0 through AR-3 candidates
 
@@ -9,9 +9,9 @@
 
 AAR is adding durable long-operation continuity as an independent `AR-LT` workstream before treating
 a general-purpose worker runtime as the default answer to every long task. The first standalone
-contract, durable-RLM, and supervisor-separation slices are verified. Policy-bound RLM next-step
-successors are also source/package verified; workspace restore and general effect-aware continuation
-remain planned.
+contract, durable-RLM, supervisor-separation, policy-bound RLM successor, workspace restore, and
+general effect-aware continuation slices are source verified and installed behind the host-managed
+supervisor on schema v5 at runtime/dispatcher generation 13.
 
 The first useful target is deliberately narrower than a distributed workflow engine:
 
@@ -36,8 +36,9 @@ The architecture in this document is decomposed into four implementation-ready p
 - [AR-LT3 — Checkpoint- and Effect-Aware Continuation](AR-LT3-CHECKPOINT-AND-EFFECT-RECOVERY-PLAN.md) — RLM step-boundary successors, new-generation workspace restore, broker/effect reconciliation, and explicit unsupported state.
 
 Each plan identifies exact source/test impact, ordered work packages, failure injection, exit evidence,
-rollback, and the AHC coordination boundary. AR-LT0 through AR-LT2 now contain executed closeouts;
-the initial AR-LT3 RLM policy/successor slice is installed and verified while the remaining phase stays open.
+rollback, and the AHC coordination boundary. AR-LT0 through AR-LT3 now contain source and installed
+closeout evidence. The installed claim remains bounded to standalone AAR and does not imply AHC
+activation or external-effect authority.
 
 The cross-project mapping is maintained in `AAR-LONG-TASK-CONTINUITY-COORDINATION-PLAN.md` in the separate AHC-by-AAR planning workspace. That planning document is not normative to AAR core. AR-LT adds no new shared gate and does not block HC-R0.
 

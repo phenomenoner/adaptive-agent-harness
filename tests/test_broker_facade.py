@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+import threading
 from pathlib import Path
 
 import pytest
@@ -828,5 +829,149 @@ def test_compensation_is_forbidden_after_cancellation_or_deadline(
         assert report.calls[0].compensation_receipt is None
         assert proposal_count == 0
         assert len(rebound.traces()) == 1
+    finally:
+        second.close()
+
+
+def test_compensation_deadline_is_rechecked_after_waiting_for_admission_lock(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "reconcile-compensation-lock-expiry.sqlite3"
+    operation = OperationRef(value="operation-broker-compensation-lock-expiry")
+    first = ReferenceHost(database)
+    envelope = broker_envelope(first, ("effect.propose", "model.request"))
+    bound = first.brokers.bind(envelope, operation)
+
+    def lose_model(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    first.models.request = lose_model  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.model_request(ModelRequest(prompt="expire behind lock"), step_key="authority-gap")
+    first.close()
+
+    now = [envelope.deadline_unix_ms - 1]
+    second = ReferenceHost(database, now_ms=lambda: now[0])
+    rebound = second.brokers.bind(
+        envelope.model_copy(update={"runtime_generation": second.runtime_generation}),
+        operation,
+    )
+    provider_calls = 0
+    original_propose = second.effects.propose
+
+    def count_proposal(*args, **kwargs):
+        nonlocal provider_calls
+        provider_calls += 1
+        return original_propose(*args, **kwargs)
+
+    second.effects.propose = count_proposal  # type: ignore[method-assign]
+    invoke_entered = threading.Event()
+    original_invoke = second.brokers._journal.invoke
+
+    def signal_then_invoke(**kwargs):
+        invoke_entered.set()
+        return original_invoke(**kwargs)
+
+    second.brokers._journal.invoke = signal_then_invoke  # type: ignore[method-assign]
+    blocker = sqlite3.connect(database, isolation_level=None)
+    blocker.execute("BEGIN IMMEDIATE")
+    result: list[object] = []
+    failures: list[BaseException] = []
+
+    def reconcile() -> None:
+        try:
+            result.append(
+                rebound.reconcile_unresolved(
+                    current_capability_digest=envelope.capability_digest,
+                    current_compensation_grant=current_effect_grant(envelope),
+                    cancellation_requested=False,
+                    propose_compensation=True,
+                )
+            )
+        except BaseException as error:
+            failures.append(error)
+
+    worker = threading.Thread(target=reconcile)
+    worker.start()
+    assert invoke_entered.wait(timeout=2)
+    now[0] = envelope.deadline_unix_ms
+    blocker.execute("COMMIT")
+    blocker.close()
+    worker.join(timeout=5)
+
+    try:
+        assert not worker.is_alive()
+        assert failures == []
+        assert len(result) == 1
+        assert provider_calls == 0
+        traces = rebound.traces()
+        assert [trace.method for trace in traces] == ["model.request"]
+        assert traces[0].compensation_digest is None
+    finally:
+        second.close()
+
+
+def test_compensation_deadline_is_rechecked_immediately_before_provider_call(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "reconcile-compensation-provider-expiry.sqlite3"
+    operation = OperationRef(value="operation-broker-compensation-provider-expiry")
+    first = ReferenceHost(database)
+    envelope = broker_envelope(first, ("effect.propose", "model.request"))
+    bound = first.brokers.bind(envelope, operation)
+
+    def lose_model(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    first.models.request = lose_model  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.model_request(ModelRequest(prompt="expire before provider"), step_key="authority-gap")
+    first.close()
+
+    now = [envelope.deadline_unix_ms - 1]
+    second = ReferenceHost(database, now_ms=lambda: now[0])
+    rebound = second.brokers.bind(
+        envelope.model_copy(update={"runtime_generation": second.runtime_generation}),
+        operation,
+    )
+    provider_calls = 0
+    original_propose = second.effects.propose
+
+    def count_proposal(*args, **kwargs):
+        nonlocal provider_calls
+        provider_calls += 1
+        return original_propose(*args, **kwargs)
+
+    second.effects.propose = count_proposal  # type: ignore[method-assign]
+    original_invoke = second.brokers._journal.invoke
+
+    def expire_after_transaction_check(**kwargs):
+        original_check = kwargs["admission_check"]
+        checks = 0
+
+        def wrapped_check() -> None:
+            nonlocal checks
+            original_check()
+            checks += 1
+            if checks == 1:
+                now[0] = envelope.deadline_unix_ms
+
+        kwargs["admission_check"] = wrapped_check
+        return original_invoke(**kwargs)
+
+    second.brokers._journal.invoke = expire_after_transaction_check  # type: ignore[method-assign]
+    try:
+        report = rebound.reconcile_unresolved(
+            current_capability_digest=envelope.capability_digest,
+            current_compensation_grant=current_effect_grant(envelope),
+            cancellation_requested=False,
+            propose_compensation=True,
+        )
+        assert report.unresolved
+        assert provider_calls == 0
+        traces = rebound.traces()
+        assert [trace.method for trace in traces] == ["model.request", "effect.propose"]
+        assert traces[1].state == "failed"
+        assert traces[1].failure_code == "BrokerDeadlineExpired"
     finally:
         second.close()

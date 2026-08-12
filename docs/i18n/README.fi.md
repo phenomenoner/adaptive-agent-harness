@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0)
+[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#projektin-tila)
 
@@ -188,11 +188,11 @@ Katso [Miksi RLM + IPython](../../docs/WHY-RLM-AND-IPYTHON.md), jossa suunnittel
 
 > **Julkinen alfa:** käytä pinattua tagia, tarkista hostisi palauttamat capabilities-tiedot ja aloita hävitettävillä työtiloilla. Tämä projekti suorittaa mallin kirjoittamaa Pythonia, eikä se ole **tietoturvasandbox**.
 
-### Asennus ensimmäisestä julkisesta tagista
+### Asennus uusimmasta julkisesta tagista
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
 ```
 
 ### Codex Appin asetukset
@@ -259,14 +259,14 @@ MCP-käyttöliittymä on tarkoituksella vaihdettavissa. Se ei omista jatkuvuusti
 
 ## Projektin tila
 
-Nykyinen julkinen alfa: **`0.3.0a0`**.
+Nykyinen julkinen alfa: **`0.3.0a1`**.
 
 Tästä julkisesta ehdokkaasta toistettu:
 
 - Python 3.11–3.14-kattavuus;
 - 30 työkalun MCP v7 -pinta;
 - additiivinen SQLite-skeema versioon v5 asti;
-- koko repositorion ajo: **245 läpäisi, 1 ohitettiin alustan vuoksi**;
+- koko repositorion ajo: **249 läpäisi, 1 ohitettiin alustan vuoksi**;
 - puhdas exact-wheel supervisor/frontend -probe Linux/WSL:ssä;
 - pysyvän valvojan, käyttöliittymän korvaamisen, prosessihäviön, vanhentuneen kirjoittajan, kuitin uudelleenkäytön ja käytäntöihin sidottujen RLM-seuraajaskenaarioiden testit.
 

@@ -2,7 +2,15 @@
 
 **Status:** reference-runtime behavior is reproducible from the public source candidate; historical
 Codex, native-Windows, and installed-Hermes rows are maintainer-reported; AHC remains a target
-**Updated:** 2026-08-11
+**Updated:** 2026-08-12
+
+> **Current public delta (2026-08-12):** complete standalone AR-LT3 source
+> `aabbcfc76c9ba1b2e837fc4c0f01e743fa455479` is installed as package `0.3.0a0` behind the
+> host-managed supervisor. Sanitized readback records schema v5, runtime/dispatcher generation
+> `13 / 13`, one ready owner, and zero active work. Workspace process-loss, checkpoint restore,
+> stale-handle, duplicate-owner fail-closed, and installed-wheel stdio canaries passed. The public
+> `0.3.0a1` maintenance source synchronizes those executable bytes and adds the final compensation
+> deadline-admission regressions; it does not itself change the installed host.
 
 > **Public evidence note:** supporting host receipts, raw traces, and private historical commits are
 > not included in this fresh-history public repository. Host-specific rows below preserve
