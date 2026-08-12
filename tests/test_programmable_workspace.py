@@ -221,6 +221,40 @@ def test_restore_and_attach_fail_closed_across_sessions_and_generations() -> Non
         backend.attach(handle, SessionRef(value="session-other"))
 
 
+def test_recovery_restore_recreates_lost_workspace_in_next_generation() -> None:
+    source = PlainPythonWorkspaceBackend()
+    workspace, session = refs()
+    created = source.create(workspace, session)
+    executed = source.execute(
+        OperationRef(value="operation-recovery-source"),
+        created,
+        WorkspaceProgramSpec(code="answer = 42\nanswer"),
+    )
+    source_handle = current(executed)
+    manifest = source.checkpoint(
+        OperationRef(value="operation-recovery-checkpoint"),
+        source_handle,
+        WorkspaceCheckpointPolicy(),
+        "trace-recovery-checkpoint",
+    )
+
+    restarted = PlainPythonWorkspaceBackend()
+    restored = restarted.restore(
+        manifest,
+        WorkspaceRestoreSpec(
+            workspace=workspace,
+            session=session,
+            expected_handle=source_handle,
+            recover_lost_generation=True,
+        ),
+    )
+
+    assert restored.generation == source_handle.generation + 1
+    assert restored.revision == 0
+    variables = {item.name: item for item in restarted.inspect(restored).variables}
+    assert variables["answer"].preview == "42"
+
+
 def test_programmable_handle_rejects_a_valid_but_foreign_backend_descriptor() -> None:
     backend = PlainPythonWorkspaceBackend()
     workspace, session = refs()

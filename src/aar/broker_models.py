@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.schemas import (
@@ -148,6 +148,15 @@ class BrokerContractSet(StrictModel):
     contracts: tuple[BrokerMethodContract, ...]
 
 
+BrokerReconciliationAction = Literal[
+    "receipt_recovered",
+    "safe_replay",
+    "pending",
+    "quarantine",
+    "compensation_proposed",
+]
+
+
 class BrokerCallTrace(StrictModel):
     schema_version: Literal["aar.broker.v1"] = BROKER_SCHEMA_VERSION
     sequence: PositiveCounter
@@ -161,6 +170,63 @@ class BrokerCallTrace(StrictModel):
     response_model: str
     usage_delta: BrokerUsage
     failure_code: str | None = None
+    reconciliation_action: BrokerReconciliationAction | None = None
+    authority_digest: Digest | None = None
+    reconciliation_digest: Digest | None = None
+    compensation_digest: Digest | None = None
+
+
+class BrokerCallReconciliation(StrictModel):
+    schema_version: Literal["aar.broker.v1"] = BROKER_SCHEMA_VERSION
+    sequence: PositiveCounter
+    method: BrokerMethodName
+    action: BrokerReconciliationAction
+    reason_code: str
+    request_digest: Digest
+    authority_digest: Digest
+    response_digest: Digest | None = None
+    compensation_receipt: BrokerReceipt | None = None
+
+
+class BrokerReconciliationReport(StrictModel):
+    schema_version: Literal["aar.broker.v1"] = BROKER_SCHEMA_VERSION
+    operation: OperationRef
+    calls: tuple[BrokerCallReconciliation, ...]
+    unresolved: bool
+    report_digest: Digest
+
+    @classmethod
+    def issue(
+        cls,
+        *,
+        operation: OperationRef,
+        calls: tuple[BrokerCallReconciliation, ...],
+        unresolved: bool,
+    ) -> BrokerReconciliationReport:
+        payload = {
+            "operation": operation,
+            "calls": calls,
+            "unresolved": unresolved,
+        }
+        return cls(
+            operation=operation,
+            calls=calls,
+            unresolved=unresolved,
+            report_digest=canonical_sha256(payload),
+        )
+
+    @model_validator(mode="after")
+    def validate_report_digest(self) -> BrokerReconciliationReport:
+        expected = canonical_sha256(
+            {
+                "operation": self.operation,
+                "calls": self.calls,
+                "unresolved": self.unresolved,
+            }
+        )
+        if self.report_digest != expected:
+            raise ValueError("broker reconciliation report digest mismatch")
+        return self
 
 
 _METHODS: dict[
@@ -256,6 +322,8 @@ BROKER_SCHEMA_MODELS: dict[str, type[StrictModel]] = {
     "broker_artifact_read_request": ArtifactReadRequest,
     "broker_artifact_read_result": ArtifactReadResult,
     "broker_call_trace": BrokerCallTrace,
+    "broker_call_reconciliation": BrokerCallReconciliation,
+    "broker_reconciliation_report": BrokerReconciliationReport,
     "broker_catalog": BrokerCatalog,
     "broker_contract_set": BrokerContractSet,
     "broker_effect_proposal": EffectProposal,

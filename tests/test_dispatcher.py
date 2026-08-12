@@ -75,6 +75,7 @@ class FakeRegistry:
     def __init__(self, operations: list[OperationRef]) -> None:
         self.records = {operation.value: _record(operation) for operation in operations}
         self.pending: deque[str] = deque()
+        self.kinds: dict[str, str] = {}
         self.dispatch_requests: list[tuple[OperationRef, str]] = []
         self.claim_calls: list[dict[str, Any]] = []
         self.finish_calls: list[
@@ -88,6 +89,7 @@ class FakeRegistry:
     def request_dispatch(self, operation: OperationRef, *, kind: str) -> OperationRecord:
         with self._lock:
             self.dispatch_requests.append((operation, kind))
+            self.kinds[operation.value] = kind
             if (
                 self.records[operation.value].state is OperationState.ACCEPTED
                 and operation.value not in self.pending
@@ -126,7 +128,12 @@ class FakeRegistry:
                 )
                 self.records[operation.value] = _state(current, OperationState.RUNNING)
                 self.write_count += 1
-                return DispatchClaim(operation, attempt, attempt.lease_epoch)
+                return DispatchClaim(
+                    operation,
+                    attempt,
+                    attempt.lease_epoch,
+                    self.kinds[operation.value],
+                )
             return None
 
     def finish_attempt(
@@ -249,6 +256,22 @@ class ExplodingHost(FakeHost):
         raise RuntimeError("worker exploded")
 
 
+class MultiKindHost(FakeHost):
+    def __init__(self, registry: FakeRegistry) -> None:
+        super().__init__(registry)
+        self.kind_calls: list[str] = []
+
+    def run_claimed(
+        self,
+        kind: str,
+        operation: OperationRef,
+        attempt: FakeAttempt,
+        fence: AttemptFence,
+    ) -> OperationRecord:
+        self.kind_calls.append(kind)
+        return super().run_claimed_rlm(operation, attempt, fence)
+
+
 def test_queued_claim_runs_to_terminal_with_exact_fence() -> None:
     operation = OperationRef(value="op-queued")
     registry = FakeRegistry([operation])
@@ -278,6 +301,25 @@ def test_queued_claim_runs_to_terminal_with_exact_fence() -> None:
         assert finished_fence.lease_epoch == attempt.lease_epoch
         assert finished_fence.owner_digest == dispatcher.owner_digest
         assert registry.claim_calls[0]["lease_duration_ms"] == 1_234
+    finally:
+        dispatcher.close()
+
+
+def test_non_rlm_kind_is_routed_to_generic_host_runner() -> None:
+    operation = OperationRef(value="op-workspace")
+    registry = FakeRegistry([operation])
+    host = MultiKindHost(registry)
+    dispatcher = DurableDispatcher(host, concurrency=1, idle_poll_ms=5)
+    dispatcher.start()
+    try:
+        dispatcher.notify(operation, kind="workspace.program.execute")
+        completed = dispatcher.wait(operation, timeout_s=1)
+
+        assert completed.state is OperationState.SUCCEEDED
+        assert host.kind_calls == ["workspace.program.execute"]
+        assert registry.dispatch_requests == [
+            (operation, "workspace.program.execute")
+        ]
     finally:
         dispatcher.close()
 

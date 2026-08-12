@@ -4,7 +4,7 @@
 
 ### Gi agentene en arbeidsbenk – ikke bare en større prompt.
 
-**RLM × persistent IPython × durable operations × host-owned authority**
+**Vertsammensatt RLM + vedvarende IPython + varige operasjoner + vertens myndighet**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
@@ -26,7 +26,9 @@
 
 De fleste agenter blir bedt om å løse store problemer med ett dyrt grensesnitt som glemmer: prompten.
 
-**Adaptive Agent Harness gir dem i stedet en programmerbar arbeidsbenk.** En modell kan beholde undersøkelsestilstand i IPython, undersøke og transformere lange inndata med Python, gjøre avgrensede rekursive modell- eller subagentkall, lagre operasjonskvitteringer varig og koble seg til arbeidet igjen gjennom en liten MCP-overflate.
+**Adaptive Agent Harness gir dem i stedet en programmerbar arbeidsbenk.** En vert kan bruke to vertsammensatte sibling surfaces side om side: vedvarende IPython-arbeidsområder for tilstandsbasert beregning og avgrensede RLM-jobber for meglet evidens og modellkall. Varige kvitteringer og en liten MCP-overflate gjør begge styrbare og mulige å koble til igjen.
+
+Den nåværende offentlige alfaen **kjører ikke en RLM-jobb inne i et IPython-arbeidsområde og deler ikke tilstand mellom dem automatisk.** Verten må eksplisitt overføre utvalgt evidens, verdier eller artefakter.
 
 Resultatet er et praktisk grunnlag for agenter som må:
 
@@ -70,7 +72,7 @@ RLM-style agent
 
 ## Hvorfor IPython?
 
-RLM-er trenger et sted å tenke **med data**, ikke bare snakke om dem. IPython passer godt fordi det gir modellen et vedvarende beregningsarbeidsområde:
+Langvarige agenter trenger også et sted å tenke **med data**, ikke bare snakke om dem. IPython utfyller RLM-flaten ved å gi verten et separat, vedvarende beregningsarbeidsområde:
 
 - variabler forblir tilgjengelige på tvers av kjøringstrinn;
 - DataFrames, tabeller, analyserte dokumenter og grafresultater kan undersøkes direkte;
@@ -87,7 +89,7 @@ Dette skillet er viktig for langvarig forskning, analyse av kodebaser, datagrans
 
 ## Hvorfor RLM × IPython?
 
-Hver del dekker en egen feilmodus:
+Her betyr «×» **vertskomposisjon**, ikke en RLM-/arbeidsområdeforbindelse i samme prosess. Hver sibling surface dekker en annen feilmodus:
 
 | Lag | Dette bidrar den med |
 |---|---|
@@ -96,7 +98,7 @@ Hver del dekker en egen feilmodus:
 | **Adaptive Agent Harness** | Legger til varig operasjonsidentitet, grants, budsjetter, kvitteringer, artefakter, gjenopprettingspolicy og vertsnøytral MCP-tilgang. |
 | **Din vertagent** | Eier identitet, leverandørlegitimasjon, godkjenning, privilegerte effekter, aksept og endelig levering. |
 
-Sammen lar de en agent gå mellom språklig resonnering og deterministisk beregning uten å gjøre hver mellomverdi om til prompttekst.
+En vert kan sette dem sammen ved å overføre utvalgt, eksplisitt evidens, verdier eller artefakter mellom flatene. Det finnes ikke noe implisitt delt navnerom eller noen automatisk RLM-til-IPython-kjøringsbane.
 
 ```mermaid
 flowchart LR
@@ -104,7 +106,6 @@ flowchart LR
     H --> A[Adaptive Agent Harness]
     A --> R[Bounded RLM job]
     A --> I[Persistent IPython workspace]
-    R <--> I
     R --> B[Brokered model / subagent / evidence calls]
     I --> P[Python transforms, tests, tables]
     B --> E[Receipts + trace]
@@ -113,9 +114,9 @@ flowchart LR
     H --> D[Authorize effects and deliver]
 ```
 
-Den styrende regelen er med vilje enkel:
+De styrende reglene er med vilje enkle:
 
-> **Python er orkestreringsspråket; verten forblir myndighetsgrensen.**
+> **Verten setter sibling surfaces sammen eksplisitt; Python er et arbeidsområdespråk, og verten forblir myndighetsgrensen.**
 
 ---
 
@@ -260,15 +261,16 @@ MCP-frontenden kan byttes ut med vilje. Den eier ikke kontinuitetsdatabasen elle
 
 Gjeldende offentlige alfa: **`0.3.0a0`**.
 
-Verifisert i den frosne kandidaten:
+Reprodusert fra denne offentlige kandidaten:
 
 - dekning for Python 3.11 til 3.14;
 - MCP v7-overflate med 30 verktøy;
 - additivt SQLite-skjema gjennom v4;
-- full kjøring av repositoriet: **199 bestått, 1 plattformstyrt hoppet over**;
-- rene Exact-Wheel-prober på Linux/WSL og nativ Windows;
-- scenarier for varig supervisor, frontend-erstatning, prosesstap, utdatert skriver, gjenbruk av kvitteringer og policybundne RLM-etterfølgerforsøk;
-- dokumentasjon av installert Hermes-cutover bevart i prosjektets append-only WAL.
+- full kjøring av repositoriet: **207 bestått, 1 plattformstyrt hoppet over**;
+- en ren exact-wheel supervisor/frontend-probe på Linux/WSL;
+- scenarier for varig supervisor, frontend-erstatning, prosesstap, utdatert skriver, gjenbruk av kvitteringer og policybundne RLM-etterfølgerforsøk.
+
+Tidligere kompatibilitetsrader for nativ Windows og installert Hermes beholdes som **historisk kontekst rapportert av vedlikeholderne**. De støttende host receipts er ikke med i dette offentlige repositoriet, så radene kan ikke revideres uavhengig fra dette treet og er ikke releasekriterier for den offentlige source-kandidaten.
 
 Fortsatt åpent:
 

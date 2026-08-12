@@ -28,5 +28,5 @@
   "mcpServers": "./.mcp.json",
   "name": "adaptive-agent-runtime",
   "skills": "./skills/",
-  "version": "0.1.0+codex.20260809083709"
+  "version": "0.3.0+codex.20260811154000"
 }

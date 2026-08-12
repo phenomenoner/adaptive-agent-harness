@@ -8,7 +8,7 @@
       "2025-03-26",
       "2024-11-05"
     ],
-    "tool_surface_digest": "sha256:c3032f942269c8705e6c8e918a6ca934fb392441264194adc0db2d36cc8133c0",
+    "tool_surface_digest": "sha256:b723b3d474565cb13d6fa3705976421a4bb37ca602bf04635603a9ac43ea106c",
     "tool_surface_version": "aar.mcp-tools.v7",
     "transport": "stdio"
   },

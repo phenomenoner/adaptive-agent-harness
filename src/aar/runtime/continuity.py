@@ -20,11 +20,19 @@ from aar.continuity_models import (
 )
 from aar.rlm_models import RlmAction, RlmJobSpec, RlmStep
 from aar.runtime.rlm import next_rlm_action
+from aar.runtime.workspace_models import (
+    ProgrammableWorkspaceHandle,
+    WorkspaceBackendDescriptor,
+    WorkspaceCheckpointManifest,
+    WorkspaceEnvironmentFingerprint,
+    WorkspaceProgramSpec,
+)
 from aar.schemas import Digest, OperationRef, RequestEnvelope, StrictModel
 from aar.versions import PACKAGE_VERSION, RLM_SCHEMA_VERSION
 
 RLM_OPERATION_KIND = "rlm.execute"
 RLM_STRATEGY_CONTRACT_VERSION = "aar.rlm-strategy.v1"
+WORKSPACE_PROGRAM_OPERATION_KIND = "workspace.program.execute"
 
 
 class RlmRecoveryPlan(StrictModel):
@@ -33,6 +41,14 @@ class RlmRecoveryPlan(StrictModel):
     decision: RecoveryDecisionKind
     reason_code: str
     boundary: OperationRlmStepBoundaryV1 | None = None
+
+
+class WorkspaceRecoveryPlan(StrictModel):
+    """A bounded checkpoint selection decision before any restore side effect."""
+
+    decision: RecoveryDecisionKind
+    reason_code: str
+    manifest: WorkspaceCheckpointManifest | None = None
 
 
 def rlm_step_boundary_policy() -> OperationRecoveryPolicyV1:
@@ -58,6 +74,133 @@ def rlm_step_boundary_policy() -> OperationRecoveryPolicyV1:
         cancellation_policy="block-successor",
         deadline_policy="preserve-original",
         effect_reconcile_required=True,
+    )
+
+
+def workspace_checkpoint_boundary_policy() -> OperationRecoveryPolicyV1:
+    """Permit one replay-safe successor from an exact complete checkpoint."""
+
+    return OperationRecoveryPolicyV1(
+        policy_version=1,
+        policy_id="workspace.checkpoint-boundary.v1",
+        operation_kind=WORKSPACE_PROGRAM_OPERATION_KIND,
+        allowed_decisions=("needs_user", "quarantine", "restore_checkpoint"),
+        max_successor_attempts=1,
+        safe_replay_no_effect=True,
+        checkpoint_required=True,
+        allow_partial_checkpoint=False,
+        environment_compatibility="environment-exact",
+        broker_uncertainty_policy="no-broker-replay",
+        cancellation_policy="block-successor",
+        deadline_policy="preserve-original",
+        effect_reconcile_required=False,
+    )
+
+
+def workspace_recovery_environment_digest(
+    *,
+    backend: WorkspaceBackendDescriptor,
+    environment: WorkspaceEnvironmentFingerprint,
+    capability_digest: Digest,
+    policy: OperationRecoveryPolicyV1,
+) -> Digest:
+    return canonical_sha256(
+        {
+            "package_version": PACKAGE_VERSION,
+            "backend": backend,
+            "environment": environment,
+            "capability_digest": capability_digest,
+            "policy_digest": canonical_sha256(policy),
+        }
+    )
+
+
+def plan_workspace_checkpoint_successor(
+    *,
+    operation: OperationRef,
+    input_digest: Digest,
+    envelope: RequestEnvelope,
+    handle: ProgrammableWorkspaceHandle,
+    spec: WorkspaceProgramSpec,
+    prior_attempt: OperationAttemptRefV1,
+    policy_binding: OperationRecoveryPolicyBindingV1,
+    current_capability_digest: Digest,
+    current_backend: WorkspaceBackendDescriptor,
+    current_environment: WorkspaceEnvironmentFingerprint,
+    manifest: WorkspaceCheckpointManifest | None,
+    cancellation_requested: bool,
+    now_unix_ms: int,
+) -> WorkspaceRecoveryPlan:
+    policy = policy_binding.policy
+    if policy_binding.operation != operation or prior_attempt.operation != operation:
+        return WorkspaceRecoveryPlan(
+            decision="quarantine", reason_code="recovery_identity_mismatch"
+        )
+    if policy.policy_id != "workspace.checkpoint-boundary.v1" or policy.policy_version != 1:
+        return WorkspaceRecoveryPlan(
+            decision="quarantine", reason_code="unknown_recovery_policy"
+        )
+    if policy.operation_kind != WORKSPACE_PROGRAM_OPERATION_KIND:
+        return WorkspaceRecoveryPlan(
+            decision="quarantine", reason_code="recovery_operation_kind_mismatch"
+        )
+    if "restore_checkpoint" not in policy.allowed_decisions or not policy.safe_replay_no_effect:
+        return WorkspaceRecoveryPlan(
+            decision="needs_user", reason_code="checkpoint_successor_not_allowed"
+        )
+    if not spec.checkpoint_replay_safe:
+        return WorkspaceRecoveryPlan(
+            decision="needs_user", reason_code="workspace_replay_not_declared_safe"
+        )
+    payload = {"handle": handle, "kind": WORKSPACE_PROGRAM_OPERATION_KIND, "spec": spec}
+    if input_digest != envelope.input_digest or canonical_sha256(payload) != input_digest:
+        return WorkspaceRecoveryPlan(
+            decision="quarantine", reason_code="recovery_input_digest_mismatch"
+        )
+    if envelope.capability_digest != current_capability_digest:
+        return WorkspaceRecoveryPlan(
+            decision="needs_user", reason_code="recovery_capability_digest_mismatch"
+        )
+    environment_digest = workspace_recovery_environment_digest(
+        backend=current_backend,
+        environment=current_environment,
+        capability_digest=current_capability_digest,
+        policy=policy,
+    )
+    if environment_digest != policy_binding.environment_digest:
+        return WorkspaceRecoveryPlan(
+            decision="needs_user", reason_code="recovery_environment_mismatch"
+        )
+    if cancellation_requested:
+        return WorkspaceRecoveryPlan(
+            decision="needs_user", reason_code="cancellation_requested"
+        )
+    if now_unix_ms >= envelope.deadline_unix_ms:
+        return WorkspaceRecoveryPlan(decision="needs_user", reason_code="deadline_expired")
+    if manifest is None:
+        return WorkspaceRecoveryPlan(
+            decision="needs_user", reason_code="workspace_checkpoint_missing"
+        )
+    if manifest.source_handle != handle:
+        return WorkspaceRecoveryPlan(
+            decision="quarantine", reason_code="workspace_checkpoint_handle_mismatch"
+        )
+    if manifest.source_handle.backend != current_backend:
+        return WorkspaceRecoveryPlan(
+            decision="needs_user", reason_code="workspace_backend_mismatch"
+        )
+    if manifest.environment != current_environment:
+        return WorkspaceRecoveryPlan(
+            decision="needs_user", reason_code="workspace_checkpoint_environment_mismatch"
+        )
+    if manifest.exclusions and not policy.allow_partial_checkpoint:
+        return WorkspaceRecoveryPlan(
+            decision="needs_user", reason_code="partial_checkpoint_not_allowed"
+        )
+    return WorkspaceRecoveryPlan(
+        decision="restore_checkpoint",
+        reason_code="workspace_exact_checkpoint_boundary",
+        manifest=manifest,
     )
 
 

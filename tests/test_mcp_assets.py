@@ -7,6 +7,7 @@ from pathlib import Path
 
 from aar.canonical import canonical_sha256
 from aar.mcp.assets import asset_documents, verify_assets
+from aar.mcp.server import FIXTURE_SET_DIGEST, SCHEMA_BUNDLE_DIGEST
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_TOOLS = (
@@ -123,3 +124,37 @@ def test_skill_metadata_binds_exact_skill_and_tool_bytes() -> None:
         "2025-03-26",
         "2024-11-05",
     ]
+
+
+def test_runtime_and_packaged_metadata_bind_canonical_schema_and_fixture_assets() -> None:
+    schema = json.loads(
+        (ROOT / "schemas" / "aar-schemas-v1.json").read_text(encoding="utf-8")
+    )
+    fixtures = json.loads(
+        (ROOT / "tests" / "fixtures" / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert schema["bundle_digest"] == SCHEMA_BUNDLE_DIGEST
+    assert fixtures["fixture_set_digest"] == FIXTURE_SET_DIGEST
+
+    metadata_paths = (
+        ROOT / "skills" / "aar-operations" / "metadata.json",
+        ROOT
+        / "profiles"
+        / "codex"
+        / "plugins"
+        / "adaptive-agent-runtime"
+        / "skills"
+        / "aar-operations"
+        / "metadata.json",
+        ROOT
+        / "profiles"
+        / "hermes"
+        / "adaptive-agent-runtime"
+        / "skills"
+        / "aar-operations"
+        / "metadata.json",
+    )
+    for path in metadata_paths:
+        metadata = json.loads(path.read_text(encoding="utf-8"))
+        assert metadata["schema_bundle_digest"] == schema["bundle_digest"]
+        assert metadata["fixture_set_digest"] == fixtures["fixture_set_digest"]

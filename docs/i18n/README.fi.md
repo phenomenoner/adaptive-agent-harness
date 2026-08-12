@@ -4,7 +4,7 @@
 
 ### Anna agenteille työpöytä — älä vain suurempaa promptia.
 
-**RLM × persistent IPython × durable operations × host-owned authority**
+**Hostin koostama RLM + pysyvä IPython + kestävät operaatiot + hostin hallussa oleva päätösvalta**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
@@ -26,7 +26,9 @@
 
 Useimpia agentteja pyydetään ratkaisemaan suuria ongelmia yhdellä kalliilla, unohtavalla rajapinnalla: promptilla.
 
-**Adaptive Agent Harness antaa niille sen sijaan ohjelmoitavan työpöydän.** Malli voi säilyttää tutkimuksen tilan IPythonissa, tarkastella ja muuntaa pitkiä syötteitä Pythonilla, tehdä rajattuja rekursiivisia malli- tai aliagenttikutsuja, säilyttää operaatioiden kuitit ja palata työhön pienen MCP-rajapinnan kautta.
+**Adaptive Agent Harness antaa niille sen sijaan ohjelmoitavan työpöydän.** Host voi käyttää rinnakkain kahta hostin koostamaa sibling surfacea: tilalliseen laskentaan tarkoitettuja pysyviä IPython-työtiloja sekä välitettyä evidenssiä ja mallikutsuja varten rajattuja RLM-töitä. Pysyvät kuitit ja pieni MCP-pinta tekevät molemmista hallittavia ja uudelleen yhdistettäviä.
+
+Nykyinen julkinen alfa **ei suorita RLM-työtä IPython-työtilan sisällä eikä jaa tilaa niiden välillä automaattisesti.** Hostin on siirrettävä valittu evidenssi, arvot tai artefaktit eksplisiittisesti.
 
 Tuloksena on käytännöllinen perusta agenteille, joiden täytyy:
 
@@ -70,7 +72,7 @@ RLM-style agent
 
 ## Miksi IPython?
 
-RLM:t tarvitsevat paikan, jossa ne voivat ajatella **datan kanssa**, eivät vain puhua datasta. IPython sopii tähän hyvin, koska se tarjoaa mallille pysyvän laskennallisen työtilan:
+Pitkäkestoiset agentit tarvitsevat myös paikan, jossa ajatella **datan kanssa**, ei vain puhua siitä. IPython täydentää RLM-pintaa tarjoamalla hostille erillisen pysyvän laskennallisen työtilan:
 
 - muuttujat säilyvät käytettävissä suoritusvaiheiden välillä;
 - DataFrameja, taulukoita, jäsennettyjä asiakirjoja ja graafituloksia voi tarkastella suoraan;
@@ -87,7 +89,7 @@ Tämä ero on tärkeä pitkässä tutkimuksessa, koodikannan analyysissä, datan
 
 ## Miksi RLM × IPython?
 
-Kukin osa kattaa eri vikatilanteen:
+Tässä “×” tarkoittaa **hostin tekemää koostamista**, ei prosessin sisäistä RLM/työtila-sidosta. Kumpikin sibling surface kattaa erilaisen vikatilanteen:
 
 | Kerros | Mitä se tuo |
 |---|---|
@@ -96,7 +98,7 @@ Kukin osa kattaa eri vikatilanteen:
 | **Adaptive Agent Harness** | Lisää operaatioiden pysyvän identiteetin, grantit, budjetit, kuitit, artefaktit, palautumiskäytännön ja hostista riippumattoman MCP-käytön. |
 | **Host-agenttisi** | Omistaa identiteetin, palveluntarjoajan tunnistetiedot, hyväksynnän, etuoikeutetut vaikutukset, hyväksymisen ja lopullisen toimituksen. |
 
-Yhdessä ne antavat agentille mahdollisuuden siirtyä kielellisen päättelyn ja deterministisen laskennan välillä muuttamatta jokaista välitulosta promptitekstiksi.
+Host voi koostaa ne siirtämällä valittua, eksplisiittistä evidenssiä, arvoja tai artefakteja pintojen välillä. Implisiittistä jaettua nimiavaruutta tai automaattista RLM–IPython-suorituspolkua ei ole.
 
 ```mermaid
 flowchart LR
@@ -104,7 +106,6 @@ flowchart LR
     H --> A[Adaptive Agent Harness]
     A --> R[Bounded RLM job]
     A --> I[Persistent IPython workspace]
-    R <--> I
     R --> B[Brokered model / subagent / evidence calls]
     I --> P[Python transforms, tests, tables]
     B --> E[Receipts + trace]
@@ -113,9 +114,9 @@ flowchart LR
     H --> D[Authorize effects and deliver]
 ```
 
-Ohjaava sääntö on tarkoituksella yksinkertainen:
+Ohjaavat säännöt ovat tarkoituksella yksinkertaiset:
 
-> **Python on orkestrointikieli; host pysyy auktoriteettirajana.**
+> **Host koostaa nämä sisaruspinnat eksplisiittisesti; Python on työtilan kieli, ja host pysyy auktoriteettirajana.**
 
 ---
 
@@ -260,15 +261,16 @@ MCP-käyttöliittymä on tarkoituksella vaihdettavissa. Se ei omista jatkuvuusti
 
 Nykyinen julkinen alfa: **`0.3.0a0`**.
 
-Jäädytetyssä ehdokkaassa on verifioitu:
+Tästä julkisesta ehdokkaasta toistettu:
 
 - Python 3.11–3.14-kattavuus;
 - 30 työkalun MCP v7 -pinta;
 - additiivinen SQLite-skeema versioon v4 asti;
-- koko repositorion ajo: **199 läpäisi, 1 ohitettiin alustan vuoksi**;
-- puhtaat Exact-Wheel-probet Linux/WSL:ssä ja natiivissa Windowsissa;
-- pysyvän valvojan, käyttöliittymän korvaamisen, prosessihäviön, vanhentuneen kirjoittajan, kuitin uudelleenkäytön ja käytäntöihin sidottujen RLM-seuraajaskenaarioiden testit;
-- asennetun Hermeksen siirtymän evidenssi säilytetty append-only-projektin WAL:ssa.
+- koko repositorion ajo: **207 läpäisi, 1 ohitettiin alustan vuoksi**;
+- puhdas exact-wheel supervisor/frontend -probe Linux/WSL:ssä;
+- pysyvän valvojan, käyttöliittymän korvaamisen, prosessihäviön, vanhentuneen kirjoittajan, kuitin uudelleenkäytön ja käytäntöihin sidottujen RLM-seuraajaskenaarioiden testit.
+
+Aiemmat natiivin Windowsin ja asennetun Hermeksen yhteensopivuusrivit säilytetään **ylläpitäjien raportoimana historiallisena kontekstina**. Niitä tukevat host receipts eivät sisälly tähän julkiseen repositoryyn, joten rivejä ei voi auditoida riippumattomasti tästä treestä eivätkä ne ole julkisen source candidate -julkaisun kriteerejä.
 
 Avoinna ovat edelleen:
 

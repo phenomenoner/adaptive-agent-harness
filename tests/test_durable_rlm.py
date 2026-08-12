@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from aar.broker_models import EvidenceQuery
 from aar.canonical import canonical_sha256
 from aar.rlm_models import RlmJobSpec, RlmResult
 from aar.runtime.continuity import (
@@ -20,6 +21,10 @@ from aar.runtime.rlm import SimulatedRlmProcessLoss
 from aar.schemas import Budget, OperationState, PrincipalRef, SessionRef
 
 NOW_MS = 1_700_000_000_000
+
+
+class SimulatedEffectProcessLoss(BaseException):
+    pass
 
 
 def open_host(database: Path, *, durable: bool) -> ReferenceHost:
@@ -276,5 +281,141 @@ def test_restart_leaves_unresolved_broker_call_indeterminate(tmp_path: Path) -> 
         assert decisions[0].policy_digest is not None
         assert decisions[0].continuation_boundary_digest is None
         assert second.brokers.has_unresolved_calls(accepted.operation)
+    finally:
+        second.close()
+
+
+def test_capability_drift_parks_rlm_recovery_without_aborting_startup(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "capability-drift.sqlite3"
+    first = open_host(database, durable=False)
+    accepted, envelope, _claim, _owner = seed_claimed(first, "capability-drift")
+
+    def abrupt_loss(_prompt: str, _context: Any) -> Any:
+        raise SimulatedRlmProcessLoss()
+
+    first.models.request = abrupt_loss  # type: ignore[method-assign]
+    with pytest.raises(SimulatedRlmProcessLoss):
+        first.rlm.run(accepted.operation, envelope)
+    first.close()
+
+    second = open_host(database, durable=False)
+    provider_calls = 0
+
+    def count_provider(_prompt: str, _context: Any) -> Any:
+        nonlocal provider_calls
+        provider_calls += 1
+        raise AssertionError("provider must not run after capability drift")
+
+    second.models.request = count_provider  # type: ignore[method-assign]
+    second.capabilities = second.capabilities.model_copy(
+        update={"digest": canonical_sha256({"different": "capability"})}
+    )
+    try:
+        dispatcher = second.start_durable_dispatch()
+        assert dispatcher is second.dispatcher
+        assert provider_calls == 0
+        parked = second.status(accepted.operation)
+        assert parked.state is OperationState.INDETERMINATE
+        decisions = second.registry.recovery_decisions(accepted.operation)
+        assert [decision.decision for decision in decisions] == ["needs_user"]
+        assert decisions[0].reason_code == "recovery_capability_digest_mismatch"
+    finally:
+        second.close()
+
+
+def test_effect_prepass_recovers_safe_receipt_before_one_rlm_successor(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "effect-prepass.sqlite3"
+    first = ReferenceHost(
+        database,
+        now_ms=lambda: NOW_MS,
+        programmable_backend="plain",
+        enable_durable_dispatch=False,
+        dispatcher_concurrency=1,
+        evidence_records=("recoverable evidence",),
+    )
+    spec = RlmJobSpec(
+        query="recoverable",
+        strategy="evidence_synthesis",
+        max_steps=2,
+    )
+    envelope = first.request_rlm_envelope(
+        request_id="request-durable-effect-prepass",
+        idempotency_key="idempotency-durable-effect-prepass",
+        principal=PrincipalRef(value="principal-durable"),
+        session=SessionRef(value="session-durable"),
+        spec=spec,
+        deadline_unix_ms=NOW_MS + 60_000,
+        budget=Budget(
+            wall_time_ms=60_000,
+            model_requests=1,
+            input_tokens=1_024,
+            output_tokens=128,
+        ),
+    )
+    accepted = first.submit_rlm(envelope, spec)
+    policy = rlm_step_boundary_policy()
+    first.registry.bind_recovery_policy(
+        accepted.operation,
+        operation_kind=RLM_OPERATION_KIND,
+        policy=policy,
+        environment_digest=rlm_recovery_environment_digest(
+            spec=spec,
+            capability_digest=first.capabilities.digest,
+            policy=policy,
+        ),
+    )
+    first.registry.request_dispatch(accepted.operation)
+    owner = canonical_sha256({"owner": "effect-prepass"})
+    claim = first.registry.claim_next(
+        first.runtime_generation,
+        first.runtime_generation,
+        owner,
+        30_000,
+    )
+    assert claim is not None
+    def lose_evidence(_request: EvidenceQuery, _context: Any) -> Any:
+        raise SimulatedEffectProcessLoss()
+
+    first.evidence.query = lose_evidence  # type: ignore[method-assign]
+    with pytest.raises(SimulatedEffectProcessLoss):
+        first.rlm.run(accepted.operation, envelope)
+    first.registry.transition_claimed(
+        claim.attempt,
+        first.runtime_generation,
+        claim.dispatcher_generation,
+        claim.lease_epoch,
+        owner,
+        state=OperationState.INDETERMINATE,
+        note="effect_process_lost",
+    )
+    first.close()
+
+    second = ReferenceHost(
+        database,
+        now_ms=lambda: NOW_MS,
+        programmable_backend="plain",
+        enable_durable_dispatch=True,
+        dispatcher_concurrency=1,
+        evidence_records=("recoverable evidence",),
+    )
+    try:
+        completed = second.wait_rlm(accepted.operation, timeout_s=2)
+        assert completed.state is OperationState.SUCCEEDED
+        snapshot = second.registry.continuity_snapshot(accepted.operation)
+        assert snapshot.last_attempt is not None
+        assert snapshot.last_attempt.attempt_no == 2
+        traces = second.brokers.bind(
+            envelope.model_copy(update={"runtime_generation": second.runtime_generation}),
+            accepted.operation,
+        ).traces()
+        assert traces[0].method == "evidence.query"
+        assert traces[0].state == "succeeded"
+        assert traces[0].reconciliation_action == "safe_replay"
+        decisions = second.registry.recovery_decisions(accepted.operation)
+        assert [decision.decision for decision in decisions] == ["start_successor"]
     finally:
         second.close()

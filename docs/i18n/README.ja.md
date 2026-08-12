@@ -4,7 +4,7 @@
 
 ### エージェントに、より大きなプロンプトではなく作業台を。
 
-**RLM × persistent IPython × durable operations × host-owned authority**
+**host が構成する RLM + persistent IPython + durable operations + host-owned authority**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
@@ -26,7 +26,9 @@
 
 多くのエージェントは、コストが高く忘れやすい一つのインターフェース、つまりプロンプトだけで大きな問題を解くよう求められます。
 
-**Adaptive Agent Harness は、その代わりにプログラム可能な作業台を提供します。**モデルは IPython に調査状態を保持し、Python で長い入力を調べて変換し、制限付きの再帰的なモデルまたはサブエージェント呼び出しを行い、operation receipt を永続化し、小さな MCP サーフェスを通じて作業に再接続できます。
+**Adaptive Agent Harness は、その代わりにプログラム可能な作業台を提供します。**host が構成する二つの sibling surfaces を並列に使えます。状態を持つ計算のための persistent IPython workspaces と、broker を介した evidence と model calls のための bounded RLM jobs です。durable receipts と小さな MCP surface によって、どちらも統制可能で、再接続できます。
+
+現在の公開 alpha は、IPython workspace の内部で RLM job を実行したり、両者の間で state を自動共有したり**しません**。選択した evidence、values、artifacts の明示的な受け渡しは host が担います。
 
 次のような能力を必要とするエージェントのための、実用的な基盤になります。
 
@@ -70,7 +72,7 @@ RLM-style agent
 
 ## なぜ IPython なのか？
 
-RLM には、単にデータについて話すのではなく、**データとともに**考える場所が必要です。IPython は永続的な計算ワークスペースを提供するため、よく適合します。
+長時間動作するエージェントには、データについて話すだけでなく、**データとともに**考える場所も必要です。IPython は、RLM surface を補完する独立した永続計算ワークスペースを提供します。
 
 - 変数が実行ステップをまたいで利用可能なままになる；
 - DataFrames、配列、解析済みドキュメント、グラフの結果を直接調べられる；
@@ -87,7 +89,7 @@ RLM には、単にデータについて話すのではなく、**データと�
 
 ## なぜ RLM × IPython なのか？
 
-それぞれが異なる失敗モードをカバーします。
+ここでいう「×」は **host composition** を意味し、in-process の RLM/workspace binding ではありません。それぞれの sibling surface が異なる失敗モードを担当します。
 
 | レイヤー | 貢献するもの |
 |---|---|
@@ -96,7 +98,7 @@ RLM には、単にデータについて話すのではなく、**データと�
 | **Adaptive Agent Harness** | durable な operation identity、grant、budget、receipt、artifact、recovery policy、host-neutral な MCP access を追加する。 |
 | **Your host agent** | identity、provider credentials、approval、privileged effects、acceptance、最終 delivery を管理する。 |
 
-これらを組み合わせることで、エージェントは中間値をすべてプロンプトのテキストに変換することなく、言語推論と決定的な計算を行き来できます。
+host は、選択した evidence、values、artifacts を surface 間で明示的に渡すことで両者を組み合わせられます。暗黙の shared namespace はなく、自動の RLM-to-IPython execution path もありません。
 
 ```mermaid
 flowchart LR
@@ -104,7 +106,6 @@ flowchart LR
     H --> A[Adaptive Agent Harness]
     A --> R[Bounded RLM job]
     A --> I[Persistent IPython workspace]
-    R <--> I
     R --> B[Brokered model / subagent / evidence calls]
     I --> P[Python transforms, tests, tables]
     B --> E[Receipts + trace]
@@ -115,7 +116,7 @@ flowchart LR
 
 統制ルールは意図的に単純です。
 
-> **Python はオーケストレーション言語であり、host が authority boundary であり続けます。**
+> **host は sibling surfaces を明示的に構成します。Python はワークスペース言語であり、host が authority boundary であり続けます。**
 
 ---
 
@@ -260,15 +261,16 @@ MCP frontend は意図的に交換可能です。continuity database や worker 
 
 現在の公開 alpha：**`0.3.0a0`**。
 
-frozen candidate で検証済みのもの：
+この公開 candidate から再現した項目：
 
 - Python 3.11 から 3.14 までの coverage；
 - 30-tool MCP v7 surface；
 - v4 までの additive SQLite schema；
-- repository 全体の実行：**199 passed, 1 platform-gated skip**；
-- Linux/WSL と native Windows での clean exact-wheel probes；
-- durable supervisor、frontend replacement、process-loss、stale-writer、receipt-reuse、policy-bound RLM successor scenarios；
-- installed Hermes cutover evidence が append-only project WAL に保持されていること。
+- repository 全体の実行：**206 passed, 1 platform-gated skip**；
+- Linux/WSL での clean exact-wheel supervisor/frontend probe；
+- durable supervisor、frontend replacement、process-loss、stale-writer、receipt-reuse、policy-bound RLM successor scenarios。
+
+以前の native-Windows および installed-Hermes compatibility rows は、**maintainer-reported historical context** として保持されます。それらを裏付ける host receipts はこの公開 repository に含まれていないため、これらの rows はこの tree から独立して監査できず、public source candidate の release criteria でもありません。
 
 未解決の項目：
 

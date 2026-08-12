@@ -2,6 +2,12 @@
 
 Append-only record of material project transitions. Corrections are new entries; earlier entries are not rewritten.
 
+> **Public evidence note:** this fresh-history repository preserves a sanitized copy of the
+> maintainer work log. Historical local-host results are maintainer-reported unless their supporting
+> artifact is committed in this tree. Private receipts, raw traces, opaque task identifiers, and
+> machine-local paths are intentionally omitted; do not treat their historical precision as
+> independently auditable public evidence.
+
 ## 2026-08-08 — Repository baseline and MCP-first plan
 
 **State before:** no standalone AAR Git repository; planning lived in the AHC × AAR coordination workspace.
@@ -712,10 +718,9 @@ Fresh Codex AR-2/AR-3 row:
 - Six schema/deadline-invalid calls were rejected before the accepted lifecycle. The final row is
   accepted because the capability/RLM/asset operations passed, not because those correction calls
   were hidden.
-- Retained summary receipt:
-  `.aar/codex-ar23-ea83402-summary.json`, SHA-256
-  `0dc6fcbf7b633afcf0f73266847bd5b67bc72633e6e050d6034fe9d14ae7aa62`. The receipt records that
-  the raw trace was not retained.
+- A redacted summary was retained in maintainer-private evidence but is not included in this public
+  repository. Treat this host row as maintainer-reported historical context rather than
+  independently auditable public proof. The raw trace was not retained.
 
 Design and integration boundary:
 
@@ -847,9 +852,9 @@ delivery remain untouched and separately gated.
   replay rejected as `OPERATION_CONFLICT` with no operation/result/artifact disclosure, and empty
   asset import `succeeded/certain` with active serving unchanged.
 - Five rejected schema/budget/deadline calls were corrected before accepted results and are retained
-  in the receipt. Fresh-host summary:
-  `.aar/codex-ar23-c21d595-summary.json`, SHA-256
-  `95e3119e85aa2cd8f80c1ccea67585acb404ac336e6316040bf279c4090db252`.
+  only in maintainer-private evidence. That summary is not included in this public repository, so
+  this fresh-host row is maintainer-reported historical context rather than independently auditable
+  public proof.
 
 ### Final documentation-bound wheel readback
 
@@ -880,10 +885,10 @@ delivery remain untouched and separately gated.
 - No additional executable blocker was found. The blocking evidence defect was that the current
   `c21d595` compatibility row still pointed to the older `ea83402` summary and said six rejected
   corrections, while the frozen current receipt contains five.
-- `HOST-COMPATIBILITY.md` now binds `.aar/codex-ar23-c21d595-summary.json`, exact SHA-256
-  `95e3119e85aa2cd8f80c1ccea67585acb404ac336e6316040bf279c4090db252`, and all five
-  rejected schema, budget, and deadline corrections. This is an evidence-only repair; executable
-  source, tests, schemas, fixtures, skills, and the exact final wheel are unchanged.
+- `HOST-COMPATIBILITY.md` now records all five rejected schema, budget, and deadline corrections.
+  The supporting summary remains maintainer-private and is not part of this public repository. This
+  is an evidence-wording repair; executable source, tests, schemas, fixtures, skills, and the exact
+  final wheel are unchanged.
 - A new review wave must rebind the corrected host document and evidence index. The current host
   receipt, six reopened host/evidence cells, and the remaining 74 unchanged atomic cells must close
   before acceptance is restored.
@@ -1155,7 +1160,7 @@ now replaces.
 - The accumulated v5/reference-context/Codex setup/routing candidate was committed as `9a97a14`
   after 120/120 repository tests, Ruff, generated host-profile verification, plugin validation, and
   cached-diff checks passed.
-- Restarted desktop task `019fe562-4e4d-7623-8823-519e69526190` and a bounded readonly subagent both
+- An existing desktop task was restarted; it and a bounded readonly subagent both
   exposed zero native AAR and Context Canvas tools while each server had two registration
   authorities: its installed plugin and a same-name global MCP transport. The AAR global command
   was the exact uv-tool launcher; the Context Canvas global command pinned an older plugin cache.
@@ -1163,7 +1168,7 @@ now replaces.
   tools, v5, dependency result 18/three rows, and a closed workspace. Its SHA-256 matched the exact
   uv-tool launcher. The two global registrations were removed, leaving the enabled plugins and
   hooks as the sole transport owners. A computer restart was not used.
-- Fresh desktop task `019fe5a8-445c-7db1-832e-acad8a95b688` then exposed 29 native AAR tools and 12
+- A fresh desktop task then exposed 29 native AAR tools and 12
   native Context Canvas tools. Native `aar_capabilities` returned `aar-mcp`, v5, runtime generation
   1, and `aar-operations` `0.6.1` with digest
   `sha256:f4c47ebee6e114de990d2be6339698584809c10d1ab1b10bf799f69c1bc5c045`.
@@ -1185,8 +1190,8 @@ now replaces.
   plugin-owned stdio commands; the AAR plugin is `0.1.0+codex.20260809083709` and Context Canvas is
   `0.4.0+codex.20260809075929`.
 - Terminating the first readonly verification task's MCP child produced `Transport closed` on a
-  same-task native retry; Codex App did not transparently rebuild that stdio client. Fresh desktop
-  task `019fe5b4-38d1-7a61-a2a9-3f87c9397c06` natively restarted the updated installed runtime and
+  same-task native retry; Codex App did not transparently rebuild that stdio client. A second fresh
+  desktop task natively restarted the updated installed runtime and
   reproduced 29 AAR tools, the v5 capability result, 12 Canvas tools, and hook identity. Current
   compatibility therefore proves fresh-task restart recovery, not same-task transparent reconnect.
   The final wheel differs from that native-probed wheel only in setup/install documentation,

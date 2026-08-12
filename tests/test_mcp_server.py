@@ -19,8 +19,17 @@ from aar.asset_models import (
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.mcp.models import McpMutationContext
 from aar.mcp.server import _envelope, _envelope_handle, build_server
+from aar.rlm_models import RlmJobSpec
+from aar.runtime.rlm import SimulatedRlmProcessLoss
 from aar.runtime.workspace_models import ProgrammableWorkspaceHandle, WorkspaceProgramSpec
-from aar.schemas import OperationRef
+from aar.schemas import (
+    Budget,
+    Grant,
+    OperationRef,
+    OperationState,
+    PrincipalRef,
+    SessionRef,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW_MS = 1_700_000_000_000
@@ -1458,3 +1467,233 @@ def test_checkpoint_contract_and_artifact_resolution_are_bounded(
             application.close()
 
     asyncio.run(scenario())
+
+
+def test_operation_reconcile_exposes_proposal_only_compensation(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        application = build_server(
+            tmp_path / "mcp-compensation.sqlite3",
+            now_ms=lambda: NOW_MS,
+            programmable_backend="plain",
+        )
+        try:
+            spec = RlmJobSpec(
+                query="unknown model outcome",
+                strategy="baseline",
+                max_steps=1,
+            )
+            envelope = application.host.request_rlm_envelope(
+                request_id="request-mcp-compensation",
+                idempotency_key="idempotency-mcp-compensation",
+                principal=PrincipalRef(value="principal-mcp-test"),
+                session=SessionRef(value="session-mcp-test"),
+                spec=spec,
+                deadline_unix_ms=NOW_MS + 10_000,
+                budget=Budget(
+                    wall_time_ms=10_000,
+                    model_requests=1,
+                    input_tokens=1_024,
+                    output_tokens=64,
+                ),
+            )
+            compensation_grant = Grant(
+                grant_id="grant-effect-propose",
+                capability="effect.propose",
+                issued_to=envelope.principal,
+                expires_at_unix_ms=envelope.deadline_unix_ms,
+            )
+            envelope = envelope.model_copy(
+                update={
+                    "grants": tuple(
+                        sorted(
+                            (*envelope.grants, compensation_grant),
+                            key=lambda grant: grant.grant_id,
+                        )
+                    )
+                }
+            )
+            accepted = application.host.submit_rlm(envelope, spec)
+            application.host.registry.begin(
+                accepted.operation,
+                application.host.runtime_generation,
+            )
+
+            def lose_model(_prompt: str, _context: Any) -> Any:
+                raise SimulatedRlmProcessLoss()
+
+            application.host.models.request = lose_model  # type: ignore[method-assign]
+            with pytest.raises(SimulatedRlmProcessLoss):
+                application.host.rlm.run(accepted.operation, envelope)
+            application.host.registry.mark_indeterminate(
+                accepted.operation,
+                application.host.runtime_generation,
+                "model_receipt_unknown",
+            )
+
+            async with Client(application.server) as client:
+                capabilities = await _capabilities(client)
+                denied = _structured(
+                    await client.call_tool(
+                        "aar_operation_reconcile",
+                        {
+                            "context": _mutation_context(
+                                capabilities,
+                                "mcp-compensation-no-effect-grant",
+                                capability="operation.reconcile",
+                            ),
+                            "operation_id": accepted.operation.value,
+                            "propose_compensation": True,
+                        },
+                    )
+                )
+                assert denied["failure"]["code"] == "AUTHORITY_DENIED"
+                reconciled = _structured(
+                    await client.call_tool(
+                        "aar_operation_reconcile",
+                        {
+                            "context": _mutation_context(
+                                capabilities,
+                                "mcp-compensation",
+                                capability="operation.reconcile",
+                            ),
+                            "operation_id": accepted.operation.value,
+                            "propose_compensation": True,
+                            "compensation_grant_id": next(
+                                descriptor["grant_id"]
+                                for descriptor in capabilities["reference_grants"]
+                                if descriptor["capability"] == "effect.propose"
+                            ),
+                        },
+                    )
+                )
+                assert reconciled["state"] == OperationState.INDETERMINATE.value
+                bound = application.host.brokers.bind(envelope, accepted.operation)
+                trace = bound.traces()[0]
+                assert trace.state == "failed"
+                assert trace.reconciliation_action == "compensation_proposed"
+                assert trace.compensation_digest is not None
+                assert not hasattr(bound, "effect_execute")
+        finally:
+            application.close()
+
+    asyncio.run(scenario())
+
+
+def test_compensation_admission_rechecks_durable_control_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application = build_server(
+        tmp_path / "compensation-control-race.sqlite3",
+        now_ms=lambda: NOW_MS,
+        programmable_backend="plain",
+    )
+    try:
+        spec = RlmJobSpec(
+            query="stale cancellation snapshot",
+            strategy="baseline",
+            max_steps=1,
+        )
+        envelope = application.host.request_rlm_envelope(
+            request_id="request-compensation-control-race",
+            idempotency_key="idempotency-compensation-control-race",
+            principal=PrincipalRef(value="principal-mcp-test"),
+            session=SessionRef(value="session-mcp-test"),
+            spec=spec,
+            deadline_unix_ms=NOW_MS + 10_000,
+            budget=Budget(
+                wall_time_ms=10_000,
+                model_requests=1,
+                input_tokens=1_024,
+                output_tokens=64,
+            ),
+        )
+        historical_effect_grant = Grant(
+            grant_id="historical-grant-effect-propose",
+            capability="effect.propose",
+            issued_to=envelope.principal,
+            expires_at_unix_ms=envelope.deadline_unix_ms,
+        )
+        envelope = envelope.model_copy(
+            update={
+                "grants": tuple(
+                    sorted(
+                        (*envelope.grants, historical_effect_grant),
+                        key=lambda grant: grant.grant_id,
+                    )
+                )
+            }
+        )
+        accepted = application.host.submit_rlm(envelope, spec)
+        application.host.registry.begin(
+            accepted.operation,
+            application.host.runtime_generation,
+        )
+
+        def lose_model(_prompt: str, _context: Any) -> Any:
+            raise SimulatedRlmProcessLoss()
+
+        application.host.models.request = lose_model  # type: ignore[method-assign]
+        with pytest.raises(SimulatedRlmProcessLoss):
+            application.host.rlm.run(accepted.operation, envelope)
+        application.host.registry.mark_indeterminate(
+            accepted.operation,
+            application.host.runtime_generation,
+            "model_receipt_unknown",
+        )
+
+        journal = application.host.brokers._journal
+        original_control_state = journal.operation_control_state
+
+        def cancel_then_return_stale(_operation: OperationRef) -> tuple[int, bool]:
+            application.host.registry.request_cancel(
+                accepted.operation,
+                f"sha256:{'c' * 64}",
+                "race_cancel",
+            )
+            monkeypatch.setattr(
+                journal,
+                "operation_control_state",
+                original_control_state,
+            )
+            return 0, False
+
+        monkeypatch.setattr(
+            journal,
+            "operation_control_state",
+            cancel_then_return_stale,
+        )
+        provider_calls = 0
+        original_propose = application.host.effects.propose
+
+        def count_proposal(*args, **kwargs):
+            nonlocal provider_calls
+            provider_calls += 1
+            return original_propose(*args, **kwargs)
+
+        application.host.effects.propose = count_proposal  # type: ignore[method-assign]
+        report = application.host.reconcile_broker_calls(
+            accepted.operation,
+            current_capability_digest=application.host.capabilities.digest,
+            current_compensation_grant=Grant(
+                grant_id="current-grant-effect-propose",
+                capability="effect.propose",
+                issued_to=envelope.principal,
+                expires_at_unix_ms=envelope.deadline_unix_ms,
+            ),
+            propose_compensation=True,
+        )
+
+        assert report.unresolved
+        assert report.calls[0].action == "pending"
+        assert provider_calls == 0
+        traces = application.host.brokers.bind(envelope, accepted.operation).traces()
+        assert [trace.method for trace in traces] == ["model.request"]
+        assert traces[0].compensation_digest is None
+        control = application.host.registry.continuity_snapshot(
+            accepted.operation
+        ).control
+        assert control.cancellation_requested is True
+        assert control.control_revision == 1
+    finally:
+        application.close()

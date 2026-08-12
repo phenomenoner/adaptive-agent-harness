@@ -4,7 +4,7 @@
 
 ### Dai agli agenti un banco di lavoro — non solo un prompt più grande.
 
-**RLM × IPython persistente × operazioni durevoli × autorità dell’host**
+**RLM composto dall’host + IPython persistente + operazioni durevoli + autorità dell’host**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
@@ -26,7 +26,9 @@
 
 La maggior parte degli agenti deve risolvere problemi grandi con un’unica interfaccia costosa e smemorata: il prompt.
 
-**Adaptive Agent Harness offre invece un banco di lavoro programmabile.** Un modello può mantenere lo stato dell’indagine in IPython, ispezionare e trasformare input lunghi con Python, effettuare chiamate ricorsive delimitate a modelli o subagenti, rendere persistenti le ricevute delle operazioni e riconnettersi al lavoro tramite una piccola superficie MCP.
+**Adaptive Agent Harness offre invece un banco di lavoro programmabile.** Un host può usare fianco a fianco due superfici sorelle: spazi di lavoro IPython persistenti per il calcolo con stato e job RLM delimitati per evidenze gestite dal broker e chiamate al modello. Ricevute durevoli e una piccola superficie MCP rendono entrambe governabili e riconnettibili.
+
+L’alfa pubblica attuale **non** esegue un job RLM all’interno di uno spazio di lavoro IPython né condivide automaticamente lo stato tra i due. L’host deve trasferire esplicitamente evidenze, valori o artefatti selezionati.
 
 Il risultato è una base pratica per agenti che devono:
 
@@ -70,7 +72,7 @@ Il termine proviene dal lavoro di Zhang, Kraska e Khattab sui [Recursive Languag
 
 ## Perché IPython?
 
-Gli RLM hanno bisogno di un luogo in cui pensare **con i dati**, non soltanto parlarne. IPython è adatto perché offre al modello uno spazio di lavoro computazionale persistente:
+Gli agenti di lunga durata hanno anch’essi bisogno di un luogo in cui pensare **con i dati**, non soltanto parlarne. IPython completa la superficie RLM offrendo all’host uno spazio di lavoro computazionale persistente e separato:
 
 - le variabili restano disponibili tra i passaggi di esecuzione;
 - DataFrame, array, documenti analizzati e risultati dei grafi possono essere ispezionati direttamente;
@@ -87,7 +89,7 @@ Questa distinzione conta per la ricerca lunga, l’analisi delle basi di codice,
 
 ## Perché RLM × IPython?
 
-Ogni componente copre una modalità di errore diversa:
+Qui “×” significa **composizione dell’host**, non un collegamento RLM/spazio di lavoro all’interno dello stesso processo. Ogni superficie sorella copre una modalità di errore diversa:
 
 | Livello | Cosa offre |
 |---|---|
@@ -96,7 +98,7 @@ Ogni componente copre una modalità di errore diversa:
 | **Adaptive Agent Harness** | Aggiunge identità operativa durevole, grant, budget, ricevute, artefatti, criteri di recupero e accesso MCP neutrale rispetto all’host. |
 | **Il tuo agente host** | Possiede identità, credenziali del provider, approvazione, effetti privilegiati, accettazione e consegna finale. |
 
-Insieme permettono a un agente di passare dal ragionamento linguistico al calcolo deterministico senza trasformare ogni valore intermedio in testo del prompt.
+Un host può comporle passando tra le superfici evidenze o artefatti selezionati in modo esplicito. Non esistono né uno spazio dei nomi condiviso implicito né un percorso automatico di esecuzione da RLM a IPython.
 
 ```mermaid
 flowchart LR
@@ -104,7 +106,6 @@ flowchart LR
     H --> A[Adaptive Agent Harness]
     A --> R[Bounded RLM job]
     A --> I[Persistent IPython workspace]
-    R <--> I
     R --> B[Brokered model / subagent / evidence calls]
     I --> P[Python transforms, tests, tables]
     B --> E[Receipts + trace]
@@ -113,9 +114,9 @@ flowchart LR
     H --> D[Authorize effects and deliver]
 ```
 
-La regola guida è volutamente semplice:
+Le regole guida sono volutamente semplici:
 
-> **Python è il linguaggio di orchestrazione; l’host rimane il confine di autorità.**
+> **L’host compone esplicitamente le superfici sorelle; Python è il linguaggio dello spazio di lavoro e l’host rimane il confine di autorità.**
 
 ---
 
@@ -260,15 +261,16 @@ Il frontend MCP è intenzionalmente sostituibile. Non possiede il database della
 
 Alfa pubblica attuale: **`0.3.0a0`**.
 
-Verificato nel candidato congelato:
+Riprodotto da questo candidato pubblico:
 
 - copertura da Python 3.11 a 3.14;
 - superficie MCP v7 con 30 strumenti;
 - schema SQLite additivo fino a v4;
-- esecuzione completa del repository: **199 superati, 1 saltato per vincolo di piattaforma**;
-- probe esatti di wheel pulito su Linux/WSL e Windows nativo;
+- esecuzione completa del repository: **206 superati, 1 saltato per vincolo di piattaforma**;
+- un probe pulito del supervisore/frontend con wheel esatto su Linux/WSL;
 - supervisore durevole, sostituzione del frontend, perdita di processo, writer obsoleto, riutilizzo delle ricevute e scenari di successori RLM vincolati da policy;
-- evidenza del passaggio a Hermes installato conservata nel WAL di progetto append-only.
+
+Le precedenti righe di compatibilità per Windows nativo e Hermes installato sono mantenute come **contesto storico riportato dai maintainer**. Le ricevute dell’host che le supportano non sono incluse in questo repository pubblico, quindi tali righe non sono verificabili in modo indipendente da questo albero e non costituiscono criteri di release per il candidato del codice sorgente pubblico.
 
 Ancora aperti:
 

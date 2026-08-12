@@ -130,8 +130,8 @@ MCP_PROTOCOL_VERSIONS = (
     *reversed(HANDSHAKE_PROTOCOL_VERSIONS),
 )
 OPERATION_SKILL_VERSION = "0.8.0"
-SCHEMA_BUNDLE_DIGEST = "sha256:8f8e456e3af25d66063469e3b4722ccf7768b0b1b2d0c37ca897002c5385ef22"
-FIXTURE_SET_DIGEST = "sha256:d9fe836b884fcae09fed9377042664f3dc9df3f5bde6f8dc78f424df389c1820"
+SCHEMA_BUNDLE_DIGEST = "sha256:e5c658d9d462922773f5c70e17312fae18ee34e9e1cfca701f54adfe864bbc33"
+FIXTURE_SET_DIGEST = "sha256:9823b46de44475ad864df1bc234d44372ffe64747228b19526098fbd52f4f1ce"
 SERVER_INSTRUCTIONS = (
     "Call aar_capabilities first. For reference-host mutations, call aar_reference_context and "
     "copy its returned context unchanged. Every stateful public tool requires the outer argument "
@@ -573,6 +573,24 @@ def _assert_operation_binding(
     ):
         raise WorkspaceBindingDenied("operation is bound to another principal or session")
     return request
+
+
+def _current_reference_grant(
+    host: ReferenceHost,
+    context: McpReadContext,
+    grant_id: str | None,
+    capability: str,
+) -> Grant:
+    _validate_read_context(host, context)
+    expected_grant = REFERENCE_GRANT_IDS.get(capability)
+    if expected_grant is None or grant_id is None or grant_id != expected_grant:
+        raise GrantDenied(f"reference host did not issue current {capability} authority")
+    return Grant(
+        grant_id=grant_id,
+        capability=capability,
+        issued_to=PrincipalRef(value=context.principal_id),
+        expires_at_unix_ms=context.deadline_unix_ms,
+    )
 
 
 def _skill_digest() -> str:
@@ -1159,13 +1177,18 @@ def build_server(
                     operation,
                     handle,
                     policy,
-                    f"trace-{context.request_id}",
+                    envelope.trace_id,
                 )
-                record = host.registry.succeed(
+                record = host.registry.succeed_workspace_checkpoint(
                     operation,
-                    canonical_json_bytes(manifest).decode(),
+                    manifest,
                     host.runtime_generation,
                 )
+                return ProgramWorkspaceCheckpointToolResult(
+                    manifest=manifest,
+                    operation=_operation_result(record),
+                )
+
             manifest = (
                 None
                 if record.result_json is None
@@ -1714,18 +1737,35 @@ def build_server(
     @server.tool(
         name="aar_operation_reconcile",
         description=(
-            "Reconcile an indeterminate operation against the authoritative workspace receipt."
+            "Reconcile an indeterminate operation against authoritative receipts; optional "
+            "compensation remains proposal-only."
         ),
         annotations=MUTATING_IDEMPOTENT,
     )
     async def aar_operation_reconcile(
         context: McpMutationContext,
         operation_id: IdentityValue,
+        propose_compensation: bool = False,
+        compensation_grant_id: str | None = None,
     ) -> OperationToolResult:
         operation = OperationRef(value=operation_id)
         try:
             _validate_mutation_context(host, context, "operation.reconcile")
             request = _assert_operation_binding(host, context, operation)
+            if compensation_grant_id is not None and not propose_compensation:
+                raise ValueError(
+                    "compensation_grant_id requires propose_compensation=true"
+                )
+            compensation_grant = (
+                _current_reference_grant(
+                    host,
+                    context,
+                    compensation_grant_id,
+                    "effect.propose",
+                )
+                if propose_compensation
+                else None
+            )
             record = host.registry.get(operation)
             if record.state is OperationState.INDETERMINATE and any(
                 grant.capability.startswith("workspace.program.")
@@ -1738,6 +1778,16 @@ def build_server(
             if any(grant.capability == "asset.import" for grant in request.grants):
                 host.reconcile_asset_import(operation)
             elif any(grant.capability == "rlm.execute" for grant in request.grants):
+                if (
+                    record.state is OperationState.INDETERMINATE
+                    and host.brokers.has_unresolved_calls(operation)
+                ):
+                    host.reconcile_broker_calls(
+                        operation,
+                        current_capability_digest=context.capability_digest,
+                        current_compensation_grant=compensation_grant,
+                        propose_compensation=propose_compensation,
+                    )
                 host.reconcile_rlm(operation)
             else:
                 host.reconcile(operation)

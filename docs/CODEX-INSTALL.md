@@ -14,7 +14,7 @@ aar-codex-setup
 From an exact local wheel:
 
 ```powershell
-uv tool install --force D:\path\to\adaptive_agent_runtime-0.1.0a0-py3-none-any.whl
+uv tool install --force D:\path\to\adaptive_agent_runtime-0.3.0a0-py3-none-any.whl
 aar-codex-setup
 ```
 
@@ -30,7 +30,7 @@ aar-codex-setup
    deleting the conflicting operator configuration.
 
 The command prints a JSON receipt. A passing receipt must contain `status: "passed"`, dependency
-versions, `tool_count: 29`, `workspace_closed: true`, the installed plugin version, and the exact
+versions, `tool_count: 30`, `workspace_closed: true`, the installed plugin version, and the exact
 preflight launcher. `mcp_authority: "plugin"`, `legacy_global_mcp_removed`,
 `configuration_changed`, and `plugin_changed` state what was selected or written. Restart the Codex
 App only when `restart_required` is true, then call `aar_capabilities` in a fresh task. A no-op rerun

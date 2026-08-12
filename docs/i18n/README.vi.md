@@ -4,7 +4,7 @@
 
 ### Trao cho agent một bàn làm việc — không chỉ một prompt lớn hơn.
 
-**RLM × IPython bền vững × thao tác lâu bền × quyền hạn do host nắm giữ**
+**RLM do host phối hợp + IPython bền vững + thao tác lâu bền + quyền hạn do host nắm giữ**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
@@ -26,7 +26,9 @@
 
 Phần lớn agent được yêu cầu giải quyết những vấn đề lớn bằng một giao diện đắt đỏ và mau quên: prompt.
 
-**Adaptive Agent Harness thay vào đó cung cấp một bàn làm việc có thể lập trình.** Model có thể giữ trạng thái điều tra trong IPython, kiểm tra và biến đổi đầu vào dài bằng Python, thực hiện các lệnh gọi model hoặc subagent đệ quy có giới hạn, lưu biên nhận thao tác và nối lại công việc qua một bề mặt MCP nhỏ gọn.
+**Adaptive Agent Harness thay vào đó cung cấp một bàn làm việc có thể lập trình.** Host có thể phối hợp và sử dụng song song hai bề mặt ngang hàng: các workspace IPython bền vững cho tính toán có trạng thái và các job RLM có giới hạn cho bằng chứng cùng các lệnh gọi model qua broker. Receipt bền vững và bề mặt MCP nhỏ gọn giúp host quản lý cả hai và kết nối lại được.
+
+Alpha công khai hiện tại **không chạy một job RLM bên trong workspace IPython và không tự động chia sẻ trạng thái giữa chúng**. Host là bên chịu trách nhiệm chuyển giao rõ ràng các bằng chứng, giá trị hoặc artifact được chọn.
 
 Kết quả là một nền tảng thực tiễn cho các agent cần:
 
@@ -70,7 +72,7 @@ Thuật ngữ này xuất phát từ công trình [Recursive Language Models](ht
 
 ## Vì sao IPython?
 
-RLM cần một nơi để **suy nghĩ cùng với dữ liệu**, không chỉ nói về dữ liệu. IPython phù hợp vì cung cấp cho model một workspace tính toán bền vững:
+Các agent chạy lâu cũng cần một nơi để **suy nghĩ cùng với dữ liệu**, không chỉ nói về dữ liệu. IPython bổ sung cho bề mặt RLM bằng cách cung cấp cho host một workspace tính toán bền vững riêng biệt:
 
 - biến vẫn khả dụng qua các bước thực thi;
 - DataFrame, mảng, tài liệu đã phân tích và kết quả đồ thị có thể được kiểm tra trực tiếp;
@@ -87,7 +89,7 @@ Sự khác biệt này quan trọng đối với nghiên cứu dài, điều tra
 
 ## Vì sao RLM × IPython?
 
-Mỗi thành phần xử lý một kiểu lỗi khác nhau:
+Ở đây, “×” nghĩa là **sự phối hợp do host thực hiện**, không phải ràng buộc RLM/workspace trong cùng một tiến trình. Mỗi bề mặt ngang hàng xử lý một kiểu lỗi khác nhau:
 
 | Lớp | Thành phần đóng góp |
 |---|---|
@@ -96,7 +98,7 @@ Mỗi thành phần xử lý một kiểu lỗi khác nhau:
 | **Adaptive Agent Harness** | Bổ sung định danh thao tác lâu bền, grant, ngân sách, biên nhận, artifact, chính sách khôi phục và quyền truy cập MCP trung lập với host. |
 | **Host agent của bạn** | Nắm giữ định danh, credential của provider, phê duyệt, hiệu ứng đặc quyền, việc chấp nhận và chuyển giao cuối cùng. |
 
-Kết hợp lại, chúng cho phép agent chuyển giữa suy luận ngôn ngữ và tính toán tất định mà không biến mọi giá trị trung gian thành văn bản prompt.
+Host có thể phối hợp chúng bằng cách chuyển rõ ràng các bằng chứng, giá trị hoặc artifact được chọn giữa hai bề mặt. Không có namespace dùng chung ngầm định hay đường thực thi RLM sang IPython tự động.
 
 ```mermaid
 flowchart LR
@@ -104,7 +106,6 @@ flowchart LR
     H --> A[Adaptive Agent Harness]
     A --> R[Bounded RLM job]
     A --> I[Persistent IPython workspace]
-    R <--> I
     R --> B[Brokered model / subagent / evidence calls]
     I --> P[Python transforms, tests, tables]
     B --> E[Receipts + trace]
@@ -115,7 +116,7 @@ flowchart LR
 
 Quy tắc chủ đạo cố ý đơn giản:
 
-> **Python là ngôn ngữ điều phối; host vẫn là ranh giới quyền hạn.**
+> **Host phối hợp rõ ràng các bề mặt ngang hàng; Python là ngôn ngữ của workspace, còn host vẫn là ranh giới quyền hạn.**
 
 ---
 
@@ -260,15 +261,19 @@ Frontend MCP được thiết kế để có thể thay thế. Nó không sở h
 
 Alpha công khai hiện tại: **`0.3.0a0`**.
 
-Đã được xác minh trong candidate đóng băng:
+Được tái hiện từ candidate công khai này:
 
 - hỗ trợ Python 3.11 đến 3.14;
 - bề mặt MCP v7 gồm 30 công cụ;
 - schema SQLite mang tính bổ sung đến v4;
-- chạy toàn bộ repository: **199 đạt, 1 bỏ qua do điều kiện nền tảng**;
-- probe wheel chính xác sạch trên Linux/WSL và Windows native;
-- các kịch bản supervisor lâu bền, thay thế frontend, mất tiến trình, writer cũ, tái sử dụng biên nhận và successor RLM gắn với policy;
-- bằng chứng chuyển đổi Hermes đã cài đặt được lưu trong WAL chỉ-ghi-thêm của dự án.
+- chạy toàn bộ repository: **206 đạt, 1 bỏ qua do điều kiện nền tảng**;
+- probe supervisor/frontend exact-wheel sạch trên Linux/WSL;
+- các kịch bản supervisor lâu bền, thay thế frontend, mất tiến trình, writer cũ, tái sử dụng biên nhận và successor RLM gắn với policy.
+
+Các dòng tương thích native-Windows và Hermes đã cài đặt trước đây được giữ lại dưới dạng
+**bối cảnh lịch sử do maintainer báo cáo**. Receipt host hỗ trợ không được đưa vào
+repository công khai này, vì vậy không thể audit độc lập các dòng đó từ cây này và chúng không phải là
+tiêu chí phát hành cho candidate mã nguồn công khai.
 
 Vẫn còn mở:
 

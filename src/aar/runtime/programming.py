@@ -70,6 +70,9 @@ class WorkspaceBackend(Protocol):
     @property
     def descriptor(self) -> WorkspaceBackendDescriptor: ...
 
+    @property
+    def environment(self) -> WorkspaceEnvironmentFingerprint: ...
+
     def create(
         self, workspace: WorkspaceRef, session: SessionRef
     ) -> ProgrammableWorkspaceHandle: ...
@@ -110,6 +113,10 @@ class WorkspaceBackend(Protocol):
     def reconcile(
         self, handle: ProgrammableWorkspaceHandle, operation: OperationRef
     ) -> WorkspaceReconciliationResult: ...
+
+    def retire_lost_receipt(
+        self, operation: OperationRef, handle: ProgrammableWorkspaceHandle
+    ) -> None: ...
 
     def close(
         self, handle: ProgrammableWorkspaceHandle, *, reason: str
@@ -254,6 +261,10 @@ class PlainPythonWorkspaceBackend:
     @property
     def descriptor(self) -> WorkspaceBackendDescriptor:
         return self._descriptor
+
+    @property
+    def environment(self) -> WorkspaceEnvironmentFingerprint:
+        return self._environment
 
     def create(
         self, workspace: WorkspaceRef, session: SessionRef
@@ -567,11 +578,15 @@ class PlainPythonWorkspaceBackend:
         if running:
             raise WorkspaceOperationConflict("cannot restore while an operation is running")
         if current is None:
-            if spec.expected_handle is not None:
+            if spec.expected_handle is not None and not spec.recover_lost_generation:
                 raise WorkspaceNotFound(spec.workspace.value)
             state = _WorkspaceState(
                 session=spec.session,
-                generation=1,
+                generation=(
+                    spec.expected_handle.generation + 1
+                    if spec.expected_handle is not None
+                    else 1
+                ),
                 revision=0,
                 namespace=namespace,
             )
@@ -588,6 +603,19 @@ class PlainPythonWorkspaceBackend:
                 raise StaleWorkspaceGeneration(
                     "restoring an existing workspace requires an expected handle"
                 )
+            if (
+                spec.recover_lost_generation
+                and current.generation == spec.expected_handle.generation + 1
+            ):
+                if (
+                    current.closed
+                    or current.revision != 0
+                    or current.namespace != namespace
+                ):
+                    raise WorkspaceOperationConflict(
+                        "existing recovery generation does not match checkpoint"
+                    )
+                return self._handle(spec.workspace, current)
             self._check_handle(current, spec.expected_handle)
             with self._lock:
                 if self._states.get(spec.workspace.value) is not current:
@@ -652,6 +680,27 @@ class PlainPythonWorkspaceBackend:
             state="running" if running else "lost",
             observed_revision=state.revision,
         )
+
+    def retire_lost_receipt(
+        self, operation: OperationRef, handle: ProgrammableWorkspaceHandle
+    ) -> None:
+        """Retire only the exact lost-attempt receipt before a verified successor."""
+
+        with self._lock:
+            result = self._receipts.get(operation.value)
+            if result is None:
+                return
+            if (
+                result.workspace != handle.workspace
+                or result.generation != handle.generation
+                or result.revision_before != handle.revision
+            ):
+                raise WorkspaceOperationConflict(
+                    "lost receipt does not match the predecessor workspace boundary"
+                )
+            if not result.workspace_lost:
+                raise WorkspaceOperationConflict("only a lost workspace receipt may be retired")
+            del self._receipts[operation.value]
 
     def close(
         self, handle: ProgrammableWorkspaceHandle, *, reason: str

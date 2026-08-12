@@ -13,7 +13,7 @@
   },
   "server_name": "aar-mcp",
   "server_version": "0.3.0a0",
-  "tool_surface_digest": "sha256:c3032f942269c8705e6c8e918a6ca934fb392441264194adc0db2d36cc8133c0",
+  "tool_surface_digest": "sha256:b723b3d474565cb13d6fa3705976421a4bb37ca602bf04635603a9ac43ea106c",
   "tool_surface_version": "aar.mcp-tools.v7",
   "tools": [
     {
@@ -12213,6 +12213,32 @@
           "BrokerCallTrace": {
             "additionalProperties": false,
             "properties": {
+              "authority_digest": {
+                "anyOf": [
+                  {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Authority Digest"
+              },
+              "compensation_digest": {
+                "anyOf": [
+                  {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Compensation Digest"
+              },
               "failure_code": {
                 "anyOf": [
                   {
@@ -12248,6 +12274,38 @@
               },
               "parent_operation": {
                 "$ref": "#/$defs/OperationRef"
+              },
+              "reconciliation_action": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "receipt_recovered",
+                      "safe_replay",
+                      "pending",
+                      "quarantine",
+                      "compensation_proposed"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Reconciliation Action"
+              },
+              "reconciliation_digest": {
+                "anyOf": [
+                  {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Reconciliation Digest"
               },
               "request_digest": {
                 "pattern": "^sha256:[0-9a-f]{64}$",
@@ -15061,7 +15119,7 @@
         "readOnlyHint": false,
         "title": null
       },
-      "description": "Reconcile an indeterminate operation against the authoritative workspace receipt.",
+      "description": "Reconcile an indeterminate operation against authoritative receipts; optional compensation remains proposal-only.",
       "execution": null,
       "icons": null,
       "inputSchema": {
@@ -15145,6 +15203,18 @@
           }
         },
         "properties": {
+          "compensation_grant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Compensation Grant Id"
+          },
           "context": {
             "$ref": "#/$defs/McpMutationContext",
             "description": "Required outer argument name: \"context\". Pass the flat McpMutationContext object shown here; never use \"mutation_context\", add \"schema_version\", or nest \"grant\" or \"budget\"."
@@ -15153,6 +15223,11 @@
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$",
             "title": "Operation Id",
             "type": "string"
+          },
+          "propose_compensation": {
+            "default": false,
+            "title": "Propose Compensation",
+            "type": "boolean"
           }
         },
         "required": [

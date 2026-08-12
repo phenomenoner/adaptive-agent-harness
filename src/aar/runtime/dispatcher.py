@@ -50,6 +50,7 @@ class DispatchClaim:
     operation: OperationRef
     attempt: Any
     lease_epoch: int
+    kind: str = "rlm.execute"
 
 
 @runtime_checkable
@@ -215,19 +216,22 @@ class DurableDispatcher:
         for worker in workers:
             worker.start()
 
-    def notify(self, operation: OperationRef) -> Any:
+    def notify(self, operation: OperationRef, *, kind: str | None = None) -> Any:
         """Persist a dispatch request and wake idle workers."""
 
+        dispatch_kind = self.dispatch_kind if kind is None else kind
+        if not dispatch_kind:
+            raise ValueError("dispatch kind must be non-empty")
         with self._condition:
             self._ensure_open_for_submit()
-            result = self.registry.request_dispatch(operation, kind=self.dispatch_kind)
+            result = self.registry.request_dispatch(operation, kind=dispatch_kind)
             self._condition.notify_all()
             return result
 
-    def submit(self, operation: OperationRef) -> Any:
+    def submit(self, operation: OperationRef, *, kind: str | None = None) -> Any:
         """Explicit submit alias for callers that use submit terminology."""
 
-        return self.notify(operation)
+        return self.notify(operation, kind=kind)
 
     def wait(self, operation: OperationRef, timeout_s: float | None = None) -> OperationRecord:
         """Read until terminal/indeterminate, or return the current record on timeout.
@@ -311,7 +315,7 @@ class DurableDispatcher:
                 continue
 
             try:
-                operation, attempt, lease_epoch = _claim_parts(claim)
+                operation, attempt, lease_epoch, kind = _claim_parts(claim)
             except BaseException:
                 # A malformed claim cannot be safely attributed to an outer
                 # operation.  Never turn it into success or failure.
@@ -319,7 +323,7 @@ class DurableDispatcher:
                 continue
 
             try:
-                self._run_claim(operation, attempt, lease_epoch)
+                self._run_claim(operation, attempt, lease_epoch, kind)
             except BaseException as error:
                 # _run_claim is intentionally defensive, but keep the daemon
                 # alive if a registry implementation violates the seam.
@@ -333,7 +337,9 @@ class DurableDispatcher:
                 return None
             self._claims_in_flight += 1
         try:
-            recover = getattr(self.host, "recover_durable_rlm", None)
+            recover = getattr(self.host, "recover_durable", None)
+            if not callable(recover):
+                recover = getattr(self.host, "recover_durable_rlm", None)
             if callable(recover):
                 recover()
             return self.registry.claim_next(
@@ -346,12 +352,27 @@ class DurableDispatcher:
             with self._condition:
                 self._claims_in_flight -= 1
 
-    def _run_claim(self, operation: OperationRef, attempt: Any, lease_epoch: int) -> None:
+    def _run_claim(
+        self,
+        operation: OperationRef,
+        attempt: Any,
+        lease_epoch: int,
+        kind: str,
+    ) -> None:
         fence = self._fence(lease_epoch)
         try:
-            record = self.host.run_claimed_rlm(operation, attempt, fence)
+            if kind == self.dispatch_kind:
+                record = self.host.run_claimed_rlm(operation, attempt, fence)
+            else:
+                run_claimed = getattr(self.host, "run_claimed", None)
+                if not callable(run_claimed):
+                    raise TypeError(f"host does not support dispatch kind {kind!r}")
+                record = cast(
+                    OperationRecord,
+                    run_claimed(kind, operation, attempt, fence),
+                )
         except BaseException as error:
-            self._handle_handler_exception(operation, attempt, fence, error)
+            self._handle_handler_exception(kind, operation, attempt, fence, error)
             return
 
         try:
@@ -363,15 +384,20 @@ class DurableDispatcher:
 
     def _handle_handler_exception(
         self,
+        kind: str,
         operation: OperationRef,
         attempt: Any,
         fence: AttemptFence,
         error: BaseException,
     ) -> None:
-        marker = getattr(self.host, "mark_dispatch_failure", None)
+        marker = getattr(self.host, "mark_dispatch_failure_for_kind", None)
+        marker_args: tuple[Any, ...] = (kind, operation, attempt, fence, error)
+        if not callable(marker) and kind == self.dispatch_kind:
+            marker = getattr(self.host, "mark_dispatch_failure", None)
+            marker_args = (operation, attempt, fence, error)
         if callable(marker):
             try:
-                record = cast(OperationRecord | None, marker(operation, attempt, fence, error))
+                record = cast(OperationRecord | None, marker(*marker_args))
             except BaseException:
                 record = None
             if record is not None:
@@ -441,27 +467,34 @@ class DurableDispatcher:
             self._condition.notify_all()
 
 
-def _claim_parts(claim: Any) -> tuple[OperationRef, Any, int]:
+def _claim_parts(claim: Any) -> tuple[OperationRef, Any, int, str]:
     """Normalize the small set of equivalent registry claim projections."""
 
     if isinstance(claim, DispatchClaim):
         operation, attempt, lease_epoch = claim.operation, claim.attempt, claim.lease_epoch
+        kind = claim.kind
     elif isinstance(claim, Mapping):
         operation = claim["operation"]
         attempt = claim.get("attempt", claim)
         lease_epoch = claim.get("lease_epoch")
+        kind = claim.get("kind", "rlm.execute")
     elif isinstance(claim, tuple):
-        if len(claim) == 3:
+        if len(claim) == 4:
+            operation, attempt, lease_epoch, kind = claim
+        elif len(claim) == 3:
             operation, attempt, lease_epoch = claim
+            kind = "rlm.execute"
         elif len(claim) == 2:
             operation, attempt = claim
             lease_epoch = getattr(attempt, "lease_epoch", None)
+            kind = getattr(attempt, "kind", "rlm.execute")
         else:
-            raise TypeError("claim tuple must contain operation, attempt, and lease epoch")
+            raise TypeError("claim tuple must contain operation, attempt, lease epoch, and kind")
     else:
         operation = claim.operation
         attempt = getattr(claim, "attempt", claim)
         lease_epoch = getattr(claim, "lease_epoch", None)
+        kind = getattr(claim, "kind", "rlm.execute")
         if lease_epoch is None:
             lease_epoch = getattr(attempt, "lease_epoch", None)
 
@@ -469,7 +502,9 @@ def _claim_parts(claim: Any) -> tuple[OperationRef, Any, int]:
         raise TypeError("claimed attempt does not expose lease_epoch")
     if isinstance(lease_epoch, bool) or not isinstance(lease_epoch, int) or lease_epoch < 1:
         raise ValueError("lease_epoch must be a positive integer")
-    return operation, attempt, lease_epoch
+    if not isinstance(kind, str) or not kind:
+        raise ValueError("claimed dispatch kind must be a non-empty string")
+    return operation, attempt, lease_epoch, kind
 
 
 def _is_terminal(record: Any) -> bool:

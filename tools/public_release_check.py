@@ -40,19 +40,35 @@ BYTE_PATTERNS = {
         rb"authorization\s*:\s*(?:bearer|token)\s+\S+", re.IGNORECASE
     ),
     "machine-local-path": re.compile(
-        rb"/home/" + rb"phenomenoner"
-        + rb"|[A-Z]:\\Users\\" + rb"user"
-        + rb"|D:\\" + rb"Warehouse"
-        + rb"|/mnt/[cd]/" + rb"Warehouse",
+        rb"(?:/" + rb"home/(?!user(?:/|$)|example(?:/|$)|<)[^/\s]+(?:/|$)"
+        rb"|/" + rb"mnt/[a-z]/(?!(?:path|project|repo|workspace|example)(?:/|$)|<)"
+        rb"[^/\s]+(?:/|$)"
+        rb"|[A-Z]:\\Users\\(?!user(?:\\|$)|example(?:\\|$)|<)[^\\/\s]+(?:\\|$)"
+        rb"|[A-Z]:\\(?!(?:path|tools|tmp|project|repo|workspace|example|Users|Windows)"
+        rb"(?:\\|$)|<)[^\\/\r\n]+(?:\\|$))",
         re.IGNORECASE,
     ),
-    "private-message-id": re.compile(rb"\b1536612665" + rb"181339668\b"),
+    "private-message-id": re.compile(
+        rb"(?:discord|telegram|message|channel|chat|guild|user)[_-]?(?:id)?"
+        rb"\s*[:=]\s*[\"']?\d{15,20}\b",
+        re.IGNORECASE,
+    ),
+    "opaque-task-id": re.compile(
+        rb"(?:desktop\s+task|task\s+id)\s+`?[0-9a-f]{8}"
+        rb"(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}`?",
+        re.IGNORECASE,
+    ),
+    "local-receipt-path": re.compile(
+        rb"(?:^|[\s`])(?:~?/)?\.aar/[A-Za-z0-9._/-]*"
+        rb"(?:receipt|summary|trace)[A-Za-z0-9._/-]*",
+        re.IGNORECASE,
+    ),
 }
 
 PROHIBITED_PATH = re.compile(
     r"(^|/)(?:\.env(?:$|\.)|\.data(?:/|$)|\.private(?:/|$)|secrets?(?:/|$)|"
     r"credentials?(?:/|$)|rollback(?:/|$)|runtime-workspace(?:/|$)|"
-    r"[^/]*\.(?:sqlite3?|pem|key))$",
+    r"[^/]*\.(?:sqlite3?|pem|key)$)",
     re.IGNORECASE,
 )
 MARKDOWN_LINK = re.compile(r"\]\(([^)]+)\)")

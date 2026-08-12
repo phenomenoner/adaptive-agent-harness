@@ -4,7 +4,7 @@
 
 ### 给智能体一张工作台——而不只是更大的提示词。
 
-**RLM × persistent IPython × durable operations × host-owned authority**
+**由 host 组合的 RLM + persistent IPython + durable operations + host-owned authority**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
@@ -26,7 +26,9 @@
 
 大多数智能体都被要求用一个昂贵又健忘的接口——提示词——解决大型问题。
 
-**Adaptive Agent Harness 改为提供一张可编程工作台。**模型可以在 IPython 中保留调查状态，用 Python 检查并转换长输入，进行有界的递归模型或子智能体调用，持久化操作收据，并通过一个小型 MCP 接口重新连接到工作。
+**Adaptive Agent Harness 改为提供一张可编程工作台。**它提供两个由 host 组合的 sibling surfaces，可以并列使用：用于有状态计算的持久 IPython workspaces，以及用于经 broker 的 evidence 和 model calls 的有界 RLM jobs。持久化 receipts 和小型 MCP surface 让两者都可治理，也可重新连接。
+
+当前公开 alpha **不会在 IPython workspace 内执行 RLM job，也不会在两者之间自动共享 state。**选定的 evidence、values 或 artifacts 必须由 host 明确传递。
 
 这为需要以下能力的智能体提供了实用基础：
 
@@ -70,7 +72,7 @@ RLM-style agent
 
 ## 为什么是 IPython？
 
-RLM 需要一个能**和数据一起**思考的地方，而不只是谈论数据。IPython 很适合，因为它提供了持久的计算工作区：
+长时间运行的智能体也需要一个能**与数据一起**思考的地方，而不只是谈论数据。IPython 通过提供一个独立的持久计算工作区，补充 RLM surface：
 
 - 变量会在不同执行步骤之间保持可用；
 - 可以直接检查 DataFrames、数组、解析后的文档和图结果；
@@ -87,7 +89,7 @@ RLM 需要一个能**和数据一起**思考的地方，而不只是谈论数据
 
 ## 为什么是 RLM × IPython？
 
-每个部分都覆盖不同的失效模式：
+这里的“×”表示 **host composition**，而不是进程内的 RLM/workspace binding。每个 sibling surface 都覆盖不同的失效模式：
 
 | 层 | 贡献 |
 |---|---|
@@ -96,7 +98,7 @@ RLM 需要一个能**和数据一起**思考的地方，而不只是谈论数据
 | **Adaptive Agent Harness** | 加入持久化操作身份、授权、预算、收据、artifacts、恢复策略和 host-neutral 的 MCP 访问。 |
 | **Your host agent** | 拥有身份、provider 凭证、审批、特权效果、接受和最终交付。 |
 
-它们结合后，智能体可以在语言推理和确定性计算之间切换，而不必把每个中间值都变成提示词文本。
+host 负责在两个 surface 之间明确传递选定的 evidence、values 或 artifacts，以组合它们。不存在隐式的 shared namespace，也没有自动的 RLM-to-IPython execution path。
 
 ```mermaid
 flowchart LR
@@ -104,7 +106,6 @@ flowchart LR
     H --> A[Adaptive Agent Harness]
     A --> R[Bounded RLM job]
     A --> I[Persistent IPython workspace]
-    R <--> I
     R --> B[Brokered model / subagent / evidence calls]
     I --> P[Python transforms, tests, tables]
     B --> E[Receipts + trace]
@@ -115,7 +116,7 @@ flowchart LR
 
 治理规则刻意保持简单：
 
-> **Python 是编排语言；host 仍然是权限边界。**
+> **host 会明确组合这些 sibling surfaces；Python 是工作区语言，而 host 仍然是 authority boundary。**
 
 ---
 
@@ -260,15 +261,16 @@ MCP frontend 刻意可以替换。它不拥有 continuity database 或 worker li
 
 当前公开 alpha：**`0.3.0a0`**。
 
-在 frozen candidate 中已验证：
+从这个公开 candidate 中重现的结果：
 
 - Python 3.11 至 3.14 覆盖范围；
 - 30-tool MCP v7 surface；
 - 直到 v4 的 additive SQLite schema；
-- 完整 repository 运行：**199 passed, 1 platform-gated skip**；
-- 在 Linux/WSL 和 native Windows 上通过 clean exact-wheel probes；
-- durable supervisor、frontend replacement、process-loss、stale-writer、receipt-reuse 和 policy-bound RLM successor 场景；
-- 已安装的 Hermes cutover 证据保留在 append-only project WAL 中。
+- 完整 repository 运行：**206 passed, 1 platform-gated skip**；
+- 在 Linux/WSL 上通过 clean exact-wheel supervisor/frontend probe；
+- durable supervisor、frontend replacement、process-loss、stale-writer、receipt-reuse 和 policy-bound RLM successor 场景。
+
+较早的 native-Windows 和 installed-Hermes compatibility rows 保留为 **maintainer-reported historical context**。支持这些 rows 的 host receipts 未包含在这个公开 repository 中，因此这些 rows 无法从这个 tree 独立审计，也不属于 public source candidate 的 release criteria。
 
 仍待完成：
 

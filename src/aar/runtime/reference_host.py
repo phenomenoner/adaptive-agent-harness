@@ -16,7 +16,12 @@ from aar.assets import (
     AssetReferenceMissing,
     SimulatedAssetProcessLoss,
 )
+from aar.broker_models import BrokerReconciliationReport
 from aar.canonical import canonical_json_bytes, canonical_sha256
+from aar.continuity_models import (
+    OperationWorkspaceCheckpointBoundaryV1,
+    OperationWorkspaceCheckpointSelectionV1,
+)
 from aar.rlm_models import RlmJobSnapshot, RlmJobSpec
 from aar.runtime.brokers import (
     BrokerBudgetExceeded,
@@ -33,9 +38,13 @@ from aar.runtime.brokers import (
 )
 from aar.runtime.continuity import (
     RLM_OPERATION_KIND,
+    WORKSPACE_PROGRAM_OPERATION_KIND,
     plan_rlm_step_successor,
+    plan_workspace_checkpoint_successor,
     rlm_recovery_environment_digest,
     rlm_step_boundary_policy,
+    workspace_checkpoint_boundary_policy,
+    workspace_recovery_environment_digest,
 )
 from aar.runtime.dispatcher import AttemptFence, DispatchHost, DurableDispatcher
 from aar.runtime.ipython_backend import SupervisedIPythonWorkspaceBackend
@@ -46,8 +55,13 @@ from aar.runtime.models import (
     WorkspaceHandle,
     WorkspaceSnapshot,
 )
-from aar.runtime.programming import PlainPythonWorkspaceBackend, WorkspaceBackend
-from aar.runtime.registry import OperationRegistry, StaleRuntimeGeneration
+from aar.runtime.programming import (
+    PlainPythonWorkspaceBackend,
+    WorkspaceBackend,
+    WorkspaceCheckpointRejected,
+    WorkspaceOperationConflict,
+)
+from aar.runtime.registry import OperationRegistry, RegistryError, StaleRuntimeGeneration
 from aar.runtime.rlm import RlmEngine, RlmExecutionCancelled
 from aar.runtime.worker_manager import WorkerManager
 from aar.runtime.workspace import (
@@ -57,6 +71,12 @@ from aar.runtime.workspace import (
     WorkspaceNotFound,
     WorkspaceRevisionConflict,
     WorkspaceSessionMismatch,
+)
+from aar.runtime.workspace_models import (
+    ProgrammableWorkspaceHandle,
+    WorkspaceCheckpointPolicy,
+    WorkspaceProgramSpec,
+    WorkspaceRestoreSpec,
 )
 from aar.schemas import (
     AccessMode,
@@ -248,7 +268,7 @@ class ReferenceHost:
                 raise ReferenceHostError("reference host is closing")
             if self.dispatcher is not None:
                 return self.dispatcher
-            self.recover_durable_rlm()
+            self.recover_durable()
             dispatcher = DurableDispatcher(
                 cast(DispatchHost, self),
                 concurrency=self._dispatcher_concurrency,
@@ -458,6 +478,175 @@ class ReferenceHost:
         if self.dispatcher is None:
             raise ReferenceHostError("durable RLM dispatch is not enabled")
         return self.dispatcher.wait(operation, timeout_s=timeout_s)
+
+    def submit_program_workspace_durable(
+        self,
+        envelope: RequestEnvelope,
+        handle: ProgrammableWorkspaceHandle,
+        spec: WorkspaceProgramSpec,
+    ) -> OperationRecord:
+        if self.dispatcher is None:
+            raise ReferenceHostError("durable workspace dispatch is not enabled")
+        payload = {
+            "handle": handle,
+            "kind": WORKSPACE_PROGRAM_OPERATION_KIND,
+            "spec": spec,
+        }
+        self._validate_program_workspace_request(envelope, handle, spec, payload)
+        record, _created = self.registry.accept(
+            envelope, canonical_json_bytes(payload).decode()
+        )
+        if spec.checkpoint_replay_safe:
+            policy = workspace_checkpoint_boundary_policy()
+            self.registry.bind_recovery_policy(
+                record.operation,
+                operation_kind=WORKSPACE_PROGRAM_OPERATION_KIND,
+                policy=policy,
+                environment_digest=workspace_recovery_environment_digest(
+                    backend=self.program_workspace.descriptor,
+                    environment=self.program_workspace.environment,
+                    capability_digest=self.capabilities.digest,
+                    policy=policy,
+                ),
+            )
+        if record.state is OperationState.ACCEPTED:
+            self.dispatcher.notify(
+                record.operation,
+                kind=WORKSPACE_PROGRAM_OPERATION_KIND,
+            )
+        return record
+
+    def wait_program_workspace(
+        self,
+        operation: OperationRef,
+        *,
+        timeout_s: float | None = None,
+    ) -> OperationRecord:
+        if self.dispatcher is None:
+            raise ReferenceHostError("durable workspace dispatch is not enabled")
+        return self.dispatcher.wait(operation, timeout_s=timeout_s)
+
+    def run_claimed(
+        self,
+        kind: str,
+        operation: OperationRef,
+        attempt: Any,
+        fence: AttemptFence,
+    ) -> OperationRecord:
+        if kind != WORKSPACE_PROGRAM_OPERATION_KIND:
+            raise ReferenceHostError(f"unsupported durable dispatch kind: {kind}")
+        return self.run_claimed_program_workspace(operation, attempt, fence)
+
+    def run_claimed_program_workspace(
+        self,
+        operation: OperationRef,
+        attempt: Any,
+        fence: AttemptFence,
+    ) -> OperationRecord:
+        if getattr(attempt, "operation", None) != operation:
+            raise ReferenceHostError("claimed attempt does not belong to operation")
+        record = self.registry.get(operation)
+        if record.state is not OperationState.RUNNING:
+            return record
+        payload = json.loads(record.payload_json)
+        if set(payload) != {"handle", "kind", "spec"}:
+            raise ReferenceHostError("workspace operation payload shape is invalid")
+        if payload["kind"] != WORKSPACE_PROGRAM_OPERATION_KIND:
+            raise ReferenceHostError("workspace operation payload kind is invalid")
+        handle = ProgrammableWorkspaceHandle.model_validate(payload["handle"], strict=True)
+        spec = WorkspaceProgramSpec.model_validate(payload["spec"], strict=True)
+        envelope = RequestEnvelope.model_validate_json(record.request_json, strict=True)
+        boundaries = self.registry.workspace_checkpoint_boundaries(operation)
+        if getattr(attempt, "attempt_no", 1) > 1:
+            if not boundaries:
+                raise ReferenceHostError("workspace successor has no restore boundary")
+            handle = boundaries[-1].restored_handle
+
+        if self._now_ms() >= envelope.deadline_unix_ms:
+            return self.registry.transition_claimed(
+                attempt,
+                self.runtime_generation,
+                fence.dispatcher_generation,
+                fence.lease_epoch,
+                fence.owner_digest,
+                state=OperationState.TIMED_OUT,
+                note="deadline_expired",
+            )
+        if self.registry.cancellation_requested(operation):
+            return self.registry.transition_claimed(
+                attempt,
+                self.runtime_generation,
+                fence.dispatcher_generation,
+                fence.lease_epoch,
+                fence.owner_digest,
+                state=OperationState.CANCELLED,
+                note="cancelled",
+            )
+
+        self.program_workspace.attach(handle, envelope.session)
+        stop_heartbeat = threading.Event()
+
+        def heartbeat() -> None:
+            while not stop_heartbeat.wait(10):
+                self.registry.heartbeat(
+                    attempt,
+                    self.runtime_generation,
+                    fence.dispatcher_generation,
+                    fence.lease_epoch,
+                    fence.owner_digest,
+                    30_000,
+                )
+
+        heartbeat_thread = threading.Thread(
+            target=heartbeat,
+            name=f"aar-workspace-heartbeat-{operation.value}",
+            daemon=True,
+        )
+        heartbeat_thread.start()
+        try:
+            result = self.program_workspace.execute(operation, handle, spec)
+        finally:
+            stop_heartbeat.set()
+            heartbeat_thread.join(timeout=1)
+        result_json = canonical_json_bytes(result).decode()
+        if result.status == "succeeded":
+            state = OperationState.SUCCEEDED
+            failure = None
+            note = "execution_succeeded"
+        elif result.status == "interrupted":
+            state = OperationState.CANCELLED
+            failure = None
+            note = "cancelled"
+        elif result.status == "timed_out":
+            state = OperationState.TIMED_OUT
+            failure = None
+            note = "deadline_expired"
+        elif result.workspace_lost and spec.checkpoint_replay_safe:
+            state = OperationState.INDETERMINATE
+            failure = None
+            note = "workspace_worker_lost"
+        else:
+            state = OperationState.FAILED
+            failure = FailureEnvelope(
+                category=FailureCategory.WORKER,
+                code="WORKSPACE_PROGRAM_FAILED",
+                message="programmable workspace execution failed",
+                retryable=False,
+                certainty=OutcomeCertainty.CERTAIN,
+                operation=operation,
+            )
+            note = "execution_failed"
+        return self.registry.transition_claimed(
+            attempt,
+            self.runtime_generation,
+            fence.dispatcher_generation,
+            fence.lease_epoch,
+            fence.owner_digest,
+            state=state,
+            result_json=result_json,
+            failure=failure,
+            note=note,
+        )
 
     def run_rlm(
         self,
@@ -703,6 +892,27 @@ class ReferenceHost:
             note="execution_succeeded",
         )
 
+    def mark_dispatch_failure_for_kind(
+        self,
+        kind: str,
+        operation: OperationRef,
+        attempt: Any,
+        fence: AttemptFence,
+        error: BaseException,
+    ) -> OperationRecord:
+        if kind == RLM_OPERATION_KIND:
+            return self.mark_dispatch_failure(operation, attempt, fence, error)
+        if kind != WORKSPACE_PROGRAM_OPERATION_KIND:
+            raise ReferenceHostError(f"unsupported durable dispatch kind: {kind}")
+        return self.registry.park_attempt(
+            attempt,
+            self.runtime_generation,
+            fence.dispatcher_generation,
+            fence.lease_epoch,
+            fence.owner_digest,
+            note=f"workspace_dispatch_exception:{type(error).__name__}",
+        )
+
     def mark_dispatch_failure(
         self,
         operation: OperationRef,
@@ -785,6 +995,219 @@ class ReferenceHost:
             authoritative_state=authoritative_state or record.state,
             usage=usage,
         )
+
+    def recover_durable(self) -> None:
+        """Reconcile every registered durable operation kind before dispatch claims."""
+
+        self.recover_durable_effects()
+        self.recover_durable_rlm()
+        self.recover_durable_workspaces()
+
+    def recover_durable_effects(self) -> tuple[BrokerReconciliationReport, ...]:
+        """Reconcile broker receipts without deciding any operation successor."""
+
+        reports: list[BrokerReconciliationReport] = []
+        for record in self.registry.list_recovery_candidates():
+            operation = record.operation
+            if not self.brokers.has_unresolved_calls(operation):
+                continue
+            try:
+                envelope = RequestEnvelope.model_validate_json(
+                    record.request_json, strict=True
+                )
+                report = self.brokers.bind(
+                    envelope, operation
+                ).reconcile_unresolved(
+                    current_capability_digest=self.capabilities.digest
+                )
+            except (BrokerCallConflict, BrokerGrantDenied, ValueError):
+                continue
+            reports.append(report)
+        return tuple(reports)
+
+    def recover_durable_workspaces(self) -> None:
+        """Recover replay-safe programmable workspaces from exact checkpoints."""
+
+        with self._recovery_lock:
+            self.registry.fence_expired_attempts(self.runtime_generation)
+            for record in self.registry.list_recovery_candidates():
+                operation = record.operation
+                try:
+                    policy_binding = self.registry.recovery_policy_binding(operation)
+                except ValueError:
+                    continue
+                if (
+                    policy_binding is None
+                    or policy_binding.operation_kind != WORKSPACE_PROGRAM_OPERATION_KIND
+                ):
+                    continue
+                prior_fence = self.registry.latest_recovery_attempt_fence(operation)
+                if prior_fence is None:
+                    self.registry.requeue_indeterminate(
+                        operation,
+                        self.runtime_generation,
+                        decision="quarantine",
+                        reason_code="recovery_attempt_fence_missing",
+                        input_digest=record.input_digest,
+                        policy_binding=policy_binding,
+                    )
+                    continue
+                try:
+                    payload = json.loads(record.payload_json)
+                    if set(payload) != {"handle", "kind", "spec"}:
+                        raise ValueError("workspace recovery payload shape is invalid")
+                    if payload["kind"] != WORKSPACE_PROGRAM_OPERATION_KIND:
+                        raise ValueError("workspace recovery payload kind is invalid")
+                    handle = ProgrammableWorkspaceHandle.model_validate(
+                        payload["handle"], strict=True
+                    )
+                    spec = WorkspaceProgramSpec.model_validate(payload["spec"], strict=True)
+                    envelope = RequestEnvelope.model_validate_json(
+                        record.request_json, strict=True
+                    )
+                    manifest = self.registry.latest_workspace_checkpoint(handle)
+                    continuity = self.registry.continuity_snapshot(operation)
+                    plan = plan_workspace_checkpoint_successor(
+                        operation=operation,
+                        input_digest=record.input_digest,
+                        envelope=envelope,
+                        handle=handle,
+                        spec=spec,
+                        prior_attempt=prior_fence.attempt,
+                        policy_binding=policy_binding,
+                        current_capability_digest=self.capabilities.digest,
+                        current_backend=self.program_workspace.descriptor,
+                        current_environment=self.program_workspace.environment,
+                        manifest=manifest,
+                        cancellation_requested=continuity.control.cancellation_requested,
+                        now_unix_ms=self.now_ms(),
+                    )
+                except (TypeError, ValueError):
+                    self.registry.requeue_indeterminate(
+                        operation,
+                        self.runtime_generation,
+                        decision="quarantine",
+                        reason_code="workspace_recovery_evidence_invalid",
+                        input_digest=record.input_digest,
+                        policy_binding=policy_binding,
+                    )
+                    continue
+                if plan.decision != "restore_checkpoint":
+                    self.registry.requeue_indeterminate(
+                        operation,
+                        self.runtime_generation,
+                        decision=plan.decision,
+                        reason_code=plan.reason_code,
+                        input_digest=record.input_digest,
+                        policy_binding=policy_binding,
+                    )
+                    continue
+                assert plan.manifest is not None
+                manifest = plan.manifest
+                selection = OperationWorkspaceCheckpointSelectionV1.issue(
+                    operation=operation,
+                    prior_attempt=prior_fence.attempt,
+                    runtime_generation=prior_fence.runtime_generation,
+                    dispatcher_generation=prior_fence.dispatcher_generation,
+                    lease_epoch=prior_fence.lease_epoch,
+                    policy_digest=policy_binding.policy_digest,
+                    input_digest=record.input_digest,
+                    checkpoint_operation=manifest.creation_operation,
+                    checkpoint_manifest_digest=manifest.content_digest,
+                    source_handle=manifest.source_handle,
+                    environment_digest=policy_binding.environment_digest,
+                    exclusion_count=len(manifest.exclusions),
+                    exclusions_digest=canonical_sha256(manifest.exclusions),
+                    artifacts_digest=canonical_sha256(manifest.artifacts),
+                    deadline_unix_ms=envelope.deadline_unix_ms,
+                    selected_at_unix_ms=record.updated_at_unix_ms,
+                )
+                restored: ProgrammableWorkspaceHandle | None = None
+                try:
+                    self.registry.select_workspace_checkpoint(
+                        selection,
+                        self.runtime_generation,
+                    )
+                    for artifact in manifest.artifacts:
+                        self.artifacts.read(artifact)
+                    restored = self.program_workspace.restore(
+                        manifest,
+                        WorkspaceRestoreSpec(
+                            workspace=handle.workspace,
+                            session=envelope.session,
+                            expected_handle=handle,
+                            recover_lost_generation=True,
+                        ),
+                    )
+                    verification = self.program_workspace.checkpoint(
+                        OperationRef(
+                            value=f"verify-{operation.value}-{prior_fence.attempt.attempt_no}"
+                        ),
+                        restored,
+                        WorkspaceCheckpointPolicy(
+                            max_values=1_024,
+                            max_bytes=16_777_216,
+                            max_depth=32,
+                            max_collection_items=65_536,
+                        ),
+                        f"trace-verify-{operation.value}",
+                    )
+                    if verification.values != manifest.values or verification.exclusions:
+                        raise WorkspaceCheckpointRejected(
+                            "restored workspace values do not match checkpoint"
+                        )
+                    boundary = OperationWorkspaceCheckpointBoundaryV1.issue(
+                        operation=operation,
+                        prior_attempt=prior_fence.attempt,
+                        runtime_generation=prior_fence.runtime_generation,
+                        dispatcher_generation=prior_fence.dispatcher_generation,
+                        lease_epoch=prior_fence.lease_epoch,
+                        policy_digest=policy_binding.policy_digest,
+                        input_digest=record.input_digest,
+                        checkpoint_operation=manifest.creation_operation,
+                        checkpoint_manifest_digest=manifest.content_digest,
+                        source_handle=manifest.source_handle,
+                        restored_handle=restored,
+                        environment_digest=policy_binding.environment_digest,
+                        exclusion_count=len(manifest.exclusions),
+                        exclusions_digest=canonical_sha256(manifest.exclusions),
+                        artifacts_digest=canonical_sha256(manifest.artifacts),
+                        deadline_unix_ms=envelope.deadline_unix_ms,
+                        created_at_unix_ms=self.now_ms(),
+                    )
+                    self.registry.mark_workspace_checkpoint_restored(
+                        selection,
+                        restored,
+                        self.runtime_generation,
+                    )
+                    self.program_workspace.retire_lost_receipt(operation, handle)
+                    self.registry.requeue_indeterminate(
+                        operation,
+                        self.runtime_generation,
+                        decision=plan.decision,
+                        reason_code=plan.reason_code,
+                        input_digest=record.input_digest,
+                        policy_binding=policy_binding,
+                        continuation_boundary=boundary,
+                    )
+                except (
+                    KeyError,
+                    RegistryError,
+                    WorkspaceCheckpointRejected,
+                    WorkspaceOperationConflict,
+                ):
+                    if restored is not None:
+                        self.program_workspace.close(
+                            restored, reason="workspace recovery transaction failed"
+                        )
+                    self.registry.requeue_indeterminate(
+                        operation,
+                        self.runtime_generation,
+                        decision="needs_user",
+                        reason_code="workspace_restore_failed",
+                        input_digest=record.input_digest,
+                        policy_binding=policy_binding,
+                    )
 
     def recover_durable_rlm(self) -> None:
         """Recover fenced RLM dispatches without guessing unresolved effects."""
@@ -869,10 +1292,26 @@ class ReferenceHost:
                     envelope = RequestEnvelope.model_validate_json(
                         record.request_json, strict=True
                     )
+                    if envelope.capability_digest != self.capabilities.digest:
+                        self.registry.requeue_indeterminate(
+                            operation,
+                            self.runtime_generation,
+                            decision="needs_user",
+                            reason_code="recovery_capability_digest_mismatch",
+                            input_digest=record.input_digest,
+                            policy_binding=policy_binding,
+                        )
+                        continue
                     spec = RlmJobSpec.model_validate_json(record.payload_json, strict=True)
                     broker = self.brokers.bind(envelope, operation)
                     continuity = self.registry.continuity_snapshot(operation)
-                    unresolved_calls = self.brokers.has_unresolved_calls(operation)
+                    reconciliation = broker.reconcile_unresolved(
+                        current_capability_digest=self.capabilities.digest,
+                        cancellation_requested=(
+                            continuity.control.cancellation_requested
+                        )
+                    )
+                    unresolved_calls = reconciliation.unresolved
                     plan = plan_rlm_step_successor(
                         operation=operation,
                         input_digest=record.input_digest,
@@ -923,6 +1362,29 @@ class ReferenceHost:
                     continuation_boundary=plan.boundary,
                 )
 
+    def reconcile_broker_calls(
+        self,
+        operation: OperationRef,
+        *,
+        current_capability_digest: str | None = None,
+        current_compensation_grant: Grant | None = None,
+        propose_compensation: bool = False,
+    ) -> BrokerReconciliationReport:
+        record = self.registry.get(operation)
+        if record.state is not OperationState.INDETERMINATE:
+            raise BrokerCallConflict(
+                "broker reconciliation requires an indeterminate operation"
+            )
+        envelope = RequestEnvelope.model_validate_json(record.request_json, strict=True)
+        broker = self.brokers.bind(envelope, operation)
+        return broker.reconcile_unresolved(
+            current_capability_digest=(
+                current_capability_digest or self.capabilities.digest
+            ),
+            current_compensation_grant=current_compensation_grant,
+            propose_compensation=propose_compensation,
+        )
+
     def reconcile_rlm(self, operation: OperationRef) -> ReconciliationReport:
         record = self.registry.get(operation)
         spec = RlmJobSpec.model_validate_json(record.payload_json, strict=True)
@@ -956,6 +1418,47 @@ class ReferenceHost:
             certainty=record.certainty,
             runtime_generation=self.runtime_generation,
             reconciliation_required=record.reconciliation_required,
+        )
+
+    def request_program_workspace_envelope(
+        self,
+        *,
+        request_id: str,
+        idempotency_key: str,
+        principal: PrincipalRef,
+        session: SessionRef,
+        handle: ProgrammableWorkspaceHandle,
+        spec: WorkspaceProgramSpec,
+        deadline_unix_ms: int,
+    ) -> RequestEnvelope:
+        payload = {
+            "handle": handle,
+            "kind": WORKSPACE_PROGRAM_OPERATION_KIND,
+            "spec": spec,
+        }
+        grant = Grant(
+            grant_id=f"grant-{idempotency_key}",
+            capability=WORKSPACE_PROGRAM_OPERATION_KIND,
+            issued_to=principal,
+            expires_at_unix_ms=deadline_unix_ms,
+        )
+        return RequestEnvelope(
+            request_id=request_id,
+            idempotency_key=idempotency_key,
+            host=HostRef(value="reference-host"),
+            principal=principal,
+            lane=LaneRef(value="program-workspace"),
+            session=session,
+            workspace=handle.workspace,
+            runtime_generation=self.runtime_generation,
+            workspace_generation=handle.generation,
+            expected_workspace_revision=handle.revision,
+            capability_digest=self.capabilities.digest,
+            deadline_unix_ms=deadline_unix_ms,
+            grants=(grant,),
+            budget=Budget(wall_time_ms=max(0, deadline_unix_ms - self._now_ms())),
+            trace_id=f"trace-{request_id}",
+            input_digest=canonical_sha256(payload),
         )
 
     def request_rlm_envelope(
@@ -1232,6 +1735,53 @@ class ReferenceHost:
             raise InputDigestMismatch("workspace revision differs between envelope and payload")
         try:
             self.workspace.assert_session(spec.workspace, envelope.session)
+        except (WorkspaceNotFound, WorkspaceSessionMismatch) as error:
+            raise WorkspaceBindingDenied(str(error)) from error
+
+    def _validate_program_workspace_request(
+        self,
+        envelope: RequestEnvelope,
+        handle: ProgrammableWorkspaceHandle,
+        spec: WorkspaceProgramSpec,
+        payload: dict[str, Any],
+    ) -> None:
+        if envelope.runtime_generation != self.runtime_generation:
+            raise StaleRuntimeGeneration(
+                "runtime generation is "
+                f"{self.runtime_generation}, not {envelope.runtime_generation}"
+            )
+        if envelope.capability_digest != self.capabilities.digest:
+            raise CapabilityMismatch("capability digest does not match the reference host")
+        if self._now_ms() >= envelope.deadline_unix_ms:
+            raise DeadlineExpired("request deadline has expired before acceptance")
+        if envelope.budget.wall_time_ms == 0:
+            raise BudgetDenied("workspace execution requires a positive wall-time budget")
+        remaining_ms = envelope.deadline_unix_ms - self._now_ms()
+        if remaining_ms > envelope.budget.wall_time_ms:
+            raise BudgetDenied("wall-time budget does not cover the request deadline")
+        if spec.wall_time_ms > envelope.budget.wall_time_ms:
+            raise BudgetDenied("workspace wall-time exceeds the request budget")
+        if envelope.budget.wall_time_ms > 60_000:
+            raise BudgetDenied("wall-time budget exceeds the reference-host capability limit")
+        matching = [
+            grant
+            for grant in envelope.grants
+            if grant.capability == WORKSPACE_PROGRAM_OPERATION_KIND
+            and grant.issued_to == envelope.principal
+            and grant.expires_at_unix_ms >= envelope.deadline_unix_ms
+        ]
+        if not matching:
+            raise GrantDenied("workspace.program.execute grant is absent or expired")
+        if canonical_sha256(payload) != envelope.input_digest:
+            raise InputDigestMismatch("workspace payload does not match envelope input digest")
+        if (
+            envelope.workspace != handle.workspace
+            or envelope.workspace_generation != handle.generation
+            or envelope.expected_workspace_revision != handle.revision
+        ):
+            raise InputDigestMismatch("workspace envelope does not match the exact handle")
+        try:
+            self.program_workspace.attach(handle, envelope.session)
         except (WorkspaceNotFound, WorkspaceSessionMismatch) as error:
             raise WorkspaceBindingDenied(str(error)) from error
 

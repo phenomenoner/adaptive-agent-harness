@@ -1,6 +1,6 @@
 # Why RLM + IPython?
 
-Adaptive Agent Harness combines a bounded Recursive Language Model (RLM) runtime with persistent IPython workspaces. This page explains the product and architecture reasoning behind that choice.
+Adaptive Agent Harness exposes bounded Recursive Language Model (RLM) jobs and persistent IPython workspaces as sibling surfaces for a host to compose. This page explains the product and architecture reasoning behind that choice. The current public alpha does not run an RLM job inside an IPython workspace or share state between them automatically.
 
 ## 1. The problem: context is an expensive interface
 
@@ -24,7 +24,7 @@ The key product idea is simple:
 
 > Do not ask the model to remember every byte. Let it decide which bytes deserve language reasoning.
 
-An RLM loop can use ordinary code for search, filtering, aggregation, ranking, deduplication, and bookkeeping. Model calls are reserved for ambiguous interpretation, synthesis, or generation.
+The broader RLM pattern can use ordinary code for search, filtering, aggregation, ranking, deduplication, and bookkeeping. Model calls are reserved for ambiguous interpretation, synthesis, or generation. The built-in Adaptive Agent Harness strategy is intentionally narrower today: it brokers `evidence.query` and `model.request` steps, and does not execute that code inside IPython.
 
 Adaptive Agent Harness adds explicit bounds:
 
@@ -39,7 +39,7 @@ Adaptive Agent Harness adds explicit bounds:
 
 ## 3. IPython: a computational working set
 
-An RLM needs an environment that is useful to a model and familiar to developers. IPython provides:
+Long-running host agents also benefit from an environment that is useful to a model and familiar to developers. The separate IPython surface provides:
 
 - persistent variables and helper functions;
 - introspection and readable errors;
@@ -54,15 +54,15 @@ The workspace can retain investigation state that would be wasteful or lossy in 
 candidate_sections = search(corpus, query)
 ranked = score(candidate_sections)
 selected = ranked[:20]
-sub_answers = [ask_model(x) for x in selected]
-result = synthesize(sub_answers)
+evidence_bundle = export_json(selected)
+# The host may submit this explicit bundle to a separate bounded RLM job.
 ```
 
-The prompt can hold the plan and compact references. The workspace holds the data, functions, and computed state.
+The prompt can hold the plan and compact references. The workspace holds the data, functions, and computed state. The host decides which explicit values or artifacts cross into an RLM request.
 
 ## 4. The synergy
 
-RLM and IPython are complementary:
+RLM and IPython are complementary sibling surfaces. This synergy is host-composed; there is no implicit shared namespace or automatic execution path between them:
 
 | Failure mode | RLM response | IPython response |
 |---|---|---|
@@ -73,7 +73,7 @@ RLM and IPython are complementary:
 | Ambiguous retry | Record broker request/receipt state | Recompute deterministic transforms without replaying effects |
 | Frontend disconnect | Continue under a durable operation | Keep worker ownership separate from the frontend |
 
-Adaptive Agent Harness connects these layers with a durable supervisor, versioned operation state, explicit authority, and MCP access.
+Adaptive Agent Harness exposes both under a durable supervisor, versioned operation state, explicit authority, and MCP access. The host connects them only through selected evidence, values, or artifacts.
 
 ## 5. Persistence without pretending everything is portable
 
@@ -108,7 +108,7 @@ A frontend can disappear while the supervisor continues to own the operation. A 
 
 Prime Agent publicly positions persistent IPython as the built-in model tool and native subagents as programmatic function calls. Its fuller agent runtime also includes daemon-backed continuity and coding/research workflows.
 
-That is strong evidence for the user value of the RLM + persistent-workbench model. Adaptive Agent Harness chooses a different product boundary: it focuses on portable operation contracts, receipts, evidence, and host-owned authority. A future integration can place Prime or another rich worker behind that boundary.
+That is strong evidence for the user value of an RLM-native persistent workbench. Adaptive Agent Harness chooses a different product boundary today: sibling RLM and IPython surfaces plus portable operation contracts, receipts, evidence, and host-owned authority. A future integration can place Prime or another rich worker behind that boundary.
 
 ### NVIDIA Object Oriented Agents (NOOA)
 
@@ -118,7 +118,7 @@ NOOA is design input only. The current package has no NOOA adapter or dependency
 
 ## 8. Good workloads
 
-The combination works best when a task has both language ambiguity and computational structure:
+Host composition of the two surfaces works best when a task has both language ambiguity and computational structure:
 
 - compare many documents with citations;
 - map a large codebase and retain impact evidence;

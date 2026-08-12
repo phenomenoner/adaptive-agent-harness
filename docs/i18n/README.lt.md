@@ -4,7 +4,7 @@
 
 ### Suteikite agentams darbo aplinką — ne tik didesnį promptą.
 
-**RLM × išliekantis IPython × patvarios operacijos × hosto valdoma kontrolė**
+**Hosto komponuojamas RLM + išliekantis IPython + patvarios operacijos + hosto valdoma kontrolė**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
@@ -26,7 +26,9 @@
 
 Daugumos agentų prašoma spręsti dideles problemas naudojant vieną brangią ir greitai užmirštančią sąsają: promptą.
 
-**Adaptive Agent Harness vietoj to suteikia programuojamą darbo aplinką.** Modelis gali laikyti tyrimo būseną IPython, tikrinti ir transformuoti ilgus įvesties duomenis naudodamas Python, atlikti ribotus rekursinius modelio ar subagentų iškvietimus, išsaugoti operacijų kvitus ir vėl prisijungti prie darbo per nedidelį MCP paviršių.
+**Adaptive Agent Harness vietoj to suteikia programuojamą darbo aplinką.** Hostas gali komponuoti ir greta naudoti du gretimus paviršius: išliekančias IPython darbo sritis skaičiavimams su būsena ir ribotas RLM užduotis per brokerį gaunamiems įrodymams bei modelio iškvietimams. Patvarūs kvitai ir nedidelis MCP paviršius leidžia abi valdyti ir pasiekti vėl prisijungus.
+
+Dabartinė viešoji alfa **nevykdo RLM užduoties IPython darbo srityje ir automatiškai nesidalija būsena tarp jų**. Hostas pats aiškiai perduoda pasirinktus įrodymus, reikšmes ar artefaktus.
 
 Tai praktinis pagrindas agentams, kuriems reikia:
 
@@ -70,7 +72,7 @@ RLM-style agent
 
 ## Kodėl IPython?
 
-RLM reikia vietos, kur galima **mąstyti su duomenimis**, o ne tik apie juos kalbėti. IPython čia ypač tinka, nes suteikia modeliui išliekančią skaičiavimo darbo sritį:
+Ilgai veikiantiems agentams taip pat reikia vietos mąstyti **su duomenimis**, o ne tik apie juos kalbėti. IPython papildo RLM paviršių, suteikdamas hostui atskirą išliekančią skaičiavimo darbo sritį:
 
 - kintamieji lieka pasiekiami tarp vykdymo žingsnių;
 - DataFrame, masyvus, išanalizuotus dokumentus ir grafų rezultatus galima tikrinti tiesiogiai;
@@ -87,7 +89,7 @@ Pokalbio transkriptas yra to, kas buvo pasakyta, įrašas. **IPython darbo sriti
 
 ## Kodėl RLM × IPython?
 
-Kiekviena dalis sprendžia skirtingą gedimo režimą:
+Čia „×“ reiškia **hosto kompoziciją**, o ne RLM ir darbo srities susiejimą viename procese. Kiekvienas gretimas paviršius sprendžia skirtingą gedimo režimą:
 
 | Sluoksnis | Ką jis suteikia |
 |---|---|
@@ -96,7 +98,7 @@ Kiekviena dalis sprendžia skirtingą gedimo režimą:
 | **Adaptive Agent Harness** | Prideda patvarią operacijos tapatybę, leidimus, biudžetus, kvitus, artefaktus, atkūrimo politiką ir hostui neutralią MCP prieigą. |
 | **Jūsų hosto agentas** | Valdo tapatybę, teikėjo kredencialus, patvirtinimą, privilegijuotus efektus, priėmimą ir galutinį pristatymą. |
 
-Kartu jie leidžia agentui pereiti nuo kalbinio samprotavimo prie deterministinių skaičiavimų ir atgal, nepaverčiant kiekvienos tarpinės reikšmės prompto tekstu.
+Hostas gali juos komponuoti, aiškiai perduodamas tarp paviršių pasirinktus įrodymus, reikšmes ar artefaktus. Nėra nei numanomos bendros vardų srities, nei automatinio RLM vykdymo kelio į IPython.
 
 ```mermaid
 flowchart LR
@@ -104,7 +106,6 @@ flowchart LR
     H --> A[Adaptive Agent Harness]
     A --> R[Bounded RLM job]
     A --> I[Persistent IPython workspace]
-    R <--> I
     R --> B[Brokered model / subagent / evidence calls]
     I --> P[Python transforms, tests, tables]
     B --> E[Receipts + trace]
@@ -115,7 +116,7 @@ flowchart LR
 
 Pagrindinė taisyklė sąmoningai paprasta:
 
-> **Python yra orkestravimo kalba; hostas išlieka autoriteto riba.**
+> **Hostas aiškiai komponuoja gretimus paviršius; Python yra darbo srities kalba, o hostas išlieka autoriteto riba.**
 
 ---
 
@@ -260,15 +261,19 @@ MCP frontend'as sąmoningai pakeičiamas. Jis nevaldo tęstinumo duomenų bazės
 
 Dabartinė viešoji alfa: **`0.3.0a0`**.
 
-Užšaldytame kandidato variante patikrinta:
+Šiame viešajame kandidate atkurta:
 
 - Python 3.11–3.14 palaikymas;
 - 30 įrankių MCP v7 paviršius;
 - papildanti SQLite schema iki v4;
-- visas saugyklos paleidimas: **199 išlaikyti testai, 1 nuo platformos priklausantis praleidimas**;
-- švarios tikslaus wheel patikros Linux/WSL ir gimtojoje Windows aplinkoje;
-- patvaraus prižiūrėtojo, frontend'o pakeitimo, proceso praradimo, pasenusio rašytojo, kvito pakartotinio panaudojimo ir su politika susieto RLM įpėdinio scenarijai;
-- įdiegtos Hermes perjungimo įrodymų medžiaga, išsaugota tik papildymui skirtame projekto WAL.
+- visas saugyklos paleidimas: **206 išlaikyti testai, 1 nuo platformos priklausantis praleidimas**;
+- švarus exact-wheel supervisor/frontend bandymas Linux/WSL aplinkoje;
+- patvaraus prižiūrėtojo, frontend'o pakeitimo, proceso praradimo, pasenusio rašytojo, kvito pakartotinio panaudojimo ir su politika susieto RLM įpėdinio scenarijai.
+
+Ankstesnės native-Windows ir įdiegto Hermes suderinamumo eilutės išlaikomos kaip
+**prižiūrėtojų pateiktas istorinis kontekstas**. Jas pagrindžiantys hosto kvitai į šią
+viešąją saugyklą neįtraukti, todėl šių eilučių negalima nepriklausomai audituoti iš šio medžio ir jos nėra viešojo šaltinio kandidato
+išleidimo kriterijai.
 
 Dar atvira:
 

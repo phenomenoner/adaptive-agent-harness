@@ -4,7 +4,7 @@
 
 ### Dejte agentům pracovní stůl — ne jen větší prompt.
 
-**RLM × persistent IPython × durable operations × host-owned authority**
+**Hostitelem sestavené RLM + persistentní IPython + trvalé operace + autorita hostitele**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
@@ -26,7 +26,9 @@
 
 Většina agentů má řešit velké problémy prostřednictvím jediného drahého rozhraní, které zapomíná: promptu.
 
-**Adaptive Agent Harness jim místo toho poskytuje programovatelný pracovní stůl.** Model si může v IPythonu udržovat stav průzkumu, pomocí Pythonu prohlížet a transformovat dlouhé vstupy, provádět omezená rekurzivní volání modelu nebo subagenta, trvale ukládat potvrzení operací a znovu se připojit k práci přes malé rozhraní MCP.
+**Adaptive Agent Harness jim místo toho poskytuje programovatelný pracovní stůl.** Hostitel může vedle sebe používat dvě jím sestavené sibling surfaces: persistentní pracovní prostory IPython pro stavové výpočty a omezené úlohy RLM pro zprostředkované důkazy a volání modelu. Trvalá potvrzení a malé rozhraní MCP umožňují obě plochy řídit a znovu k nim připojit práci.
+
+Aktuální veřejná alfa **nespouští úlohu RLM uvnitř pracovního prostoru IPython a nesdílí mezi nimi stav automaticky.** Hostitel musí explicitně přenášet vybrané důkazy, hodnoty nebo artefakty.
 
 Výsledkem je praktický základ pro agenty, kteří potřebují:
 
@@ -70,7 +72,7 @@ RLM-style agent
 
 ## Proč IPython?
 
-RLM potřebují místo, kde mohou přemýšlet **s daty**, nikoli o nich jen mluvit. IPython se hodí, protože modelu poskytuje trvalý výpočetní pracovní prostor:
+Dlouho běžící agenti také potřebují místo, kde mohou přemýšlet **s daty**, nejen o nich mluvit. IPython doplňuje povrch RLM tím, že hostiteli poskytuje samostatný persistentní výpočetní pracovní prostor:
 
 - proměnné zůstávají dostupné napříč kroky provádění;
 - DataFrames, pole, parsované dokumenty a výsledky grafů lze přímo prohlížet;
@@ -87,7 +89,7 @@ Toto rozlišení je důležité pro dlouhý výzkum, analýzu kódové základny
 
 ## Proč RLM × IPython?
 
-Každá část pokrývá jiný režim selhání:
+Zde „×“ znamená **host composition**, nikoli vazbu RLM/pracovního prostoru v rámci jednoho procesu. Každá sibling surface pokrývá jiný režim selhání:
 
 | Vrstva | Co přináší |
 |---|---|
@@ -96,7 +98,7 @@ Každá část pokrývá jiný režim selhání:
 | **Adaptive Agent Harness** | Přidává trvalou identitu operací, granty, rozpočty, potvrzení, artefakty, zásady obnovy a přístup k MCP nezávislý na hostiteli. |
 | **Váš hostitelský agent** | Vlastní identitu, přihlašovací údaje poskytovatele, schválení, privilegované efekty, akceptaci a konečné doručení. |
 
-Dohromady umožňují agentovi přecházet mezi jazykovým uvažováním a deterministickým výpočtem, aniž by se každá mezihodnota musela měnit na text promptu.
+Hostitel je může skládat tak, že mezi plochami předává vybrané, explicitně určené důkazy, hodnoty nebo artefakty. Neexistuje implicitní sdílený jmenný prostor ani automatická cesta spuštění z RLM do IPythonu.
 
 ```mermaid
 flowchart LR
@@ -104,7 +106,6 @@ flowchart LR
     H --> A[Adaptive Agent Harness]
     A --> R[Bounded RLM job]
     A --> I[Persistent IPython workspace]
-    R <--> I
     R --> B[Brokered model / subagent / evidence calls]
     I --> P[Python transforms, tests, tables]
     B --> E[Receipts + trace]
@@ -113,9 +114,9 @@ flowchart LR
     H --> D[Authorize effects and deliver]
 ```
 
-Řídicí pravidlo je záměrně jednoduché:
+Řídicí pravidla jsou záměrně jednoduchá:
 
-> **Python je jazyk orchestrace; hostitel zůstává hranicí autority.**
+> **Hostitel explicitně skládá sibling surfaces; Python je jazykem pracovního prostoru a hostitel zůstává hranicí autority.**
 
 ---
 
@@ -260,15 +261,16 @@ Frontend MCP je záměrně vyměnitelný. Nevlastní databázi kontinuity ani ž
 
 Aktuální veřejná alfa: **`0.3.0a0`**.
 
-Ve zmrazeném kandidátovi ověřeno:
+Reprodukováno z tohoto veřejného kandidáta:
 
 - pokrytí Pythonu 3.11 až 3.14;
 - plocha MCP v7 s 30 nástroji;
 - aditivní schéma SQLite až do v4;
-- úplný běh repozitáře: **199 úspěšných testů, 1 přeskočený test kvůli platformě**;
-- čisté Exact-Wheel probe na Linuxu/WSL a nativním Windows;
-- scénáře trvalého supervisoru, náhrady frontendu, ztráty procesu, zastaralého zapisovatele, opětovného použití potvrzení a následníků RLM vázaných na zásady;
-- důkazy o přechodu nainstalovaného Hermesu zachované v append-only projektovém WAL.
+- úplný běh repozitáře: **207 úspěšných testů, 1 přeskočený test kvůli platformě**;
+- čisté exact-wheel probe supervisoru/frontendu na Linuxu/WSL;
+- scénáře trvalého supervisoru, náhrady frontendu, ztráty procesu, zastaralého zapisovatele, opětovného použití potvrzení a následníků RLM vázaných na zásady.
+
+Dřívější řádky kompatibility pro nativní Windows a nainstalovaný Hermes jsou zachovány jako **historický kontext uváděný správci**. Podpůrné host receipts nejsou součástí tohoto veřejného repozitáře, takže tyto řádky nelze nezávisle auditovat z tohoto stromu a nejsou release kritériem veřejného source kandidáta.
 
 Stále otevřené:
 

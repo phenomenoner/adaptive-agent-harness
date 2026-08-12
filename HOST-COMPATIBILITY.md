@@ -1,12 +1,17 @@
 # Host Compatibility Plan
 
-**Status:** AR-LT2 durable supervisor/frontend separation verified in the reference host and
-installed Hermes AAR surface; Codex AR-2/AR-3 rows remain verified; AHC remains a target
+**Status:** reference-runtime behavior is reproducible from the public source candidate; historical
+Codex, native-Windows, and installed-Hermes rows are maintainer-reported; AHC remains a target
 **Updated:** 2026-08-11
+
+> **Public evidence note:** supporting host receipts, raw traces, and private historical commits are
+> not included in this fresh-history public repository. Host-specific rows below preserve
+> maintainer-reported historical context and boundaries; they are not independently auditable from
+> this tree. Reproduce a row before claiming current support for that host.
 
 ## Compatibility record
 
-Every executed row records:
+The original maintainer record for each executed row includes:
 
 - AAR commit and package version;
 - AAR envelope/runtime/workspace schema versions;
@@ -248,7 +253,7 @@ Observed install boundaries:
 
 ### Desktop plugin-only discovery closeout
 
-- Restarted desktop task `019fe562-4e4d-7623-8823-519e69526190` and a fresh-context readonly
+- An existing desktop task was restarted; it and a fresh-context readonly
   subagent initially exposed zero native AAR tools and zero Context Canvas tools while both servers
   had a plugin registration plus a same-name global transport. Direct setup preflight still passed,
   but was not counted as desktop discovery.
@@ -256,7 +261,7 @@ Observed install boundaries:
   with 29 tools, v5, the dependency calculation, and a closed workspace. Its launcher SHA-256
   matched the exact uv-tool launcher. The matching global `aar` registration and the stale global
   Context Canvas registration were then removed; installed plugins and hooks were left enabled.
-- Fresh desktop task `019fe5a8-445c-7db1-832e-acad8a95b688` natively exposed 29 AAR tools and 12
+- A fresh desktop task natively exposed 29 AAR tools and 12
   Context Canvas tools. Its native `aar_capabilities` call returned `aar-mcp`,
   `aar.mcp-tools.v5`, runtime generation 1, and `aar-operations` `0.6.1` at
   `sha256:f4c47ebee6e114de990d2be6339698584809c10d1ab1b10bf799f69c1bc5c045`.
@@ -279,11 +284,11 @@ Observed install boundaries:
   Installed configuration-only setup was a true no-op with plugin authority, no legacy global
   entry, and `restart_required: false`.
 - After intentionally terminating the first verification task's read-only MCP child, the same task
-  returned `Transport closed` instead of reconnecting. Fresh task
-  `019fe5b4-38d1-7a61-a2a9-3f87c9397c06` then natively started the updated installed runtime and
-  reproduced the 29-tool capability result plus 12 Canvas tools. The compatibility claim therefore
-  includes fresh-task restart recovery, but does not claim transparent same-task stdio reconnect.
-  The final wheel changed only setup/install documentation, `aar/compat/codex_setup.py`, and wheel
+  returned `Transport closed` instead of reconnecting. A second fresh task then natively started the
+  updated installed runtime and reproduced the 29-tool capability result plus 12 Canvas tools. The
+  compatibility claim therefore includes fresh-task restart recovery, but does not claim transparent
+  same-task stdio reconnect. The final wheel changed only setup/install documentation,
+  `aar/compat/codex_setup.py`, and wheel
   `RECORD` from that native-probed wheel; AAR MCP server and operation-skill bytes are identical, so
   the native proof remains bound.
 - This closes current desktop native discovery for the plugin-only registration. It does not prove
@@ -310,14 +315,12 @@ MCP surface `aar.mcp-tools.v4` with 28 public tools at
 | Package/plugin evidence | wheel contains schemas, fixtures, benchmarks, integration fixture, operation skill, and optional CodeGraph workflow skill; Python 3.11 and 3.14 isolated installs passed `aar-compat-smoke` with all nine checks | installed plugin `0.1.0+codex.20260808192807`; selected installed/source plugin bytes are identical |
 | Authority ceiling | deterministic local brokers; Effect remains proposal-only; materializer remains prepare-only | no provider credentials, external effects, activation, serving mutation, or final delivery |
 
-The retained fresh-host summary is
-`.aar/codex-ar23-c21d595-summary.json`, SHA-256
-`95e3119e85aa2cd8f80c1ccea67585acb404ac336e6316040bf279c4090db252`. It records
-the accepted outputs and that the raw trace was not retained. The host made five rejected
-schema, budget, and deadline correction calls before the accepted lifecycle; the summary retains
-each failed tool, failure class, and correction. They were not counted as passing operations or
-erased from the compatibility assessment. The accepted capability, RLM, status, replay-denial,
-broker, and asset calls passed.
+The original fresh-host summary and raw trace are not included in this public repository. Treat
+this row as maintainer-reported historical context rather than independently auditable public
+evidence. The maintainer-private summary records the accepted outputs and five rejected schema,
+budget, and deadline correction calls before the accepted lifecycle. They were not counted as
+passing operations or erased from the compatibility assessment. The accepted capability, RLM,
+status, replay-denial, broker, and asset calls passed.
 
 AR-2/AR-3 boundaries and open host rows:
 

@@ -123,6 +123,7 @@ class WorkspaceProgramSpec(StrictModel):
     wall_time_ms: Annotated[int, Field(ge=1, le=60_000, strict=True)] = 10_000
     max_output_chars: Annotated[int, Field(ge=256, le=65_536, strict=True)] = 16_384
     max_events: Annotated[int, Field(ge=8, le=256, strict=True)] = 64
+    checkpoint_replay_safe: bool = False
 
 
 class WorkspaceEvent(StrictModel):
@@ -277,11 +278,14 @@ class WorkspaceRestoreSpec(StrictModel):
     workspace: WorkspaceRef
     session: SessionRef
     expected_handle: ProgrammableWorkspaceHandle | None = None
+    recover_lost_generation: bool = False
 
     @model_validator(mode="after")
     def handle_targets_workspace(self) -> Self:
         if self.expected_handle is not None and self.expected_handle.workspace != self.workspace:
             raise ValueError("restore handle must target the requested workspace")
+        if self.recover_lost_generation and self.expected_handle is None:
+            raise ValueError("lost-generation recovery requires an exact expected handle")
         return self
 
 

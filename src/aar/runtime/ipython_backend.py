@@ -117,6 +117,10 @@ class SupervisedIPythonWorkspaceBackend:
     def descriptor(self) -> WorkspaceBackendDescriptor:
         return self._descriptor
 
+    @property
+    def environment(self) -> WorkspaceEnvironmentFingerprint:
+        return self._environment
+
     def create(
         self, workspace: WorkspaceRef, session: SessionRef
     ) -> ProgrammableWorkspaceHandle:
@@ -315,9 +319,13 @@ class SupervisedIPythonWorkspaceBackend:
             return state
 
         if current is None:
-            if spec.expected_handle is not None:
+            if spec.expected_handle is not None and not spec.recover_lost_generation:
                 raise WorkspaceNotFound(spec.workspace.value)
-            state = restored_state(1)
+            state = restored_state(
+                spec.expected_handle.generation + 1
+                if spec.expected_handle is not None
+                else 1
+            )
             with self._lock:
                 if self._states.get(spec.workspace.value) is not None:
                     self._terminate(state.process)
@@ -340,7 +348,81 @@ class SupervisedIPythonWorkspaceBackend:
                 raise StaleWorkspaceGeneration(
                     "restoring an existing workspace requires an expected handle"
                 )
-            self._check_handle(current, spec.expected_handle)
+            if (
+                spec.recover_lost_generation
+                and current.generation == spec.expected_handle.generation + 1
+            ):
+                if current.closed or current.revision != 0:
+                    raise WorkspaceOperationConflict(
+                        "existing recovery generation cannot be reused"
+                    )
+                if current.running_operation is not None:
+                    raise WorkspaceOperationConflict(
+                        "cannot reconcile restore while an operation is running"
+                    )
+                if current.process.poll() is None and not current.lost:
+                    response = self._request(
+                        current,
+                        {
+                            "command": "checkpoint",
+                            "policy": WorkspaceCheckpointPolicy(
+                                max_values=1_024,
+                                max_bytes=16_777_216,
+                                max_depth=32,
+                                max_collection_items=65_536,
+                            ).model_dump(mode="json"),
+                        },
+                        timeout_s=5.0,
+                    )
+                    values = tuple(
+                        WorkspaceCheckpointValue.model_validate(item, strict=True)
+                        for item in response["values"]
+                    )
+                    exclusions = tuple(
+                        WorkspaceCheckpointExclusion.model_validate(item, strict=True)
+                        for item in response["exclusions"]
+                    )
+                    if values != manifest.values or exclusions:
+                        raise WorkspaceOperationConflict(
+                            "existing recovery generation does not match checkpoint"
+                        )
+                    return self._handle(spec.workspace, current)
+                state = restored_state(current.generation)
+                with self._lock:
+                    if self._states.get(spec.workspace.value) is not current:
+                        self._terminate(state.process)
+                        self._managed_finish(
+                            state,
+                            disposition="terminated",
+                            reason="checkpoint_restore_conflict",
+                        )
+                        raise WorkspaceOperationConflict(
+                            "workspace changed during recovery restore"
+                        )
+                    self._states[spec.workspace.value] = state
+                self._terminate(current.process)
+                self._managed_finish(
+                    current,
+                    disposition="lost",
+                    reason="checkpoint_restore_retry",
+                )
+                current.closed = True
+                return self._handle(spec.workspace, state)
+            if spec.recover_lost_generation and current.lost:
+                if spec.expected_handle.backend != self.descriptor:
+                    raise WorkspaceRevisionConflict(
+                        "workspace backend capability identity does not match this backend"
+                    )
+                if current.generation != spec.expected_handle.generation:
+                    raise StaleWorkspaceGeneration(
+                        "lost workspace generation does not match the recovery predecessor"
+                    )
+                if current.revision != spec.expected_handle.revision + 1:
+                    raise WorkspaceRevisionConflict(
+                        "lost workspace revision does not follow the recovery predecessor"
+                    )
+            else:
+                self._check_handle(current, spec.expected_handle)
             if current.running_operation is not None:
                 raise WorkspaceOperationConflict("cannot restore while an operation is running")
             state = restored_state(current.generation + 1)
@@ -409,6 +491,27 @@ class SupervisedIPythonWorkspaceBackend:
             state=status,
             observed_revision=state.revision,
         )
+
+    def retire_lost_receipt(
+        self, operation: OperationRef, handle: ProgrammableWorkspaceHandle
+    ) -> None:
+        """Retire only the exact lost-attempt receipt before a verified successor."""
+
+        with self._lock:
+            result = self._receipts.get(operation.value)
+            if result is None:
+                return
+            if (
+                result.workspace != handle.workspace
+                or result.generation != handle.generation
+                or result.revision_before != handle.revision
+            ):
+                raise WorkspaceOperationConflict(
+                    "lost receipt does not match the predecessor workspace boundary"
+                )
+            if not result.workspace_lost:
+                raise WorkspaceOperationConflict("only a lost workspace receipt may be retired")
+            del self._receipts[operation.value]
 
     def close(
         self, handle: ProgrammableWorkspaceHandle, *, reason: str

@@ -19,6 +19,12 @@ from aar.continuity_models import (
     OperationRecoveryPolicyBindingV1,
     OperationRecoveryPolicyV1,
     OperationRlmStepBoundaryV1,
+    OperationWorkspaceCheckpointBoundaryV1,
+    OperationWorkspaceCheckpointSelectionV1,
+)
+from aar.runtime.workspace_models import (
+    ProgrammableWorkspaceHandle,
+    WorkspaceBackendDescriptor,
 )
 from aar.schemas import (
     ArtifactIdRef,
@@ -27,6 +33,7 @@ from aar.schemas import (
     OperationState,
     OutcomeCertainty,
     StrictModel,
+    WorkspaceRef,
 )
 
 DIGEST = canonical_sha256({"fixture": "continuity"})
@@ -110,6 +117,61 @@ def valid_models() -> tuple[StrictModel, ...]:
         usage_digest=DIGEST,
         created_at_unix_ms=130,
     )
+    workspace_backend = WorkspaceBackendDescriptor.issue(
+        kind="plain-python",
+        version="continuity-test-v1",
+        checkpoint_formats=("aar.workspace-checkpoint.v1",),
+        features=("checkpoint.json-subset",),
+    )
+    source_handle = ProgrammableWorkspaceHandle(
+        workspace=WorkspaceRef(value="workspace-continuity"),
+        backend=workspace_backend,
+        generation=1,
+        revision=2,
+    )
+    restored_handle = ProgrammableWorkspaceHandle(
+        workspace=source_handle.workspace,
+        backend=workspace_backend,
+        generation=2,
+        revision=0,
+    )
+    workspace_selection = OperationWorkspaceCheckpointSelectionV1.issue(
+        operation=OPERATION,
+        prior_attempt=attempt(1),
+        runtime_generation=1,
+        dispatcher_generation=2,
+        lease_epoch=1,
+        policy_digest=policy_binding.policy_digest,
+        input_digest=DIGEST,
+        checkpoint_operation=OTHER_OPERATION,
+        checkpoint_manifest_digest=DIGEST,
+        source_handle=source_handle,
+        environment_digest=DIGEST,
+        exclusion_count=0,
+        exclusions_digest=DIGEST,
+        artifacts_digest=DIGEST,
+        deadline_unix_ms=1_000,
+        selected_at_unix_ms=125,
+    )
+    workspace_boundary = OperationWorkspaceCheckpointBoundaryV1.issue(
+        operation=OPERATION,
+        prior_attempt=attempt(1),
+        runtime_generation=1,
+        dispatcher_generation=2,
+        lease_epoch=1,
+        policy_digest=policy_binding.policy_digest,
+        input_digest=DIGEST,
+        checkpoint_operation=OTHER_OPERATION,
+        checkpoint_manifest_digest=DIGEST,
+        source_handle=source_handle,
+        restored_handle=restored_handle,
+        environment_digest=DIGEST,
+        exclusion_count=0,
+        exclusions_digest=DIGEST,
+        artifacts_digest=DIGEST,
+        deadline_unix_ms=1_000,
+        created_at_unix_ms=130,
+    )
     control = OperationControlStateV1(
         operation=OPERATION,
         control_revision=1,
@@ -173,6 +235,8 @@ def valid_models() -> tuple[StrictModel, ...]:
             environment_digest=DIGEST,
             created_at_unix_ms=145,
         ),
+        workspace_selection,
+        workspace_boundary,
         OperationRecoveryDecisionV1(
             operation=OPERATION,
             decision_no=1,
@@ -209,6 +273,8 @@ def test_continuity_models_round_trip_and_are_registered() -> None:
         "operation_recovery_policy_binding",
         "operation_rlm_step_boundary",
         "operation_checkpoint_binding",
+        "operation_workspace_checkpoint_selection",
+        "operation_workspace_checkpoint_boundary",
         "operation_recovery_decision",
         "operation_event_envelope",
         "operation_continuity_snapshot",

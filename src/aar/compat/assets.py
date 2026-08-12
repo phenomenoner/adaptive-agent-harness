@@ -17,8 +17,8 @@ from aar.mcp.server import (
 from aar.versions import PACKAGE_VERSION
 
 PROFILE_CONTRACT_VERSION = "aar.host-profiles.v1"
-PROFILE_VERSION = "0.1.0"
-CODEX_PROFILE_VERSION = "0.1.0+codex.20260809083709"
+PROFILE_VERSION = "0.3.0"
+CODEX_PROFILE_VERSION = "0.3.0+codex.20260811154000"
 SKILL_FILES = ("SKILL.md", "agents/openai.yaml", "metadata.json")
 OPTIONAL_SKILL_FILES = ("SKILL.md", "agents/openai.yaml")
 CODEX_ROOT = Path("profiles/codex/plugins/adaptive-agent-runtime")

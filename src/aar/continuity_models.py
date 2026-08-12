@@ -7,6 +7,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, JsonValue, model_validator
 
 from aar.canonical import canonical_sha256
+from aar.runtime.workspace_models import ProgrammableWorkspaceHandle
 from aar.schemas import (
     ArtifactReference,
     Digest,
@@ -45,6 +46,7 @@ DispatchState = Literal["queued", "running", "completed", "parked", "cancelled"]
 ContinuityText = Annotated[str, Field(min_length=1, max_length=512, strict=True)]
 EventKind = Annotated[str, Field(min_length=1, max_length=128, strict=True)]
 JsonObject = dict[str, JsonValue]
+_SUCCESSOR_DECISIONS = frozenset({"start_successor", "restore_checkpoint"})
 
 
 class OperationAttemptRefV1(StrictModel):
@@ -150,9 +152,10 @@ class OperationRecoveryPolicyV1(StrictModel):
         decisions = list(self.allowed_decisions)
         if decisions != sorted(decisions) or len(decisions) != len(set(decisions)):
             raise ValueError("recovery policy decisions must be sorted and unique")
-        if "start_successor" in decisions and self.max_successor_attempts == 0:
+        has_successor = bool(_SUCCESSOR_DECISIONS.intersection(decisions))
+        if has_successor and self.max_successor_attempts == 0:
             raise ValueError("successor recovery requires a positive successor bound")
-        if "start_successor" not in decisions and self.max_successor_attempts != 0:
+        if not has_successor and self.max_successor_attempts != 0:
             raise ValueError("non-successor policy must set max_successor_attempts to zero")
         return self
 
@@ -297,6 +300,169 @@ class OperationCheckpointBindingV1(StrictModel):
         return self
 
 
+class OperationWorkspaceCheckpointSelectionV1(StrictModel):
+    """Immutable checkpoint choice persisted before any restore side effect."""
+
+    schema_version: Literal["aar.operation-continuity.v1"] = CONTINUITY_SCHEMA_VERSION
+    operation: OperationRef
+    prior_attempt: OperationAttemptRefV1
+    runtime_generation: PositiveCounter
+    dispatcher_generation: PositiveCounter
+    lease_epoch: PositiveCounter
+    policy_digest: Digest
+    input_digest: Digest
+    checkpoint_operation: OperationRef
+    checkpoint_manifest_digest: Digest
+    source_handle: ProgrammableWorkspaceHandle
+    environment_digest: Digest
+    exclusion_count: Revision
+    exclusions_digest: Digest
+    artifacts_digest: Digest
+    completeness: Literal["complete", "partial"]
+    deadline_unix_ms: PositiveCounter
+    selected_at_unix_ms: PositiveCounter
+    selection_digest: Digest
+
+    @classmethod
+    def issue(
+        cls,
+        *,
+        operation: OperationRef,
+        prior_attempt: OperationAttemptRefV1,
+        runtime_generation: int,
+        dispatcher_generation: int,
+        lease_epoch: int,
+        policy_digest: Digest,
+        input_digest: Digest,
+        checkpoint_operation: OperationRef,
+        checkpoint_manifest_digest: Digest,
+        source_handle: ProgrammableWorkspaceHandle,
+        environment_digest: Digest,
+        exclusion_count: int,
+        exclusions_digest: Digest,
+        artifacts_digest: Digest,
+        deadline_unix_ms: int,
+        selected_at_unix_ms: int,
+    ) -> OperationWorkspaceCheckpointSelectionV1:
+        payload = {
+            "operation": operation,
+            "prior_attempt": prior_attempt,
+            "runtime_generation": runtime_generation,
+            "dispatcher_generation": dispatcher_generation,
+            "lease_epoch": lease_epoch,
+            "policy_digest": policy_digest,
+            "input_digest": input_digest,
+            "checkpoint_operation": checkpoint_operation,
+            "checkpoint_manifest_digest": checkpoint_manifest_digest,
+            "source_handle": source_handle,
+            "environment_digest": environment_digest,
+            "exclusion_count": exclusion_count,
+            "exclusions_digest": exclusions_digest,
+            "artifacts_digest": artifacts_digest,
+            "completeness": "complete" if exclusion_count == 0 else "partial",
+            "deadline_unix_ms": deadline_unix_ms,
+            "selected_at_unix_ms": selected_at_unix_ms,
+        }
+        return cls(**payload, selection_digest=canonical_sha256(payload))
+
+    @model_validator(mode="after")
+    def selection_is_exact_and_content_bound(self) -> Self:
+        if self.prior_attempt.operation != self.operation:
+            raise ValueError("workspace selection attempt must match binding operation")
+        if (self.exclusion_count == 0) != (self.completeness == "complete"):
+            raise ValueError("checkpoint completeness does not match exclusion count")
+        payload = self.model_dump(mode="json", exclude={"schema_version", "selection_digest"})
+        if self.selection_digest != canonical_sha256(payload):
+            raise ValueError("workspace selection digest does not match canonical selection bytes")
+        return self
+
+
+class OperationWorkspaceCheckpointBoundaryV1(StrictModel):
+    schema_version: Literal["aar.operation-continuity.v1"] = CONTINUITY_SCHEMA_VERSION
+    operation: OperationRef
+    prior_attempt: OperationAttemptRefV1
+    runtime_generation: PositiveCounter
+    dispatcher_generation: PositiveCounter
+    lease_epoch: PositiveCounter
+    policy_digest: Digest
+    input_digest: Digest
+    checkpoint_operation: OperationRef
+    checkpoint_manifest_digest: Digest
+    source_handle: ProgrammableWorkspaceHandle
+    restored_handle: ProgrammableWorkspaceHandle
+    environment_digest: Digest
+    exclusion_count: Revision
+    exclusions_digest: Digest
+    artifacts_digest: Digest
+    completeness: Literal["complete", "partial"]
+    deadline_unix_ms: PositiveCounter
+    created_at_unix_ms: PositiveCounter
+    boundary_digest: Digest
+
+    @classmethod
+    def issue(
+        cls,
+        *,
+        operation: OperationRef,
+        prior_attempt: OperationAttemptRefV1,
+        runtime_generation: int,
+        dispatcher_generation: int,
+        lease_epoch: int,
+        policy_digest: Digest,
+        input_digest: Digest,
+        checkpoint_operation: OperationRef,
+        checkpoint_manifest_digest: Digest,
+        source_handle: ProgrammableWorkspaceHandle,
+        restored_handle: ProgrammableWorkspaceHandle,
+        environment_digest: Digest,
+        exclusion_count: int,
+        exclusions_digest: Digest,
+        artifacts_digest: Digest,
+        deadline_unix_ms: int,
+        created_at_unix_ms: int,
+    ) -> OperationWorkspaceCheckpointBoundaryV1:
+        payload = {
+            "operation": operation,
+            "prior_attempt": prior_attempt,
+            "runtime_generation": runtime_generation,
+            "dispatcher_generation": dispatcher_generation,
+            "lease_epoch": lease_epoch,
+            "policy_digest": policy_digest,
+            "input_digest": input_digest,
+            "checkpoint_operation": checkpoint_operation,
+            "checkpoint_manifest_digest": checkpoint_manifest_digest,
+            "source_handle": source_handle,
+            "restored_handle": restored_handle,
+            "environment_digest": environment_digest,
+            "exclusion_count": exclusion_count,
+            "exclusions_digest": exclusions_digest,
+            "artifacts_digest": artifacts_digest,
+            "completeness": "complete" if exclusion_count == 0 else "partial",
+            "deadline_unix_ms": deadline_unix_ms,
+            "created_at_unix_ms": created_at_unix_ms,
+        }
+        return cls(**payload, boundary_digest=canonical_sha256(payload))
+
+    @model_validator(mode="after")
+    def boundary_is_exact_and_content_bound(self) -> Self:
+        if self.prior_attempt.operation != self.operation:
+            raise ValueError("workspace boundary attempt operation must match binding operation")
+        if self.source_handle.workspace != self.restored_handle.workspace:
+            raise ValueError("workspace recovery must preserve workspace identity")
+        if self.restored_handle.generation != self.source_handle.generation + 1:
+            raise ValueError("workspace recovery must advance exactly one generation")
+        if self.restored_handle.revision != 0:
+            raise ValueError("restored workspace generation must start at revision zero")
+        if self.source_handle.backend != self.restored_handle.backend:
+            raise ValueError("workspace recovery requires the exact backend capability")
+        if (self.exclusion_count == 0) != (self.completeness == "complete"):
+            raise ValueError("checkpoint completeness does not match exclusion count")
+        payload = self.model_dump(mode="json", exclude={"schema_version", "boundary_digest"})
+        if self.boundary_digest != canonical_sha256(payload):
+            raise ValueError("workspace boundary digest does not match canonical boundary bytes")
+        return self
+
+
 class OperationRecoveryDecisionV1(StrictModel):
     schema_version: Literal["aar.operation-continuity.v1"] = CONTINUITY_SCHEMA_VERSION
     operation: OperationRef
@@ -331,7 +497,7 @@ class OperationRecoveryDecisionV1(StrictModel):
                 "successor attempt number must be greater than prior attempt number"
             )
         if (
-            self.decision == "start_successor"
+            self.decision in _SUCCESSOR_DECISIONS
             and (self.policy_digest is None) != (self.continuation_boundary_digest is None)
         ):
             raise ValueError(
@@ -435,6 +601,8 @@ CONTINUITY_SCHEMA_MODELS: dict[str, type[StrictModel]] = {
     "operation_recovery_policy_binding": OperationRecoveryPolicyBindingV1,
     "operation_rlm_step_boundary": OperationRlmStepBoundaryV1,
     "operation_checkpoint_binding": OperationCheckpointBindingV1,
+    "operation_workspace_checkpoint_selection": OperationWorkspaceCheckpointSelectionV1,
+    "operation_workspace_checkpoint_boundary": OperationWorkspaceCheckpointBoundaryV1,
     "operation_recovery_decision": OperationRecoveryDecisionV1,
     "operation_event_envelope": OperationEventEnvelopeV1,
     "operation_continuity_snapshot": OperationContinuitySnapshotV1,

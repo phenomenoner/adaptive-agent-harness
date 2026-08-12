@@ -16,22 +16,25 @@ RLMs treat long context as data that a model can inspect, transform, decompose, 
 - durable supervisor with replaceable authenticated frontends;
 - exact process-start identity and generation/lease fencing;
 - cursor-readable status, events, cancellation, and reconciliation;
-- schema v4 policy-bound RLM successor recovery;
+- schema v5 policy-bound RLM, checkpoint, and effect-receipt recovery contracts;
 - digest-bound artifacts and adaptive-asset bundles;
-- Codex and Hermes host profiles;
+- Codex and Hermes host profiles with v0.3 cache-busters for the current 30-tool surface;
 - English marketing-first README plus 17 linked translations.
 
 ## Verification
 
-The frozen runtime candidate passed:
+The public source candidate reproduced:
 
-- **199 passed, 1 platform-gated skip** in the full repository suite;
+- **245 passed, 1 platform-gated skip** in the full repository suite;
 - Python 3.11–3.14 coverage;
-- exact-wheel Linux/WSL and native Windows probes;
-- additive v3-to-v4 migration and older-reader fail-closed checks;
+- a clean exact-wheel Linux/WSL supervisor/frontend probe;
+- additive v3-to-v4-to-v5 migration and older-reader fail-closed checks;
 - frontend replacement, supervisor loss, stale-writer, single-owner, authoritative-receipt reuse, and durable RLM scenarios.
 
-The public staging tree was rebuilt and retested before publication. See `TECHNICAL-STATUS.md`, `HOST-COMPATIBILITY.md`, and the append-only `WAL.md` for evidence and boundaries.
+The public staging tree was rebuilt and retested before publication. Earlier native-Windows and
+installed-Hermes rows in `HOST-COMPATIBILITY.md` and `WAL.md` are maintainer-reported historical
+context: their supporting host receipts are not committed here and are not independently auditable
+from this repository.
 
 ## Install
 
@@ -49,6 +52,7 @@ aar-codex-setup
 ## Important alpha boundaries
 
 - This is not a security sandbox.
+- RLM jobs and IPython workspaces are sibling surfaces; they do not share state or execute inside one another automatically.
 - The runtime does not own provider credentials, general external effects, or final delivery.
 - It does not promise universal exactly-once semantics.
 - Broad automatic IPython state restoration remains in progress.

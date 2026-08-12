@@ -1,5 +1,5 @@
 {
-  "bundle_digest": "sha256:de251fb18ce631a227d58857e3392418a80ae534fae57d2d3ab125eeb8b18171",
+  "bundle_digest": "sha256:e5c658d9d462922773f5c70e17312fae18ee34e9e1cfca701f54adfe864bbc33",
   "package_version": "0.3.0a0",
   "schema_versions": {
     "adaptive_asset": "aar.adaptive-asset.v1",
@@ -1942,6 +1942,132 @@
       "title": "ArtifactReadResult",
       "type": "object"
     },
+    "broker_call_reconciliation": {
+      "$defs": {
+        "BrokerReceipt": {
+          "additionalProperties": false,
+          "properties": {
+            "digest": {
+              "title": "Digest",
+              "type": "string"
+            },
+            "handle": {
+              "title": "Handle",
+              "type": "string"
+            },
+            "kind": {
+              "title": "Kind",
+              "type": "string"
+            },
+            "schema_version": {
+              "const": "aar.broker.v1",
+              "default": "aar.broker.v1",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "value": {
+              "title": "Value",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "handle",
+            "digest",
+            "value"
+          ],
+          "title": "BrokerReceipt",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "receipt_recovered",
+            "safe_replay",
+            "pending",
+            "quarantine",
+            "compensation_proposed"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "authority_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Authority Digest",
+          "type": "string"
+        },
+        "compensation_receipt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BrokerReceipt"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "method": {
+          "enum": [
+            "artifact.put",
+            "artifact.read",
+            "effect.propose",
+            "evidence.query",
+            "model.request",
+            "subagent.result",
+            "subagent.submit"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "reason_code": {
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "request_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Request Digest",
+          "type": "string"
+        },
+        "response_digest": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response Digest"
+        },
+        "schema_version": {
+          "const": "aar.broker.v1",
+          "default": "aar.broker.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sequence": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sequence",
+        "method",
+        "action",
+        "reason_code",
+        "request_digest",
+        "authority_digest"
+      ],
+      "title": "BrokerCallReconciliation",
+      "type": "object"
+    },
     "broker_call_trace": {
       "$defs": {
         "BrokerUsage": {
@@ -2016,6 +2142,32 @@
       },
       "additionalProperties": false,
       "properties": {
+        "authority_digest": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Authority Digest"
+        },
+        "compensation_digest": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Compensation Digest"
+        },
         "failure_code": {
           "anyOf": [
             {
@@ -2051,6 +2203,38 @@
         },
         "parent_operation": {
           "$ref": "#/$defs/OperationRef"
+        },
+        "reconciliation_action": {
+          "anyOf": [
+            {
+              "enum": [
+                "receipt_recovered",
+                "safe_replay",
+                "pending",
+                "quarantine",
+                "compensation_proposed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reconciliation Action"
+        },
+        "reconciliation_digest": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reconciliation Digest"
         },
         "request_digest": {
           "pattern": "^sha256:[0-9a-f]{64}$",
@@ -2515,6 +2699,191 @@
         "value"
       ],
       "title": "BrokerReceipt",
+      "type": "object"
+    },
+    "broker_reconciliation_report": {
+      "$defs": {
+        "BrokerCallReconciliation": {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "enum": [
+                "receipt_recovered",
+                "safe_replay",
+                "pending",
+                "quarantine",
+                "compensation_proposed"
+              ],
+              "title": "Action",
+              "type": "string"
+            },
+            "authority_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "title": "Authority Digest",
+              "type": "string"
+            },
+            "compensation_receipt": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/BrokerReceipt"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "method": {
+              "enum": [
+                "artifact.put",
+                "artifact.read",
+                "effect.propose",
+                "evidence.query",
+                "model.request",
+                "subagent.result",
+                "subagent.submit"
+              ],
+              "title": "Method",
+              "type": "string"
+            },
+            "reason_code": {
+              "title": "Reason Code",
+              "type": "string"
+            },
+            "request_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "title": "Request Digest",
+              "type": "string"
+            },
+            "response_digest": {
+              "anyOf": [
+                {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Response Digest"
+            },
+            "schema_version": {
+              "const": "aar.broker.v1",
+              "default": "aar.broker.v1",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "sequence": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "title": "Sequence",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "sequence",
+            "method",
+            "action",
+            "reason_code",
+            "request_digest",
+            "authority_digest"
+          ],
+          "title": "BrokerCallReconciliation",
+          "type": "object"
+        },
+        "BrokerReceipt": {
+          "additionalProperties": false,
+          "properties": {
+            "digest": {
+              "title": "Digest",
+              "type": "string"
+            },
+            "handle": {
+              "title": "Handle",
+              "type": "string"
+            },
+            "kind": {
+              "title": "Kind",
+              "type": "string"
+            },
+            "schema_version": {
+              "const": "aar.broker.v1",
+              "default": "aar.broker.v1",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "value": {
+              "title": "Value",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "handle",
+            "digest",
+            "value"
+          ],
+          "title": "BrokerReceipt",
+          "type": "object"
+        },
+        "OperationRef": {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "operation",
+              "default": "operation",
+              "title": "Type",
+              "type": "string"
+            },
+            "value": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$",
+              "title": "Value",
+              "type": "string"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "OperationRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "items": {
+            "$ref": "#/$defs/BrokerCallReconciliation"
+          },
+          "title": "Calls",
+          "type": "array"
+        },
+        "operation": {
+          "$ref": "#/$defs/OperationRef"
+        },
+        "report_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Report Digest",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "aar.broker.v1",
+          "default": "aar.broker.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "unresolved": {
+          "title": "Unresolved",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "operation",
+        "calls",
+        "unresolved",
+        "report_digest"
+      ],
+      "title": "BrokerReconciliationReport",
       "type": "object"
     },
     "broker_retained_subagent_handle": {
@@ -5516,6 +5885,573 @@
       "title": "OperationRlmStepBoundaryV1",
       "type": "object"
     },
+    "operation_workspace_checkpoint_boundary": {
+      "$defs": {
+        "OperationAttemptRefV1": {
+          "additionalProperties": false,
+          "properties": {
+            "attempt_id": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$",
+              "title": "Attempt Id",
+              "type": "string"
+            },
+            "attempt_no": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "title": "Attempt No",
+              "type": "integer"
+            },
+            "operation": {
+              "$ref": "#/$defs/OperationRef"
+            },
+            "schema_version": {
+              "const": "aar.operation-continuity.v1",
+              "default": "aar.operation-continuity.v1",
+              "title": "Schema Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "attempt_no",
+            "attempt_id"
+          ],
+          "title": "OperationAttemptRefV1",
+          "type": "object"
+        },
+        "OperationRef": {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "operation",
+              "default": "operation",
+              "title": "Type",
+              "type": "string"
+            },
+            "value": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$",
+              "title": "Value",
+              "type": "string"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "OperationRef",
+          "type": "object"
+        },
+        "ProgrammableWorkspaceHandle": {
+          "additionalProperties": false,
+          "properties": {
+            "backend": {
+              "$ref": "#/$defs/WorkspaceBackendDescriptor"
+            },
+            "generation": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "title": "Generation",
+              "type": "integer"
+            },
+            "revision": {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "title": "Revision",
+              "type": "integer"
+            },
+            "workspace": {
+              "$ref": "#/$defs/WorkspaceRef"
+            }
+          },
+          "required": [
+            "workspace",
+            "backend",
+            "generation",
+            "revision"
+          ],
+          "title": "ProgrammableWorkspaceHandle",
+          "type": "object"
+        },
+        "WorkspaceBackendDescriptor": {
+          "additionalProperties": false,
+          "properties": {
+            "capability_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "title": "Capability Digest",
+              "type": "string"
+            },
+            "checkpoint_formats": {
+              "items": {
+                "const": "aar.workspace-checkpoint.v1",
+                "type": "string"
+              },
+              "title": "Checkpoint Formats",
+              "type": "array"
+            },
+            "features": {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              "title": "Features",
+              "type": "array"
+            },
+            "kind": {
+              "enum": [
+                "plain-python",
+                "ipython"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "version": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "version",
+            "capability_digest",
+            "checkpoint_formats",
+            "features"
+          ],
+          "title": "WorkspaceBackendDescriptor",
+          "type": "object"
+        },
+        "WorkspaceRef": {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "workspace",
+              "default": "workspace",
+              "title": "Type",
+              "type": "string"
+            },
+            "value": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$",
+              "title": "Value",
+              "type": "string"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "WorkspaceRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "artifacts_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Artifacts Digest",
+          "type": "string"
+        },
+        "boundary_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Boundary Digest",
+          "type": "string"
+        },
+        "checkpoint_manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Checkpoint Manifest Digest",
+          "type": "string"
+        },
+        "checkpoint_operation": {
+          "$ref": "#/$defs/OperationRef"
+        },
+        "completeness": {
+          "enum": [
+            "complete",
+            "partial"
+          ],
+          "title": "Completeness",
+          "type": "string"
+        },
+        "created_at_unix_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Created At Unix Ms",
+          "type": "integer"
+        },
+        "deadline_unix_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Deadline Unix Ms",
+          "type": "integer"
+        },
+        "dispatcher_generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Dispatcher Generation",
+          "type": "integer"
+        },
+        "environment_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Environment Digest",
+          "type": "string"
+        },
+        "exclusion_count": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Exclusion Count",
+          "type": "integer"
+        },
+        "exclusions_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Exclusions Digest",
+          "type": "string"
+        },
+        "input_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Input Digest",
+          "type": "string"
+        },
+        "lease_epoch": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Lease Epoch",
+          "type": "integer"
+        },
+        "operation": {
+          "$ref": "#/$defs/OperationRef"
+        },
+        "policy_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Policy Digest",
+          "type": "string"
+        },
+        "prior_attempt": {
+          "$ref": "#/$defs/OperationAttemptRefV1"
+        },
+        "restored_handle": {
+          "$ref": "#/$defs/ProgrammableWorkspaceHandle"
+        },
+        "runtime_generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Runtime Generation",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "aar.operation-continuity.v1",
+          "default": "aar.operation-continuity.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_handle": {
+          "$ref": "#/$defs/ProgrammableWorkspaceHandle"
+        }
+      },
+      "required": [
+        "operation",
+        "prior_attempt",
+        "runtime_generation",
+        "dispatcher_generation",
+        "lease_epoch",
+        "policy_digest",
+        "input_digest",
+        "checkpoint_operation",
+        "checkpoint_manifest_digest",
+        "source_handle",
+        "restored_handle",
+        "environment_digest",
+        "exclusion_count",
+        "exclusions_digest",
+        "artifacts_digest",
+        "completeness",
+        "deadline_unix_ms",
+        "created_at_unix_ms",
+        "boundary_digest"
+      ],
+      "title": "OperationWorkspaceCheckpointBoundaryV1",
+      "type": "object"
+    },
+    "operation_workspace_checkpoint_selection": {
+      "$defs": {
+        "OperationAttemptRefV1": {
+          "additionalProperties": false,
+          "properties": {
+            "attempt_id": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$",
+              "title": "Attempt Id",
+              "type": "string"
+            },
+            "attempt_no": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "title": "Attempt No",
+              "type": "integer"
+            },
+            "operation": {
+              "$ref": "#/$defs/OperationRef"
+            },
+            "schema_version": {
+              "const": "aar.operation-continuity.v1",
+              "default": "aar.operation-continuity.v1",
+              "title": "Schema Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "operation",
+            "attempt_no",
+            "attempt_id"
+          ],
+          "title": "OperationAttemptRefV1",
+          "type": "object"
+        },
+        "OperationRef": {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "operation",
+              "default": "operation",
+              "title": "Type",
+              "type": "string"
+            },
+            "value": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$",
+              "title": "Value",
+              "type": "string"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "OperationRef",
+          "type": "object"
+        },
+        "ProgrammableWorkspaceHandle": {
+          "additionalProperties": false,
+          "properties": {
+            "backend": {
+              "$ref": "#/$defs/WorkspaceBackendDescriptor"
+            },
+            "generation": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "title": "Generation",
+              "type": "integer"
+            },
+            "revision": {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "title": "Revision",
+              "type": "integer"
+            },
+            "workspace": {
+              "$ref": "#/$defs/WorkspaceRef"
+            }
+          },
+          "required": [
+            "workspace",
+            "backend",
+            "generation",
+            "revision"
+          ],
+          "title": "ProgrammableWorkspaceHandle",
+          "type": "object"
+        },
+        "WorkspaceBackendDescriptor": {
+          "additionalProperties": false,
+          "properties": {
+            "capability_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "title": "Capability Digest",
+              "type": "string"
+            },
+            "checkpoint_formats": {
+              "items": {
+                "const": "aar.workspace-checkpoint.v1",
+                "type": "string"
+              },
+              "title": "Checkpoint Formats",
+              "type": "array"
+            },
+            "features": {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              "title": "Features",
+              "type": "array"
+            },
+            "kind": {
+              "enum": [
+                "plain-python",
+                "ipython"
+              ],
+              "title": "Kind",
+              "type": "string"
+            },
+            "version": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "version",
+            "capability_digest",
+            "checkpoint_formats",
+            "features"
+          ],
+          "title": "WorkspaceBackendDescriptor",
+          "type": "object"
+        },
+        "WorkspaceRef": {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "workspace",
+              "default": "workspace",
+              "title": "Type",
+              "type": "string"
+            },
+            "value": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$",
+              "title": "Value",
+              "type": "string"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "title": "WorkspaceRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Immutable checkpoint choice persisted before any restore side effect.",
+      "properties": {
+        "artifacts_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Artifacts Digest",
+          "type": "string"
+        },
+        "checkpoint_manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Checkpoint Manifest Digest",
+          "type": "string"
+        },
+        "checkpoint_operation": {
+          "$ref": "#/$defs/OperationRef"
+        },
+        "completeness": {
+          "enum": [
+            "complete",
+            "partial"
+          ],
+          "title": "Completeness",
+          "type": "string"
+        },
+        "deadline_unix_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Deadline Unix Ms",
+          "type": "integer"
+        },
+        "dispatcher_generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Dispatcher Generation",
+          "type": "integer"
+        },
+        "environment_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Environment Digest",
+          "type": "string"
+        },
+        "exclusion_count": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Exclusion Count",
+          "type": "integer"
+        },
+        "exclusions_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Exclusions Digest",
+          "type": "string"
+        },
+        "input_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Input Digest",
+          "type": "string"
+        },
+        "lease_epoch": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Lease Epoch",
+          "type": "integer"
+        },
+        "operation": {
+          "$ref": "#/$defs/OperationRef"
+        },
+        "policy_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Policy Digest",
+          "type": "string"
+        },
+        "prior_attempt": {
+          "$ref": "#/$defs/OperationAttemptRefV1"
+        },
+        "runtime_generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Runtime Generation",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "aar.operation-continuity.v1",
+          "default": "aar.operation-continuity.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "selected_at_unix_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Selected At Unix Ms",
+          "type": "integer"
+        },
+        "selection_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Selection Digest",
+          "type": "string"
+        },
+        "source_handle": {
+          "$ref": "#/$defs/ProgrammableWorkspaceHandle"
+        }
+      },
+      "required": [
+        "operation",
+        "prior_attempt",
+        "runtime_generation",
+        "dispatcher_generation",
+        "lease_epoch",
+        "policy_digest",
+        "input_digest",
+        "checkpoint_operation",
+        "checkpoint_manifest_digest",
+        "source_handle",
+        "environment_digest",
+        "exclusion_count",
+        "exclusions_digest",
+        "artifacts_digest",
+        "completeness",
+        "deadline_unix_ms",
+        "selected_at_unix_ms",
+        "selection_digest"
+      ],
+      "title": "OperationWorkspaceCheckpointSelectionV1",
+      "type": "object"
+    },
     "outcome": {
       "$defs": {
         "AdaptiveAssetRef": {
@@ -6392,6 +7328,32 @@
         "BrokerCallTrace": {
           "additionalProperties": false,
           "properties": {
+            "authority_digest": {
+              "anyOf": [
+                {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Authority Digest"
+            },
+            "compensation_digest": {
+              "anyOf": [
+                {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Compensation Digest"
+            },
             "failure_code": {
               "anyOf": [
                 {
@@ -6427,6 +7389,38 @@
             },
             "parent_operation": {
               "$ref": "#/$defs/OperationRef"
+            },
+            "reconciliation_action": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "receipt_recovered",
+                    "safe_replay",
+                    "pending",
+                    "quarantine",
+                    "compensation_proposed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reconciliation Action"
+            },
+            "reconciliation_digest": {
+              "anyOf": [
+                {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reconciliation Digest"
             },
             "request_digest": {
               "pattern": "^sha256:[0-9a-f]{64}$",
@@ -6847,6 +7841,32 @@
         "BrokerCallTrace": {
           "additionalProperties": false,
           "properties": {
+            "authority_digest": {
+              "anyOf": [
+                {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Authority Digest"
+            },
+            "compensation_digest": {
+              "anyOf": [
+                {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Compensation Digest"
+            },
             "failure_code": {
               "anyOf": [
                 {
@@ -6882,6 +7902,38 @@
             },
             "parent_operation": {
               "$ref": "#/$defs/OperationRef"
+            },
+            "reconciliation_action": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "receipt_recovered",
+                    "safe_replay",
+                    "pending",
+                    "quarantine",
+                    "compensation_proposed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reconciliation Action"
+            },
+            "reconciliation_digest": {
+              "anyOf": [
+                {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reconciliation Digest"
             },
             "request_digest": {
               "pattern": "^sha256:[0-9a-f]{64}$",

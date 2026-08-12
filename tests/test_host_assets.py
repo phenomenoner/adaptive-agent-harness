@@ -57,7 +57,7 @@ def test_codex_plugin_uses_single_development_cachebuster() -> None:
             / "profiles/codex/plugins/adaptive-agent-runtime/.codex-plugin/plugin.json"
         ).read_text(encoding="utf-8")
     )
-    assert manifest["version"].startswith("0.1.0+codex.")
+    assert manifest["version"].startswith("0.3.0+codex.")
     assert manifest["version"].count("+codex.") == 1
     interface_text = json.dumps(manifest["interface"]).lower()
     assert "tool use or analysis" in interface_text

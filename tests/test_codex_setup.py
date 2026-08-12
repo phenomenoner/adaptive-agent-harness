@@ -178,6 +178,60 @@ def test_configure_codex_is_a_noop_when_plugin_and_mcp_are_current(tmp_path: Pat
     assert ("mcp", "get", "aar") not in calls
 
 
+def test_configure_codex_upgrades_previous_v5_plugin_cachebuster(tmp_path: Path) -> None:
+    marketplace = ROOT / "profiles" / "codex"
+    expected_version = json.loads(
+        (
+            marketplace
+            / "plugins/adaptive-agent-runtime/.codex-plugin/plugin.json"
+        ).read_text(encoding="utf-8")
+    )["version"]
+    previous_version = "0.1.0+codex.20260809083709"
+    assert expected_version != previous_version
+    aar_mcp = Path(r"C:\tools\aar-mcp.exe")
+    calls: list[tuple[str, ...]] = []
+
+    def invoke(arguments: tuple[str, ...]) -> str:
+        calls.append(arguments)
+        if arguments == ("plugin", "marketplace", "list", "--json"):
+            return json.dumps(
+                {"marketplaces": [{"name": "aar-local", "root": str(marketplace)}]}
+            )
+        if arguments == ("plugin", "list", "--json"):
+            return json.dumps(
+                {
+                    "installed": [
+                        {
+                            "pluginId": "adaptive-agent-runtime@aar-local",
+                            "version": previous_version,
+                            "enabled": True,
+                        }
+                    ]
+                }
+            )
+        if arguments[:2] == ("plugin", "add"):
+            return json.dumps(
+                {
+                    "pluginId": "adaptive-agent-runtime@aar-local",
+                    "version": expected_version,
+                }
+            )
+        raise AssertionError(arguments)
+
+    report = configure_codex(
+        Path(r"C:\tools\codex.cmd"),
+        aar_mcp,
+        marketplace,
+        invoke=invoke,
+        codex_config=tmp_path / "config.toml",
+    )
+
+    assert report["configuration_changed"] is True
+    assert report["plugin_changed"] is True
+    assert report["plugin_version"] == expected_version
+    assert any(arguments[:2] == ("plugin", "add") for arguments in calls)
+
+
 def test_configure_codex_rejects_conflicting_global_mcp_override(tmp_path: Path) -> None:
     marketplace = ROOT / "profiles" / "codex"
     version = json.loads(

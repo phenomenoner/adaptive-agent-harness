@@ -207,7 +207,7 @@ def test_additive_migration_preserves_legacy_bytes_and_rollback_copy(tmp_path: P
     rollback_digest = hashlib.sha256(rollback_copy.read_bytes()).hexdigest()
 
     registry = OperationRegistry(database, clock)
-    assert registry.schema_versions() == (1, 2, 3, 4)
+    assert registry.schema_versions() == (1, 2, 3, 4, 5)
     migrated = registry.get(OperationRef(value=operation_id))
     assert migrated.request_json == request_json
     assert migrated.payload_json == payload_json
@@ -221,6 +221,8 @@ def test_additive_migration_preserves_legacy_bytes_and_rollback_copy(tmp_path: P
         }
         assert "operation_recovery_policies" in tables
         assert "operation_rlm_boundaries" in tables
+        assert "workspace_checkpoint_catalog" in tables
+        assert "operation_workspace_boundaries" in tables
         decision_columns = {
             row[1]
             for row in connection.execute(
@@ -254,6 +256,112 @@ def test_additive_migration_preserves_legacy_bytes_and_rollback_copy(tmp_path: P
         legacy_reader.close()
 
 
+def test_reopen_of_persisted_v4_layout_applies_only_additive_v5(tmp_path: Path) -> None:
+    class V4OperationRegistry(OperationRegistry):
+        def _apply_v5_schema(self) -> None:
+            return
+
+        def _insert_schema_version(self, version: int) -> None:
+            if version == 5:
+                return
+            super()._insert_schema_version(version)
+
+    clock = ManualClock()
+    database = tmp_path / "persisted-v4.sqlite3"
+    v4 = V4OperationRegistry(database, clock)
+    record, created = v4.accept(
+        envelope(clock, key="persisted-v4"),
+        canonical_json_bytes({"payload": "persisted-v4"}).decode(),
+    )
+    assert created
+    assert v4.schema_versions() == (1, 2, 3, 4)
+    request_json = record.request_json
+    payload_json = record.payload_json
+    v4.close()
+
+    before = sqlite3.connect(database)
+    try:
+        tables_before = {
+            str(row[0])
+            for row in before.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        assert "operation_workspace_checkpoint_selections" not in tables_before
+    finally:
+        before.close()
+
+    migrated = OperationRegistry(database, clock)
+    try:
+        assert migrated.schema_versions() == (1, 2, 3, 4, 5)
+        restored = migrated.get(record.operation)
+        assert restored.request_json == request_json
+        assert restored.payload_json == payload_json
+        after = sqlite3.connect(database)
+        try:
+            tables_after = {
+                str(row[0])
+                for row in after.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                )
+            }
+            assert "operation_workspace_checkpoint_selections" in tables_after
+            assert "operation_workspace_boundaries" in tables_after
+        finally:
+            after.close()
+    finally:
+        migrated.close()
+
+
+def test_interrupted_v5_migration_rolls_back_and_reopen_converges(tmp_path: Path) -> None:
+    class V4OperationRegistry(OperationRegistry):
+        def _apply_v5_schema(self) -> None:
+            return
+
+        def _insert_schema_version(self, version: int) -> None:
+            if version == 5:
+                return
+            super()._insert_schema_version(version)
+
+    class InterruptedV5Registry(OperationRegistry):
+        def _apply_v5_schema(self) -> None:
+            super()._apply_v5_schema()
+            raise RuntimeError("simulated migration interruption")
+
+    clock = ManualClock()
+    database = tmp_path / "interrupted-v5.sqlite3"
+    v4 = V4OperationRegistry(database, clock)
+    assert v4.schema_versions() == (1, 2, 3, 4)
+    v4.close()
+
+    with pytest.raises(RuntimeError, match="simulated migration interruption"):
+        InterruptedV5Registry(database, clock)
+
+    after_failure = sqlite3.connect(database)
+    try:
+        assert tuple(
+            int(row[0])
+            for row in after_failure.execute(
+                "SELECT version FROM schema_migrations ORDER BY version"
+            )
+        ) == (1, 2, 3, 4)
+        tables = {
+            str(row[0])
+            for row in after_failure.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        assert "operation_workspace_checkpoint_selections" not in tables
+    finally:
+        after_failure.close()
+
+    recovered = OperationRegistry(database, clock)
+    try:
+        assert recovered.schema_versions() == (1, 2, 3, 4, 5)
+    finally:
+        recovered.close()
+
+
 @pytest.mark.parametrize("tamper", ["newer", "digest"])
 def test_schema_registry_fails_closed_on_newer_or_tampered_migration(
     tmp_path: Path,
@@ -269,9 +377,9 @@ def test_schema_registry_fails_closed_on_newer_or_tampered_migration(
             connection.execute(
                 """
                 INSERT INTO schema_migrations(version, applied_at_unix_ms, migration_digest)
-                VALUES (5, ?, ?)
+                VALUES (6, ?, ?)
                 """,
-                (clock.now, canonical_sha256({"unknown": 5})),
+                (clock.now, canonical_sha256({"unknown": 6})),
             )
         else:
             connection.execute(

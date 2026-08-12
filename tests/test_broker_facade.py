@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ from aar.runtime.brokers import (
     ArtifactPutRequest,
     ArtifactReadRequest,
     BrokerBudgetExceeded,
+    BrokerCallConflict,
     BrokerGrantDenied,
     EffectProposal,
     EvidenceQuery,
@@ -27,6 +29,10 @@ from aar.schemas import (
     RequestEnvelope,
     SessionRef,
 )
+
+
+class SimulatedBrokerProcessLoss(BaseException):
+    pass
 
 
 def broker_envelope(
@@ -73,6 +79,15 @@ def broker_envelope(
         ),
         trace_id="trace-broker-facade",
         input_digest=f"sha256:{'0' * 64}",
+    )
+
+
+def current_effect_grant(envelope: RequestEnvelope) -> Grant:
+    return Grant(
+        grant_id="current-grant-effect-propose",
+        capability="effect.propose",
+        issued_to=envelope.principal,
+        expires_at_unix_ms=envelope.deadline_unix_ms,
     )
 
 
@@ -198,5 +213,620 @@ def test_child_and_artifact_receipts_survive_host_restart(tmp_path: Path) -> Non
             "artifact.read",
         ]
         assert not hasattr(rebound, "effect_execute")
+    finally:
+        second.close()
+
+
+def test_reconciliation_recovers_artifact_and_subagent_receipts_by_lookup(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "reconcile-lookups.sqlite3"
+    operation = OperationRef(value="operation-broker-reconcile-lookups")
+    capabilities = ("artifact.write", "subagent.submit")
+    first = ReferenceHost(database)
+    envelope = broker_envelope(first, capabilities)
+    bound = first.brokers.bind(envelope, operation)
+    content = b"recoverable-artifact"
+    original_put = first.artifacts.put
+    original_submit = first.subagents.submit
+
+    def put_then_lose(*args, **kwargs):
+        original_put(*args, **kwargs)
+        raise SimulatedBrokerProcessLoss()
+
+    def submit_then_lose(*args, **kwargs):
+        original_submit(*args, **kwargs)
+        raise SimulatedBrokerProcessLoss()
+
+    first.artifacts.put = put_then_lose  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.artifact_put(
+            ArtifactPutRequest(
+                content_digest=f"sha256:{hashlib.sha256(content).hexdigest()}",
+                media_type="text/plain",
+                size_bytes=len(content),
+            ),
+            content,
+            step_key="artifact-lookup-gap",
+        )
+    first.subagents.submit = submit_then_lose  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.subagent_submit(
+            SubagentSubmit(task="recover retained handle"),
+            step_key="subagent-lookup-gap",
+        )
+    first.close()
+
+    second = ReferenceHost(database)
+    try:
+        rebound = second.brokers.bind(
+            envelope.model_copy(update={"runtime_generation": second.runtime_generation}),
+            operation,
+        )
+        report = rebound.reconcile_unresolved(
+                current_capability_digest=envelope.capability_digest,
+                cancellation_requested=False,
+            )
+        assert not report.unresolved
+        assert [call.action for call in report.calls] == [
+            "receipt_recovered",
+            "receipt_recovered",
+        ]
+        traces = rebound.traces()
+        assert [trace.state for trace in traces] == ["succeeded", "succeeded"]
+        assert [trace.reconciliation_action for trace in traces] == [
+            "receipt_recovered",
+            "receipt_recovered",
+        ]
+    finally:
+        second.close()
+
+
+def test_reconciliation_replays_only_safe_read_calls(tmp_path: Path) -> None:
+    database = tmp_path / "reconcile-reads.sqlite3"
+    operation = OperationRef(value="operation-broker-reconcile-reads")
+    first = ReferenceHost(database, evidence_records=("durable evidence",))
+    envelope = broker_envelope(first, ("artifact.read", "evidence.query"))
+    content = b"read-after-loss"
+    reference = first.artifacts.put(content, "text/plain", operation)
+    bound = first.brokers.bind(envelope, operation)
+
+    def lose_read(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    def lose_query(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    first.artifacts.read = lose_read  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.artifact_read(
+            ArtifactReadRequest(reference=reference),
+            step_key="artifact-read-gap",
+        )
+    first.evidence.query = lose_query  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.evidence_query(
+            EvidenceQuery(text="durable"),
+            step_key="evidence-read-gap",
+        )
+    first.close()
+
+    second = ReferenceHost(database, evidence_records=("durable evidence",))
+    try:
+        rebound = second.brokers.bind(
+            envelope.model_copy(update={"runtime_generation": second.runtime_generation}),
+            operation,
+        )
+        report = rebound.reconcile_unresolved(
+                current_capability_digest=envelope.capability_digest,
+                cancellation_requested=False,
+            )
+        assert not report.unresolved
+        assert [call.action for call in report.calls] == ["safe_replay", "safe_replay"]
+        assert all(trace.state == "succeeded" for trace in rebound.traces())
+    finally:
+        second.close()
+
+
+def test_reconciliation_blocks_provider_on_current_capability_drift(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "reconcile-capability-drift.sqlite3"
+    operation = OperationRef(value="operation-broker-capability-drift")
+    first = ReferenceHost(database, evidence_records=("durable evidence",))
+    envelope = broker_envelope(first, ("evidence.query",))
+    bound = first.brokers.bind(envelope, operation)
+
+    def lose_query(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    first.evidence.query = lose_query  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.evidence_query(
+            EvidenceQuery(text="durable"),
+            step_key="capability-drift-gap",
+        )
+    first.close()
+
+    second = ReferenceHost(database, evidence_records=("durable evidence",))
+    provider_calls = 0
+    original_query = second.evidence.query
+
+    def count_query(*args, **kwargs):
+        nonlocal provider_calls
+        provider_calls += 1
+        return original_query(*args, **kwargs)
+
+    second.evidence.query = count_query  # type: ignore[method-assign]
+    try:
+        rebound = second.brokers.bind(
+            envelope.model_copy(update={"runtime_generation": second.runtime_generation}),
+            operation,
+        )
+        with pytest.raises(BrokerGrantDenied, match="current host authority"):
+            rebound.reconcile_unresolved(
+                current_capability_digest=f"sha256:{'f' * 64}"
+            )
+        assert provider_calls == 0
+        assert rebound.traces()[0].state == "started"
+    finally:
+        second.close()
+
+
+def test_indeterminate_effect_proposal_stays_pending_without_provider_replay(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "reconcile-effect-pending.sqlite3"
+    operation = OperationRef(value="operation-broker-effect-pending")
+    first = ReferenceHost(database)
+    envelope = broker_envelope(first, ("effect.propose",))
+    bound = first.brokers.bind(envelope, operation)
+
+    def lose_effect(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    first.effects.propose = lose_effect  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.effect_propose(
+            EffectProposal(
+                effect_type="effect.notify",
+                payload_digest=f"sha256:{'9' * 64}",
+            ),
+            step_key="effect-gap",
+        )
+    first.close()
+
+    second = ReferenceHost(database)
+    replay_count = 0
+    original_propose = second.effects.propose
+
+    def count_proposal(*args, **kwargs):
+        nonlocal replay_count
+        replay_count += 1
+        return original_propose(*args, **kwargs)
+
+    second.effects.propose = count_proposal  # type: ignore[method-assign]
+    try:
+        rebound = second.brokers.bind(
+            envelope.model_copy(update={"runtime_generation": second.runtime_generation}),
+            operation,
+        )
+        report = rebound.reconcile_unresolved(
+                current_capability_digest=envelope.capability_digest,
+                cancellation_requested=False,
+            )
+        assert report.unresolved
+        assert report.calls[0].action == "pending"
+        assert report.calls[0].reason_code == "effect_proposal_receipt_unavailable"
+        assert replay_count == 0
+        assert rebound.traces()[0].state == "started"
+    finally:
+        second.close()
+
+
+def test_model_receipt_stays_pending_until_explicit_compensation_proposal(
+    tmp_path: Path,
+) -> None:
+    host = ReferenceHost(tmp_path / "reconcile-compensation.sqlite3")
+    operation = OperationRef(value="operation-broker-reconcile-compensation")
+    envelope = broker_envelope(host, ("effect.propose", "model.request"))
+    bound = host.brokers.bind(envelope, operation)
+
+    def lose_model(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    host.models.request = lose_model  # type: ignore[method-assign]
+    try:
+        with pytest.raises(SimulatedBrokerProcessLoss):
+            bound.model_request(ModelRequest(prompt="unknown outcome"), step_key="model-gap")
+        pending = bound.reconcile_unresolved(
+                current_capability_digest=envelope.capability_digest,
+                cancellation_requested=False,
+            )
+        assert pending.unresolved
+        assert pending.calls[0].action == "pending"
+        assert bound.traces()[0].state == "started"
+
+        compensated = bound.reconcile_unresolved(
+            current_capability_digest=envelope.capability_digest,
+            current_compensation_grant=current_effect_grant(envelope),
+            cancellation_requested=False,
+            propose_compensation=True,
+        )
+        assert compensated.unresolved
+        assert compensated.calls[0].action == "compensation_proposed"
+        assert compensated.calls[0].compensation_receipt is not None
+        traces = bound.traces()
+        assert len(traces) == 2
+        trace = traces[0]
+        assert trace.state == "failed"
+        assert trace.reconciliation_action == "compensation_proposed"
+        assert trace.compensation_digest is not None
+        assert traces[1].method == "effect.propose"
+        assert traces[1].state == "succeeded"
+        assert not hasattr(bound, "effect_execute")
+    finally:
+        host.close()
+
+
+def test_compensation_intent_is_durable_before_provider_invocation(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "reconcile-compensation-intent.sqlite3"
+    operation = OperationRef(value="operation-broker-compensation-intent")
+    first = ReferenceHost(database)
+    envelope = broker_envelope(first, ("effect.propose", "model.request"))
+    bound = first.brokers.bind(envelope, operation)
+
+    def lose_call(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    first.models.request = lose_call  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.model_request(ModelRequest(prompt="unknown model"), step_key="model-gap")
+    first.effects.propose = lose_call  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.reconcile_unresolved(
+            current_capability_digest=envelope.capability_digest,
+            current_compensation_grant=current_effect_grant(envelope),
+            cancellation_requested=False,
+            propose_compensation=True,
+        )
+    first.close()
+
+    second = ReferenceHost(database)
+    replay_count = 0
+    original_propose = second.effects.propose
+
+    def count_proposal(*args, **kwargs):
+        nonlocal replay_count
+        replay_count += 1
+        return original_propose(*args, **kwargs)
+
+    second.effects.propose = count_proposal  # type: ignore[method-assign]
+    try:
+        rebound = second.brokers.bind(
+            envelope.model_copy(update={"runtime_generation": second.runtime_generation}),
+            operation,
+        )
+        traces = rebound.traces()
+        assert [trace.method for trace in traces] == ["model.request", "effect.propose"]
+        assert [trace.state for trace in traces] == ["started", "started"]
+        report = rebound.reconcile_unresolved(
+                current_capability_digest=envelope.capability_digest,
+                cancellation_requested=False,
+            )
+        assert report.unresolved
+        assert [call.action for call in report.calls] == ["pending", "pending"]
+        assert replay_count == 0
+    finally:
+        second.close()
+
+
+@pytest.mark.parametrize(
+    ("mode", "reason_code"),
+    (
+        ("cancelled", "broker_reconcile_cancelled"),
+        ("deadline", "broker_reconcile_deadline_expired"),
+        ("grant-drift", "broker_reconcile_grant_drift"),
+    ),
+)
+def test_safe_replay_is_blocked_by_control_or_authority_drift(
+    tmp_path: Path,
+    mode: str,
+    reason_code: str,
+) -> None:
+    database = tmp_path / f"reconcile-{mode}.sqlite3"
+    operation = OperationRef(value=f"operation-broker-reconcile-{mode}")
+    first = ReferenceHost(database, evidence_records=("bounded evidence",))
+    envelope = broker_envelope(first, ("evidence.query",))
+    bound = first.brokers.bind(envelope, operation)
+
+    def lose_query(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    first.evidence.query = lose_query  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.evidence_query(EvidenceQuery(text="bounded"), step_key="authority-gap")
+    first.close()
+
+    now_ms = (
+        (lambda: envelope.deadline_unix_ms)
+        if mode == "deadline"
+        else (lambda: envelope.deadline_unix_ms - 1)
+    )
+    second = ReferenceHost(
+        database,
+        now_ms=now_ms,
+        evidence_records=("bounded evidence",),
+    )
+    replay_count = 0
+    original_query = second.evidence.query
+
+    def count_query(*args, **kwargs):
+        nonlocal replay_count
+        replay_count += 1
+        return original_query(*args, **kwargs)
+
+    second.evidence.query = count_query  # type: ignore[method-assign]
+    try:
+        rebound_envelope = envelope.model_copy(
+            update={"runtime_generation": second.runtime_generation}
+        )
+        if mode == "grant-drift":
+            rebound_envelope = rebound_envelope.model_copy(
+                update={
+                    "grants": (
+                        rebound_envelope.grants[0].model_copy(
+                            update={"grant_id": "grant-evidence-query-drift"}
+                        ),
+                    )
+                }
+            )
+        report = second.brokers.bind(
+            rebound_envelope,
+            operation,
+        ).reconcile_unresolved(
+            current_capability_digest=envelope.capability_digest,
+            cancellation_requested=mode == "cancelled",
+        )
+        assert report.unresolved
+        assert report.calls[0].action == "quarantine"
+        assert report.calls[0].reason_code == reason_code
+        assert replay_count == 0
+        trace = second.brokers.bind(rebound_envelope, operation).traces()[0]
+        assert trace.state == "failed"
+        assert trace.reconciliation_action == "quarantine"
+    finally:
+        second.close()
+
+
+def test_tampered_request_bytes_are_never_replayed(tmp_path: Path) -> None:
+    database = tmp_path / "reconcile-tamper.sqlite3"
+    operation = OperationRef(value="operation-broker-reconcile-tamper")
+    first = ReferenceHost(database, evidence_records=("bounded evidence",))
+    envelope = broker_envelope(first, ("evidence.query",))
+    bound = first.brokers.bind(envelope, operation)
+
+    def lose_query(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    first.evidence.query = lose_query  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.evidence_query(EvidenceQuery(text="bounded"), step_key="tamper-gap")
+    first.close()
+
+    connection = sqlite3.connect(database)
+    with connection:
+        connection.execute(
+            """
+            UPDATE broker_calls SET request_json = ?
+            WHERE operation_id = ? AND sequence = 1
+            """,
+            ('{"schema_version":"aar.broker.v1","text":"tampered"}', operation.value),
+        )
+    connection.close()
+
+    second = ReferenceHost(database, evidence_records=("bounded evidence",))
+    try:
+        rebound = second.brokers.bind(
+            envelope.model_copy(update={"runtime_generation": second.runtime_generation}),
+            operation,
+        )
+        with pytest.raises(BrokerCallConflict):
+            rebound.reconcile_unresolved(
+                current_capability_digest=envelope.capability_digest,
+                cancellation_requested=False,
+            )
+        assert rebound.traces()[0].state == "started"
+    finally:
+        second.close()
+
+
+def test_missing_legacy_request_bytes_quarantine_without_replay(tmp_path: Path) -> None:
+    database = tmp_path / "reconcile-missing-request.sqlite3"
+    operation = OperationRef(value="operation-broker-reconcile-missing-request")
+    first = ReferenceHost(database, evidence_records=("bounded evidence",))
+    envelope = broker_envelope(first, ("evidence.query",))
+    bound = first.brokers.bind(envelope, operation)
+
+    def lose_query(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    first.evidence.query = lose_query  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.evidence_query(EvidenceQuery(text="bounded"), step_key="legacy-gap")
+    first.close()
+
+    connection = sqlite3.connect(database)
+    with connection:
+        connection.execute(
+            """
+            UPDATE broker_calls SET request_json = NULL
+            WHERE operation_id = ? AND sequence = 1
+            """,
+            (operation.value,),
+        )
+    connection.close()
+
+    second = ReferenceHost(database, evidence_records=("bounded evidence",))
+    try:
+        rebound = second.brokers.bind(
+            envelope.model_copy(update={"runtime_generation": second.runtime_generation}),
+            operation,
+        )
+        report = rebound.reconcile_unresolved(
+                current_capability_digest=envelope.capability_digest,
+                cancellation_requested=False,
+            )
+        assert report.unresolved
+        assert report.calls[0].action == "quarantine"
+        assert report.calls[0].reason_code == "broker_request_bytes_unavailable"
+        assert rebound.traces()[0].state == "failed"
+    finally:
+        second.close()
+
+
+def test_pending_receipt_and_compensation_evidence_survive_reconnect(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "reconcile-pending-reconnect.sqlite3"
+    operation = OperationRef(value="operation-broker-reconcile-pending-reconnect")
+    first = ReferenceHost(database)
+    envelope = broker_envelope(first, ("effect.propose", "model.request"))
+    bound = first.brokers.bind(envelope, operation)
+
+    def lose_model(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    first.models.request = lose_model  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.model_request(ModelRequest(prompt="pending reconnect"), step_key="pending-gap")
+    pending = bound.reconcile_unresolved(
+                current_capability_digest=envelope.capability_digest,
+                cancellation_requested=False,
+            )
+    assert pending.calls[0].action == "pending"
+    first.close()
+
+    second = ReferenceHost(database)
+    rebound_envelope = envelope.model_copy(
+        update={"runtime_generation": second.runtime_generation}
+    )
+    rebound = second.brokers.bind(rebound_envelope, operation)
+    pending_again = rebound.reconcile_unresolved(
+                current_capability_digest=envelope.capability_digest,
+                cancellation_requested=False,
+            )
+    assert pending_again.calls[0].action == "pending"
+    compensated = rebound.reconcile_unresolved(
+        current_capability_digest=envelope.capability_digest,
+        current_compensation_grant=current_effect_grant(envelope),
+        cancellation_requested=False,
+        propose_compensation=True,
+    )
+    assert compensated.calls[0].action == "compensation_proposed"
+    compensation_digest = rebound.traces()[0].compensation_digest
+    assert compensation_digest is not None
+    second.close()
+
+    third = ReferenceHost(database)
+    try:
+        final = third.brokers.bind(
+            envelope.model_copy(update={"runtime_generation": third.runtime_generation}),
+            operation,
+        )
+        report = final.reconcile_unresolved(
+            current_capability_digest=envelope.capability_digest,
+            current_compensation_grant=current_effect_grant(envelope),
+            cancellation_requested=False,
+            propose_compensation=True,
+        )
+        assert report.unresolved
+        assert report.calls == ()
+        trace = final.traces()[0]
+        assert trace.reconciliation_action == "compensation_proposed"
+        assert trace.compensation_digest == compensation_digest
+    finally:
+        third.close()
+
+
+def test_compensation_requires_original_effect_proposal_authority(tmp_path: Path) -> None:
+    host = ReferenceHost(tmp_path / "reconcile-compensation-authority.sqlite3")
+    operation = OperationRef(value="operation-broker-compensation-authority")
+    envelope = broker_envelope(host, ("model.request",))
+    bound = host.brokers.bind(envelope, operation)
+
+    def lose_model(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    host.models.request = lose_model  # type: ignore[method-assign]
+    try:
+        with pytest.raises(SimulatedBrokerProcessLoss):
+            bound.model_request(ModelRequest(prompt="no compensation grant"), step_key="gap")
+        report = bound.reconcile_unresolved(
+            current_capability_digest=envelope.capability_digest,
+            current_compensation_grant=current_effect_grant(envelope),
+            cancellation_requested=False,
+            propose_compensation=True,
+        )
+        assert report.unresolved
+        assert report.calls[0].action == "pending"
+        assert report.calls[0].compensation_receipt is None
+        assert bound.traces()[0].state == "started"
+    finally:
+        host.close()
+
+
+@pytest.mark.parametrize("mode", ("cancelled", "deadline"))
+def test_compensation_is_forbidden_after_cancellation_or_deadline(
+    tmp_path: Path,
+    mode: str,
+) -> None:
+    database = tmp_path / f"reconcile-compensation-{mode}.sqlite3"
+    operation = OperationRef(value=f"operation-broker-compensation-{mode}")
+    first = ReferenceHost(database)
+    envelope = broker_envelope(first, ("effect.propose", "model.request"))
+    bound = first.brokers.bind(envelope, operation)
+
+    def lose_model(*_args, **_kwargs):
+        raise SimulatedBrokerProcessLoss()
+
+    first.models.request = lose_model  # type: ignore[method-assign]
+    with pytest.raises(SimulatedBrokerProcessLoss):
+        bound.model_request(ModelRequest(prompt=mode), step_key="authority-gap")
+    first.close()
+
+    now_ms = (
+        (lambda: envelope.deadline_unix_ms)
+        if mode == "deadline"
+        else (lambda: envelope.deadline_unix_ms - 1)
+    )
+    second = ReferenceHost(database, now_ms=now_ms)
+    proposal_count = 0
+    original_propose = second.effects.propose
+
+    def count_proposal(*args, **kwargs):
+        nonlocal proposal_count
+        proposal_count += 1
+        return original_propose(*args, **kwargs)
+
+    second.effects.propose = count_proposal  # type: ignore[method-assign]
+    try:
+        rebound = second.brokers.bind(
+            envelope.model_copy(update={"runtime_generation": second.runtime_generation}),
+            operation,
+        )
+        report = rebound.reconcile_unresolved(
+            current_capability_digest=envelope.capability_digest,
+            current_compensation_grant=current_effect_grant(envelope),
+            cancellation_requested=mode == "cancelled",
+            propose_compensation=True,
+        )
+        assert report.unresolved
+        assert report.calls[0].action == "quarantine"
+        assert report.calls[0].compensation_receipt is None
+        assert proposal_count == 0
+        assert len(rebound.traces()) == 1
     finally:
         second.close()

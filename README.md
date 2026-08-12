@@ -4,7 +4,7 @@
 
 ### Give agents a workbench — not just a bigger prompt.
 
-**RLM × persistent IPython × durable operations × host-owned authority**
+**Host-composed RLM + persistent IPython + durable operations + host-owned authority**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
@@ -26,7 +26,9 @@
 
 Most agents are asked to solve large problems with one expensive, forgetful interface: the prompt.
 
-**Adaptive Agent Harness gives them a programmable workbench instead.** A model can keep investigation state in IPython, inspect and transform long inputs with Python, make bounded recursive model or subagent calls, persist operation receipts, and reconnect to work through a small MCP surface.
+**Adaptive Agent Harness gives them a programmable workbench instead.** A host can use two sibling surfaces side by side: persistent IPython workspaces for stateful computation, and bounded RLM jobs for brokered evidence and model calls. Durable receipts and a small MCP surface make both governable and reconnectable.
+
+The current public alpha does **not** execute an RLM job inside an IPython workspace or share state between them automatically. A host must transfer selected evidence, values, or artifacts explicitly.
 
 The result is a practical foundation for agents that need to:
 
@@ -70,7 +72,7 @@ The term comes from Zhang, Kraska, and Khattab's [Recursive Language Models](htt
 
 ## Why IPython?
 
-RLMs need somewhere to think **with data**, not merely talk about it. IPython is a strong fit because it gives the model a persistent computational workspace:
+Long-running agents also need somewhere to think **with data**, not merely talk about it. IPython complements the RLM surface by giving the host a separate persistent computational workspace:
 
 - variables stay available across execution steps;
 - DataFrames, arrays, parsed documents, and graph results can be inspected directly;
@@ -87,7 +89,7 @@ That distinction matters for long research, codebase analysis, data investigatio
 
 ## Why RLM × IPython?
 
-Each piece covers a different failure mode:
+Here, “×” means **host composition**, not an in-process RLM/workspace binding. Each sibling surface covers a different failure mode:
 
 | Layer | What it contributes |
 |---|---|
@@ -96,7 +98,7 @@ Each piece covers a different failure mode:
 | **Adaptive Agent Harness** | Adds durable operation identity, grants, budgets, receipts, artifacts, recovery policy, and host-neutral MCP access. |
 | **Your host agent** | Owns identity, provider credentials, approval, privileged effects, acceptance, and final delivery. |
 
-Together, they let an agent move between language reasoning and deterministic computation without turning every intermediate value into prompt text.
+A host can compose them by passing selected, explicit evidence or artifacts between the surfaces. There is no implicit shared namespace or automatic RLM-to-IPython execution path.
 
 ```mermaid
 flowchart LR
@@ -104,7 +106,6 @@ flowchart LR
     H --> A[Adaptive Agent Harness]
     A --> R[Bounded RLM job]
     A --> I[Persistent IPython workspace]
-    R <--> I
     R --> B[Brokered model / subagent / evidence calls]
     I --> P[Python transforms, tests, tables]
     B --> E[Receipts + trace]
@@ -113,9 +114,9 @@ flowchart LR
     H --> D[Authorize effects and deliver]
 ```
 
-The governing rule is deliberately simple:
+The governing rules are deliberately simple:
 
-> **Python is the orchestration language; the host remains the authority boundary.**
+> **The host composes the sibling surfaces explicitly; Python is a workspace language, and the host remains the authority boundary.**
 
 ---
 
@@ -260,15 +261,19 @@ The MCP frontend is intentionally replaceable. It does not own the continuity da
 
 Current public alpha: **`0.3.0a0`**.
 
-Verified in the frozen candidate:
+Reproduced from this public candidate:
 
 - Python 3.11 through 3.14 coverage;
 - 30-tool MCP v7 surface;
-- additive SQLite schema through v4;
-- full repository run: **199 passed, 1 platform-gated skip**;
-- clean exact-wheel probes on Linux/WSL and native Windows;
-- durable supervisor, frontend replacement, process-loss, stale-writer, receipt-reuse, and policy-bound RLM successor scenarios;
-- installed Hermes cutover evidence retained in the append-only project WAL.
+- additive SQLite schema through v5;
+- full repository run: **245 passed, 1 platform-gated skip**;
+- a clean exact-wheel supervisor/frontend probe on Linux/WSL;
+- durable supervisor, frontend replacement, process-loss, stale-writer, receipt-reuse, and policy-bound RLM successor scenarios.
+
+Earlier native-Windows and installed-Hermes compatibility rows are retained as
+**maintainer-reported historical context**. Their supporting host receipts are not included in this
+public repository, so those rows are not independently auditable from this tree and are not release
+criteria for the public source candidate.
 
 Still open:
 

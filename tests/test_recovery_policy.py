@@ -16,14 +16,32 @@ from aar.rlm_models import RlmJobSpec
 from aar.runtime.brokers import BrokerCallConflict
 from aar.runtime.continuity import (
     RLM_OPERATION_KIND,
+    WORKSPACE_PROGRAM_OPERATION_KIND,
     plan_rlm_step_successor,
+    plan_workspace_checkpoint_successor,
     rlm_recovery_environment_digest,
     rlm_step_boundary_policy,
+    workspace_checkpoint_boundary_policy,
+    workspace_recovery_environment_digest,
 )
 from aar.runtime.reference_host import ReferenceHost
 from aar.runtime.registry import IdempotencyConflict, InvalidTransition, StaleAttemptFence
 from aar.runtime.rlm import next_rlm_action
-from aar.schemas import Budget, OperationRef, OperationState, PrincipalRef, SessionRef
+from aar.runtime.workspace_models import (
+    ProgrammableWorkspaceHandle,
+    WorkspaceCheckpointManifest,
+    WorkspaceCheckpointPolicy,
+    WorkspaceEnvironmentFingerprint,
+    WorkspaceProgramSpec,
+)
+from aar.schemas import (
+    Budget,
+    OperationRef,
+    OperationState,
+    PrincipalRef,
+    SessionRef,
+    WorkspaceRef,
+)
 
 NOW_MS = 1_700_000_000_000
 
@@ -481,5 +499,274 @@ def test_recovery_policy_is_bound_before_dispatch_and_is_byte_stable(tmp_path: P
                     policy=policy,
                 ),
             )
+    finally:
+        host.close()
+
+
+def workspace_recovery_context(
+    host: ReferenceHost,
+    suffix: str,
+    *,
+    partial: bool = False,
+    allow_partial: bool = False,
+):
+    session = SessionRef(value=f"session-workspace-{suffix}")
+    handle = host.program_workspace.create(
+        WorkspaceRef(value=f"workspace-{suffix}"),
+        session,
+    )
+    setup = host.program_workspace.execute(
+        OperationRef(value=f"operation-workspace-setup-{suffix}"),
+        handle,
+        WorkspaceProgramSpec(
+            code=(
+                "answer = 41\nunsupported = object()\nanswer"
+                if partial
+                else "answer = 41\nanswer"
+            )
+        ),
+    )
+    handle = ProgrammableWorkspaceHandle(
+        workspace=handle.workspace,
+        backend=handle.backend,
+        generation=handle.generation,
+        revision=setup.revision_after,
+    )
+    manifest = host.program_workspace.checkpoint(
+        OperationRef(value=f"operation-workspace-checkpoint-{suffix}"),
+        handle,
+        WorkspaceCheckpointPolicy(),
+        f"trace-workspace-{suffix}",
+    )
+    spec = WorkspaceProgramSpec(
+        code="answer += 1\nanswer",
+        checkpoint_replay_safe=True,
+    )
+    envelope = host.request_program_workspace_envelope(
+        request_id=f"request-workspace-{suffix}",
+        idempotency_key=f"idempotency-workspace-{suffix}",
+        principal=PrincipalRef(value="principal-workspace-recovery"),
+        session=session,
+        handle=handle,
+        spec=spec,
+        deadline_unix_ms=NOW_MS + 60_000,
+    )
+    policy = workspace_checkpoint_boundary_policy().model_copy(
+        update={"allow_partial_checkpoint": allow_partial}
+    )
+    binding = OperationRecoveryPolicyBindingV1.issue(
+        operation=OperationRef(value=f"operation-workspace-recovery-{suffix}"),
+        operation_kind=WORKSPACE_PROGRAM_OPERATION_KIND,
+        policy=policy,
+        environment_digest=workspace_recovery_environment_digest(
+            backend=host.program_workspace.descriptor,
+            environment=host.program_workspace.environment,
+            capability_digest=host.capabilities.digest,
+            policy=policy,
+        ),
+        created_at_unix_ms=NOW_MS,
+    )
+    return handle, spec, envelope, manifest, binding
+
+
+def workspace_plan(
+    host: ReferenceHost,
+    handle: ProgrammableWorkspaceHandle,
+    spec: WorkspaceProgramSpec,
+    envelope: Any,
+    manifest: WorkspaceCheckpointManifest | None,
+    binding: OperationRecoveryPolicyBindingV1,
+    **overrides: Any,
+):
+    values: dict[str, Any] = {
+        "operation": binding.operation,
+        "input_digest": envelope.input_digest,
+        "envelope": envelope,
+        "handle": handle,
+        "spec": spec,
+        "prior_attempt": OperationAttemptRefV1(
+            operation=binding.operation,
+            attempt_no=1,
+            attempt_id="attempt-workspace-recovery-1",
+        ),
+        "policy_binding": binding,
+        "current_capability_digest": host.capabilities.digest,
+        "current_backend": host.program_workspace.descriptor,
+        "current_environment": host.program_workspace.environment,
+        "manifest": manifest,
+        "cancellation_requested": False,
+        "now_unix_ms": NOW_MS,
+    }
+    values.update(overrides)
+    return plan_workspace_checkpoint_successor(**values)
+
+
+def test_workspace_recovery_plan_accepts_exact_checkpoint(tmp_path: Path) -> None:
+    host = open_host(tmp_path / "workspace-plan-exact.sqlite3")
+    try:
+        handle, spec, envelope, manifest, binding = workspace_recovery_context(
+            host, "plan-exact"
+        )
+        result = workspace_plan(host, handle, spec, envelope, manifest, binding)
+        assert result.decision == "restore_checkpoint"
+        assert result.reason_code == "workspace_exact_checkpoint_boundary"
+        assert result.manifest == manifest
+    finally:
+        host.close()
+
+
+@pytest.mark.parametrize(
+    ("override_key", "override_value", "decision", "reason"),
+    (
+        ("manifest", None, "needs_user", "workspace_checkpoint_missing"),
+        ("cancellation_requested", True, "needs_user", "cancellation_requested"),
+        ("now_unix_ms", NOW_MS + 60_000, "needs_user", "deadline_expired"),
+        (
+            "input_digest",
+            canonical_sha256({"different": "workspace-input"}),
+            "quarantine",
+            "recovery_input_digest_mismatch",
+        ),
+        (
+            "current_capability_digest",
+            canonical_sha256({"different": "workspace-capability"}),
+            "needs_user",
+            "recovery_capability_digest_mismatch",
+        ),
+    ),
+)
+def test_workspace_recovery_plan_fails_closed_on_boundary_drift(
+    tmp_path: Path,
+    override_key: str,
+    override_value: Any,
+    decision: str,
+    reason: str,
+) -> None:
+    host = open_host(tmp_path / f"workspace-plan-{reason}.sqlite3")
+    try:
+        handle, spec, envelope, manifest, binding = workspace_recovery_context(host, reason)
+        effective_manifest = override_value if override_key == "manifest" else manifest
+        effective_overrides = (
+            {} if override_key == "manifest" else {override_key: override_value}
+        )
+        result = workspace_plan(
+            host,
+            handle,
+            spec,
+            envelope,
+            effective_manifest,
+            binding,
+            **effective_overrides,
+        )
+        assert result.decision == decision
+        assert result.reason_code == reason
+        assert result.manifest is None
+    finally:
+        host.close()
+
+
+def test_workspace_recovery_requires_explicit_replay_opt_in(tmp_path: Path) -> None:
+    host = open_host(tmp_path / "workspace-plan-opt-in.sqlite3")
+    try:
+        handle, spec, envelope, manifest, binding = workspace_recovery_context(host, "opt-in")
+        result = workspace_plan(
+            host,
+            handle,
+            spec.model_copy(update={"checkpoint_replay_safe": False}),
+            envelope,
+            manifest,
+            binding,
+        )
+        assert result.decision == "needs_user"
+        assert result.reason_code == "workspace_replay_not_declared_safe"
+    finally:
+        host.close()
+
+
+def test_workspace_recovery_rejects_foreign_handle_and_environment(tmp_path: Path) -> None:
+    host = open_host(tmp_path / "workspace-plan-foreign.sqlite3")
+    try:
+        handle, spec, envelope, manifest, binding = workspace_recovery_context(
+            host, "foreign"
+        )
+        foreign_handle = handle.model_copy(update={"revision": handle.revision + 1})
+        foreign_handle_manifest = WorkspaceCheckpointManifest.issue(
+            source_handle=foreign_handle,
+            creation_operation=manifest.creation_operation,
+            trace_id=manifest.trace_id,
+            environment=manifest.environment,
+            values=manifest.values,
+            exclusions=manifest.exclusions,
+            artifacts=manifest.artifacts,
+        )
+        handle_result = workspace_plan(
+            host,
+            handle,
+            spec,
+            envelope,
+            foreign_handle_manifest,
+            binding,
+        )
+        assert handle_result.decision == "quarantine"
+        assert handle_result.reason_code == "workspace_checkpoint_handle_mismatch"
+
+        foreign_environment = WorkspaceEnvironmentFingerprint.current(
+            extra=(("recovery_test", "foreign"),)
+        )
+        foreign_environment_manifest = WorkspaceCheckpointManifest.issue(
+            source_handle=handle,
+            creation_operation=manifest.creation_operation,
+            trace_id=manifest.trace_id,
+            environment=foreign_environment,
+            values=manifest.values,
+            exclusions=manifest.exclusions,
+            artifacts=manifest.artifacts,
+        )
+        environment_result = workspace_plan(
+            host,
+            handle,
+            spec,
+            envelope,
+            foreign_environment_manifest,
+            binding,
+        )
+        assert environment_result.decision == "needs_user"
+        assert (
+            environment_result.reason_code
+            == "workspace_checkpoint_environment_mismatch"
+        )
+    finally:
+        host.close()
+
+
+def test_workspace_partial_checkpoint_requires_explicit_policy(tmp_path: Path) -> None:
+    host = open_host(tmp_path / "workspace-plan-partial.sqlite3")
+    try:
+        handle, spec, envelope, manifest, binding = workspace_recovery_context(
+            host, "partial-denied", partial=True
+        )
+        assert manifest.exclusions
+        denied = workspace_plan(host, handle, spec, envelope, manifest, binding)
+        assert denied.decision == "needs_user"
+        assert denied.reason_code == "partial_checkpoint_not_allowed"
+
+        allowed_handle, allowed_spec, allowed_envelope, allowed_manifest, allowed_binding = (
+            workspace_recovery_context(
+                host,
+                "partial-allowed",
+                partial=True,
+                allow_partial=True,
+            )
+        )
+        allowed = workspace_plan(
+            host,
+            allowed_handle,
+            allowed_spec,
+            allowed_envelope,
+            allowed_manifest,
+            allowed_binding,
+        )
+        assert allowed.decision == "restore_checkpoint"
+        assert allowed.reason_code == "workspace_exact_checkpoint_boundary"
     finally:
         host.close()
