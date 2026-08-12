@@ -265,8 +265,8 @@ Dabartinė viešoji alfa: **`0.3.0a0`**.
 
 - Python 3.11–3.14 palaikymas;
 - 30 įrankių MCP v7 paviršius;
-- papildanti SQLite schema iki v4;
-- visas saugyklos paleidimas: **206 išlaikyti testai, 1 nuo platformos priklausantis praleidimas**;
+- papildanti SQLite schema iki v5;
+- visas saugyklos paleidimas: **245 išlaikyti testai, 1 nuo platformos priklausantis praleidimas**;
 - švarus exact-wheel supervisor/frontend bandymas Linux/WSL aplinkoje;
 - patvaraus prižiūrėtojo, frontend'o pakeitimo, proceso praradimo, pasenusio rašytojo, kvito pakartotinio panaudojimo ir su politika susieto RLM įpėdinio scenarijai.
 

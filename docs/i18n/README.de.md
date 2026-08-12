@@ -265,8 +265,8 @@ Aus diesem öffentlichen Kandidaten reproduziert:
 
 - Abdeckung von Python 3.11 bis 3.14;
 - MCP-v7-Oberfläche mit 30 Tools;
-- additive SQLite-Schemata bis v4;
-- vollständiger Repository-Lauf: **207 bestanden, 1 plattformbedingt übersprungen**;
+- additive SQLite-Schemata bis v5;
+- vollständiger Repository-Lauf: **245 bestanden, 1 plattformbedingt übersprungen**;
 - ein sauberer Exact-Wheel-Probe für Supervisor/Frontend unter Linux/WSL;
 - Szenarien für dauerhaften Supervisor, Frontend-Ersatz, Prozessverlust, veraltete Schreiber, Wiederverwendung von Quittungen und richtliniengebundene RLM-Folgeversuche.
 

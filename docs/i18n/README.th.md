@@ -265,8 +265,8 @@ Plain Python / IPython workers and host-authorized brokers
 
 - รองรับ Python 3.11 ถึง 3.14;
 - พื้นผิว MCP v7 จำนวน 30 เครื่องมือ;
-- schema SQLite แบบเพิ่มต่อเนื่องจนถึง v4;
-- การรันรีโพซิทอรีทั้งหมด: **ผ่าน 206 รายการ ข้าม 1 รายการตามเงื่อนไขแพลตฟอร์ม**;
+- schema SQLite แบบเพิ่มต่อเนื่องจนถึง v5;
+- การรันรีโพซิทอรีทั้งหมด: **ผ่าน 245 รายการ ข้าม 1 รายการตามเงื่อนไขแพลตฟอร์ม**;
 - การตรวจสอบ supervisor/frontend แบบ exact-wheel ที่สะอาดบน Linux/WSL;
 - สถานการณ์ supervisor ที่คงทน การแทนที่ frontend การสูญเสียกระบวนการ writer ที่ล้าสมัย การนำใบเสร็จ (receipt) กลับมาใช้ซ้ำ และ successor ของ RLM ที่ผูกกับ policy
 

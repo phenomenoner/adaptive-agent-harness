@@ -265,8 +265,8 @@ Reprodukováno z tohoto veřejného kandidáta:
 
 - pokrytí Pythonu 3.11 až 3.14;
 - plocha MCP v7 s 30 nástroji;
-- aditivní schéma SQLite až do v4;
-- úplný běh repozitáře: **207 úspěšných testů, 1 přeskočený test kvůli platformě**;
+- aditivní schéma SQLite až do v5;
+- úplný běh repozitáře: **245 úspěšných testů, 1 přeskočený test kvůli platformě**;
 - čisté exact-wheel probe supervisoru/frontendu na Linuxu/WSL;
 - scénáře trvalého supervisoru, náhrady frontendu, ztráty procesu, zastaralého zapisovatele, opětovného použití potvrzení a následníků RLM vázaných na zásady.
 

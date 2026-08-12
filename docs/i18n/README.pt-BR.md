@@ -265,8 +265,8 @@ Reproduzido a partir deste candidato público:
 
 - cobertura de Python 3.11 a 3.14;
 - superfície MCP v7 com 30 ferramentas;
-- esquema SQLite aditivo até v4;
-- execução completa do repositório: **206 aprovados, 1 ignorado por condição de plataforma**;
+- esquema SQLite aditivo até v5;
+- execução completa do repositório: **245 aprovados, 1 ignorado por condição de plataforma**;
 - uma sondagem limpa do supervisor/frontend com wheel exato no Linux/WSL;
 - supervisor durável, substituição do frontend, perda de processo, gravador obsoleto, reutilização de recibos e cenários de sucessores RLM vinculados a políticas;
 

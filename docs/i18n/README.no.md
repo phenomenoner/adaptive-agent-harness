@@ -265,8 +265,8 @@ Reprodusert fra denne offentlige kandidaten:
 
 - dekning for Python 3.11 til 3.14;
 - MCP v7-overflate med 30 verktøy;
-- additivt SQLite-skjema gjennom v4;
-- full kjøring av repositoriet: **207 bestått, 1 plattformstyrt hoppet over**;
+- additivt SQLite-skjema gjennom v5;
+- full kjøring av repositoriet: **245 bestått, 1 plattformstyrt hoppet over**;
 - en ren exact-wheel supervisor/frontend-probe på Linux/WSL;
 - scenarier for varig supervisor, frontend-erstatning, prosesstap, utdatert skriver, gjenbruk av kvitteringer og policybundne RLM-etterfølgerforsøk.
 

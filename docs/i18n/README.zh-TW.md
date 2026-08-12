@@ -265,8 +265,8 @@ MCP frontend 刻意可以替換。它不擁有 continuity database 或 worker li
 
 - Python 3.11 至 3.14 覆蓋範圍；
 - 30-tool MCP v7 surface；
-- 直到 v4 的 additive SQLite schema；
-- 完整 repository 執行：**206 passed, 1 platform-gated skip**；
+- 直到 v5 的 additive SQLite schema；
+- 完整 repository 執行：**245 passed, 1 platform-gated skip**；
 - 在 Linux/WSL 上通過 clean exact-wheel supervisor/frontend probe；
 - durable supervisor、frontend replacement、process-loss、stale-writer、receipt-reuse 與 policy-bound RLM successor 情境。
 

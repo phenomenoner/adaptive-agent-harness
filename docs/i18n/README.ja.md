@@ -265,8 +265,8 @@ MCP frontend は意図的に交換可能です。continuity database や worker 
 
 - Python 3.11 から 3.14 までの coverage；
 - 30-tool MCP v7 surface；
-- v4 までの additive SQLite schema；
-- repository 全体の実行：**206 passed, 1 platform-gated skip**；
+- v5 までの additive SQLite schema；
+- repository 全体の実行：**245 passed, 1 platform-gated skip**；
 - Linux/WSL での clean exact-wheel supervisor/frontend probe；
 - durable supervisor、frontend replacement、process-loss、stale-writer、receipt-reuse、policy-bound RLM successor scenarios。
 

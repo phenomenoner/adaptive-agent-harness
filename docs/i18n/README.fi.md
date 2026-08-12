@@ -265,8 +265,8 @@ Tästä julkisesta ehdokkaasta toistettu:
 
 - Python 3.11–3.14-kattavuus;
 - 30 työkalun MCP v7 -pinta;
-- additiivinen SQLite-skeema versioon v4 asti;
-- koko repositorion ajo: **207 läpäisi, 1 ohitettiin alustan vuoksi**;
+- additiivinen SQLite-skeema versioon v5 asti;
+- koko repositorion ajo: **245 läpäisi, 1 ohitettiin alustan vuoksi**;
 - puhdas exact-wheel supervisor/frontend -probe Linux/WSL:ssä;
 - pysyvän valvojan, käyttöliittymän korvaamisen, prosessihäviön, vanhentuneen kirjoittajan, kuitin uudelleenkäytön ja käytäntöihin sidottujen RLM-seuraajaskenaarioiden testit.
 

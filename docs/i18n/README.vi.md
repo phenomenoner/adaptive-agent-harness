@@ -265,8 +265,8 @@ Alpha công khai hiện tại: **`0.3.0a0`**.
 
 - hỗ trợ Python 3.11 đến 3.14;
 - bề mặt MCP v7 gồm 30 công cụ;
-- schema SQLite mang tính bổ sung đến v4;
-- chạy toàn bộ repository: **206 đạt, 1 bỏ qua do điều kiện nền tảng**;
+- schema SQLite mang tính bổ sung đến v5;
+- chạy toàn bộ repository: **245 đạt, 1 bỏ qua do điều kiện nền tảng**;
 - probe supervisor/frontend exact-wheel sạch trên Linux/WSL;
 - các kịch bản supervisor lâu bền, thay thế frontend, mất tiến trình, writer cũ, tái sử dụng biên nhận và successor RLM gắn với policy.
 
