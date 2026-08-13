@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
+[![Release](https://img.shields.io/badge/release-v0.3.0a2-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#estado-del-proyecto)
 
@@ -190,7 +190,7 @@ Consulta [Por qué RLM + IPython](../../docs/WHY-RLM-AND-IPYTHON.md) para conoce
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a2"
 ```
 
 ### Configuración de Codex App
@@ -257,7 +257,13 @@ El frontend MCP se puede sustituir deliberadamente. No es dueño de la base de d
 
 ## Estado del proyecto
 
-Alfa pública actual: **`0.3.0a1`**.
+Alfa pública actual: **`0.3.0a2`**.
+
+> **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
+> context. For `v0.3.0a2` receipt-backed model routing, current verification, and exact release
+> boundaries, read the canonical English [release notes](../RELEASE-v0.3.0a2.md) and
+> [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
+
 
 Reproducido a partir de este candidato público:
 
@@ -278,7 +284,7 @@ Aún pendiente:
 - efectos genéricos exactamente una vez;
 - publicación en un registro de paquetes y garantías de API estables.
 
-Lee [TECHNICAL-STATUS.md](../../TECHNICAL-STATUS.md), [HOST-COMPATIBILITY.md](../../HOST-COMPATIBILITY.md) y [WAL.md](../../WAL.md) antes de hacer afirmaciones de producción.
+Lee [TECHNICAL-STATUS.md](../../TECHNICAL-STATUS.md), [HOST-COMPATIBILITY.md](../../HOST-COMPATIBILITY.md) antes de hacer afirmaciones de producción.
 
 ---
 

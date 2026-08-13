@@ -1,6 +1,6 @@
 # Install AAR for Codex App
 
-The normal installation path for the `v0.3.0a1` source prerelease is two commands. It does not run
+The normal installation path for the `v0.3.0a2` source prerelease is two commands. It does not run
 the repository test matrix.
 For an upgrade, close any Codex App task already using AAR before replacing the uv tool; Windows
 otherwise keeps the old console entrypoint open until that MCP process exits.
@@ -8,7 +8,7 @@ otherwise keeps the old console entrypoint open until that MCP process exits.
 From the pinned Git tag:
 
 ```powershell
-uv tool install --force "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
+uv tool install --force "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a2"
 aar-codex-setup
 ```
 
@@ -16,10 +16,10 @@ If a package-index build is published later, the equivalent first command is
 `uv tool install --force adaptive-agent-runtime`. This prerelease does not promise package-index
 publication.
 
-Maintainers who already have an exact local wheel may instead use:
+Maintainers who already have an immutable wheel artifact may instead use:
 
 ```powershell
-uv tool install --force D:\path\to\adaptive_agent_runtime-0.3.0a1-py3-none-any.whl
+uv tool install --force D:\path\to\adaptive_agent_runtime-0.3.0a2-py3-none-any.whl
 aar-codex-setup
 ```
 

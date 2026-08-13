@@ -2,6 +2,54 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
+## [0.3.0a2] — 2026-08-14
+
+### Added
+
+- owner-authored, digest-bound model route catalogs and immutable admission bindings;
+- a durable model-execution journal with explicit pre-send, sent, receipt, usage, committed,
+  indeterminate, and quarantined outcomes;
+- an owner-gateway driver boundary that keeps provider credentials outside AAR state;
+- a bidirectional MCP Sampling transport for host-owned physical provider calls;
+- requested-versus-effective route receipts, provider-reported usage, retry ordinals, fallback
+  chains, and strict route-drift validation;
+- pinned run-manifest and usage-ledger schemas plus an AAR evidence adapter for controlled
+  `openai-codex / gpt-5.6-luna / max` comparisons.
+
+### Safety and recovery
+
+- expire pre-send requests without provider invocation;
+- classify post-send timeout, cancellation, disconnect, or ownership loss as an unknown outcome
+  rather than blindly replaying a potentially billable call;
+- sanitize public provider failures and keep credentials out of durable requests, journals, traces,
+  benchmark fragments, and bundled profiles;
+- reject fallback, route mutation, non-provider usage, and unaccounted retry from evaluation evidence.
+
+### Documentation and packaging
+
+- document model routing, MCP Sampling, receipt semantics, and fair-evaluation requirements in a
+  public integration guide;
+- update the bundled `aar-operations` skill to `0.9.0` with model-route, receipt, uncertainty, and
+  evaluation guidance;
+- refresh package-bound schemas, MCP assets, Codex/Hermes bundles, host profiles, and all localized
+  release references under immutable version `0.3.0a2`.
+
+### Boundaries
+
+- this release provides route and evidence contracts, not provider credentials, a provider account,
+  a benchmark score, or a winner;
+- live provider qualification and formal evaluation remain explicit operator-authorized actions;
+- MCP Sampling has no portable provider-receipt lookup API, so unresolved post-send outcomes remain
+  indeterminate or quarantined.
+
+### Verified
+
+- public repository suite: 326 passed, 1 platform-gated skip;
+- credential-free model broker, benchmark adapter, and bidirectional MCP Sampling scenarios;
+- generated contract, MCP, Codex/Hermes host-profile, and bundled operation-skill assets agree with
+  executable source;
+- source hygiene, Ruff, exact-wheel build/install, and fresh-host readback are release gates.
+
 ## [0.3.0a1] — 2026-08-12
 
 ### Fixed
@@ -67,3 +115,4 @@ All notable public changes are documented here. The project is in public alpha; 
 
 [0.3.0a0]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0
 [0.3.0a1]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1
+[0.3.0a2]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a2

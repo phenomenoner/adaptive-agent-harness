@@ -199,7 +199,14 @@ def host_documents(root: Path) -> dict[Path, bytes]:
         b"reads `config.yaml.mcp_servers`; `mcp.json` is the equivalent reviewable server map.\n"
         b"Use a fresh isolated profile and invoke the bundled `aar-operations` skill.\n"
         b"The same surface supports bounded RLM jobs and immutable asset bundles without serving\n"
-        b"activation authority.\n"
+        b"activation authority.\n\n"
+        b"Provider-backed RLM calls require a separately configured owner route catalog and\n"
+        b"model broker. A Hermes client with MCP Sampling support can own the physical provider\n"
+        b"call and return an `aar.model-receipt.v1` receipt. The bundled profile contains no\n"
+        b"credentials, does not select a provider account, and does not authorize billable\n"
+        b"inference by itself. See\n"
+        b"`docs/MODEL-ROUTING-AND-EVALUATION.md` in the repository for route and evaluation\n"
+        b"constraints.\n"
     )
 
     documents = {

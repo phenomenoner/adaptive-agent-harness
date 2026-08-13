@@ -1,0 +1,19 @@
+{
+  "schema_version": "aar.integration-contracts.v1",
+  "source_project": "adaptive-agent-harness",
+  "published_with": "0.3.0a2",
+  "contracts": [
+    {
+      "path": "run-manifest.schema.json",
+      "source_path": "src/aar/integrations/contracts/run-manifest.schema.json",
+      "schema_id": "https://github.com/phenomenoner/adaptive-agent-harness/blob/v0.3.0a2/src/aar/integrations/contracts/run-manifest.schema.json",
+      "sha256": "eea2641dd1679f10932e6a420b175ac895bdd54026b5dbe15a1de4db5d113beb"
+    },
+    {
+      "path": "usage-ledger-row.schema.json",
+      "source_path": "src/aar/integrations/contracts/usage-ledger-row.schema.json",
+      "schema_id": "https://github.com/phenomenoner/adaptive-agent-harness/blob/v0.3.0a2/src/aar/integrations/contracts/usage-ledger-row.schema.json",
+      "sha256": "12b27dfad6fccabdd5d997354a57341cff6ba72cd8ca7064fe61927f642b139c"
+    }
+  ]
+}

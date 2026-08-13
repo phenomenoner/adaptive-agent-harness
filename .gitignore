@@ -24,8 +24,6 @@ target/
 .debug/
 .idea/
 .vscode/
-/README.local.md
-/roadmap.local.html
 
 # Runtime-local state and secrets
 .env

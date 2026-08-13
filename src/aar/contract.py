@@ -24,6 +24,13 @@ from aar.broker_models import (
     BrokerCatalog,
     BrokerMethodSummary,
     BrokerUsage,
+    EffectiveModelRoute,
+    ModelResponse,
+    ModelRouteBinding,
+    ModelRouteCatalog,
+    ModelRouteProfile,
+    ModelRouteReceipt,
+    ModelUsageRecord,
 )
 from aar.canonical import canonical_json_bytes, canonical_sha256, pretty_json_bytes
 from aar.continuity_models import (
@@ -196,6 +203,41 @@ def _valid_documents() -> dict[str, tuple[str, dict[str, Any]]]:
                 description="Request a model result through the host broker.",
             ),
         )
+    )
+    model_route_profile = ModelRouteProfile(
+        profile_id="reference-fake-v1",
+        provider_driver="reference-fake-driver-v1",
+        provider="reference",
+        model="deterministic-reference",
+        max_output_tokens=256,
+    )
+    model_route_catalog = ModelRouteCatalog.issue((model_route_profile,))
+    model_route_binding = ModelRouteBinding.issue(
+        model_route_catalog,
+        model_route_profile,
+    )
+    effective_model_route = EffectiveModelRoute(
+        provider_driver=model_route_binding.provider_driver,
+        provider=model_route_binding.provider,
+        model=model_route_binding.model,
+        reasoning_effort=model_route_binding.reasoning_effort,
+    )
+    model_route_receipt = ModelRouteReceipt.issue(
+        requested=model_route_binding,
+        effective=effective_model_route,
+        finish_reason="stop",
+        provider_response_id="reference-response-demo",
+    )
+    model_usage = ModelUsageRecord(
+        accounting_source="reference",
+        input_tokens=4,
+        output_tokens=2,
+        total_tokens=6,
+    )
+    model_response = ModelResponse(
+        output_text="deterministic:demo",
+        route_receipt=model_route_receipt,
+        usage=model_usage,
     )
     rlm_job = RlmJobSpec(
         query="Summarize the retained evidence.",
@@ -400,6 +442,26 @@ def _valid_documents() -> dict[str, tuple[str, dict[str, Any]]]:
             "broker_catalog",
             broker_catalog.model_dump(mode="json"),
         ),
+        "valid/model-response.json": (
+            "model_response",
+            model_response.model_dump(mode="json"),
+        ),
+        "valid/model-route-binding.json": (
+            "model_route_binding",
+            model_route_binding.model_dump(mode="json"),
+        ),
+        "valid/model-route-catalog.json": (
+            "model_route_catalog",
+            model_route_catalog.model_dump(mode="json"),
+        ),
+        "valid/model-route-receipt.json": (
+            "model_route_receipt",
+            model_route_receipt.model_dump(mode="json"),
+        ),
+        "valid/model-usage-record.json": (
+            "model_usage_record",
+            model_usage.model_dump(mode="json"),
+        ),
         "valid/failure-envelope.json": ("failure_envelope", failure.model_dump(mode="json")),
         "valid/reconciliation-report.json": (
             "reconciliation_report",
@@ -417,6 +479,10 @@ def fixture_documents() -> dict[str, tuple[str, bool, dict[str, Any]]]:
     capabilities = copy.deepcopy(valid["valid/capability-set.json"][1])
     rlm_job = copy.deepcopy(valid["valid/rlm-job-spec.json"][1])
     asset_bundle = copy.deepcopy(valid["valid/adaptive-asset-bundle.json"][1])
+    model_catalog = copy.deepcopy(valid["valid/model-route-catalog.json"][1])
+    model_binding = copy.deepcopy(valid["valid/model-route-binding.json"][1])
+    model_receipt = copy.deepcopy(valid["valid/model-route-receipt.json"][1])
+    model_usage = copy.deepcopy(valid["valid/model-usage-record.json"][1])
 
     invalid: dict[str, tuple[str, dict[str, Any]]] = {}
 
@@ -516,6 +582,66 @@ def fixture_documents() -> dict[str, tuple[str, bool, dict[str, Any]]]:
     case = copy.deepcopy(request)
     case["unexpected"] = True
     invalid["invalid/request-extra-field.json"] = ("request_envelope", case)
+
+    case = copy.deepcopy(model_catalog)
+    case["catalog_digest"] = f"sha256:{'0' * 64}"
+    invalid["invalid/model-route-catalog-digest-mismatch.json"] = (
+        "model_route_catalog",
+        case,
+    )
+
+    case = copy.deepcopy(model_catalog)
+    case["profiles"].append(copy.deepcopy(case["profiles"][0]))
+    invalid["invalid/model-route-catalog-duplicate-profile.json"] = (
+        "model_route_catalog",
+        case,
+    )
+
+    case = copy.deepcopy(model_binding)
+    case["model"] = "tampered-model"
+    invalid["invalid/model-route-binding-profile-digest-mismatch.json"] = (
+        "model_route_binding",
+        case,
+    )
+
+    case = copy.deepcopy(model_usage)
+    case["total_tokens"] += 1
+    invalid["invalid/model-usage-total-mismatch.json"] = (
+        "model_usage_record",
+        case,
+    )
+
+    case = copy.deepcopy(model_receipt)
+    case["effective"]["model"] = "drifted-model"
+    receipt_payload = {
+        "requested": case["requested"],
+        "effective": case["effective"],
+        "finish_reason": case["finish_reason"],
+        "provider_response_id": case["provider_response_id"],
+        "fallback_chain": case["fallback_chain"],
+        "lookup_supported": case["lookup_supported"],
+    }
+    case["receipt_digest"] = canonical_sha256(receipt_payload)
+    invalid["invalid/model-route-receipt-effective-drift.json"] = (
+        "model_route_receipt",
+        case,
+    )
+
+    case = copy.deepcopy(model_receipt)
+    case["fallback_chain"] = [copy.deepcopy(case["effective"])]
+    receipt_payload = {
+        "requested": case["requested"],
+        "effective": case["effective"],
+        "finish_reason": case["finish_reason"],
+        "provider_response_id": case["provider_response_id"],
+        "fallback_chain": case["fallback_chain"],
+        "lookup_supported": case["lookup_supported"],
+    }
+    case["receipt_digest"] = canonical_sha256(receipt_payload)
+    invalid["invalid/model-route-receipt-forbidden-fallback.json"] = (
+        "model_route_receipt",
+        case,
+    )
 
     documents = {
         path: (model_name, True, document)

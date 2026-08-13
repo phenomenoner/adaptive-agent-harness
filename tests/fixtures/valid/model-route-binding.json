@@ -1,0 +1,13 @@
+{
+  "cache_policy": "disabled",
+  "catalog_digest": "sha256:dba9cff17d1dc0f6e20a17d0ed431a87d551daa32d14e94d395a762c05907cef",
+  "fallback_policy": "none",
+  "max_output_tokens": 256,
+  "model": "deterministic-reference",
+  "profile_digest": "sha256:939ac2c1198c1b8e12d4446a245a9f84685e5214024858bc7e9cb7d06acde11f",
+  "profile_id": "reference-fake-v1",
+  "provider": "reference",
+  "provider_driver": "reference-fake-driver-v1",
+  "reasoning_effort": null,
+  "schema_version": "aar.model-route.v1"
+}

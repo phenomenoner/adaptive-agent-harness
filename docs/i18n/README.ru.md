@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
+[![Release](https://img.shields.io/badge/release-v0.3.0a2-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#статус-проекта)
 
@@ -190,7 +190,7 @@ Adaptive Agent Harness хорошо подходит для:
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a2"
 ```
 
 ### Настройка Codex App
@@ -257,7 +257,13 @@ Plain Python / IPython workers and host-authorized brokers
 
 ## Статус проекта
 
-Текущая публичная альфа-версия: **`0.3.0a1`**.
+Текущая публичная альфа-версия: **`0.3.0a2`**.
+
+> **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
+> context. For `v0.3.0a2` receipt-backed model routing, current verification, and exact release
+> boundaries, read the canonical English [release notes](../RELEASE-v0.3.0a2.md) and
+> [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
+
 
 Воспроизведено в этом публичном кандидате:
 
@@ -281,7 +287,7 @@ Plain Python / IPython workers and host-authorized brokers
 - универсальные эффекты с семантикой «ровно один раз»;
 - публикация в реестре пакетов и стабильные гарантии API.
 
-Перед заявлениями о готовности к производству прочитайте [TECHNICAL-STATUS.md](../../TECHNICAL-STATUS.md), [HOST-COMPATIBILITY.md](../../HOST-COMPATIBILITY.md) и [WAL.md](../../WAL.md).
+Перед заявлениями о готовности к производству прочитайте [TECHNICAL-STATUS.md](../../TECHNICAL-STATUS.md), [HOST-COMPATIBILITY.md](../../HOST-COMPATIBILITY.md).
 
 ---
 

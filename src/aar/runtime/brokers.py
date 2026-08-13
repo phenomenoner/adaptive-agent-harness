@@ -29,6 +29,7 @@ from aar.broker_models import (
     EffectProposal,
     EvidenceQuery,
     ModelRequest,
+    ModelResponse,
     RetainedSubagentHandle,
     SubagentResultRequest,
     SubagentSubmit,
@@ -45,6 +46,14 @@ from aar.broker_models import (
     BrokerMethodSummary as BrokerMethodSummary,
 )
 from aar.canonical import canonical_json_bytes, canonical_sha256
+from aar.runtime.model_broker import (
+    ModelBrokerRegistry,
+    ModelCallIndeterminate,
+    ModelExecutionJournal,
+    ModelReceiptLookupFailed,
+    ModelReceiptLookupUnavailable,
+    ModelRouteDrift,
+)
 from aar.schemas import (
     ArtifactIdRef,
     ArtifactReference,
@@ -78,6 +87,14 @@ class BrokerCallConflict(BrokerFacadeError):
 
 class BrokerCallIndeterminate(BrokerFacadeError):
     """A prior broker call started but has no authoritative terminal receipt."""
+
+
+class BrokerCallQuarantined(BrokerFacadeError):
+    """A provider call produced terminal evidence that cannot be trusted as success."""
+
+    def __init__(self, reason_code: str) -> None:
+        super().__init__("broker call was quarantined")
+        self.reason_code = reason_code
 
 
 class BrokerJournal:
@@ -152,11 +169,14 @@ class BrokerJournal:
         usage: BrokerUsage,
         budget: Budget,
         call: Callable[[], StrictModel],
+        committed_usage: Callable[[StrictModel], BrokerUsage] | None = None,
+        post_commit_check: Callable[[], None] | None = None,
         expected_control_revision: int | None = None,
         require_not_cancelled: bool = False,
         admission_check: Callable[[], None] | None = None,
     ) -> StrictModel:
         request_digest = canonical_sha256(request)
+        sequence: int | None = None
         with self._lock, self._connection:
             if admission_check is not None:
                 # A no-op DML acquires the configured IMMEDIATE write reservation before
@@ -195,28 +215,36 @@ class BrokerJournal:
                 """,
                 (operation.value, idempotency_key),
             ).fetchone()
+            replay_rejected_before_send = False
             if existing is not None:
                 if existing["request_digest"] != request_digest:
                     raise BrokerCallConflict(
                         "broker idempotency key already binds different request bytes"
                     )
-                if existing["state"] != "succeeded" or existing["response_json"] is None:
+                if existing["state"] == "succeeded" and existing["response_json"] is not None:
+                    response = response_type.model_validate_json(
+                        str(existing["response_json"]), strict=True
+                    )
+                    if existing["response_digest"] != canonical_sha256(response):
+                        raise BrokerCallConflict(
+                            "broker success receipt digest does not match stored response bytes"
+                        )
+                    return response
+                if (
+                    existing["state"] == "rejected_before_send"
+                    and existing["response_json"] is None
+                ):
+                    replay_rejected_before_send = True
+                    sequence = int(existing["sequence"])
+                else:
                     raise BrokerCallIndeterminate(
                         "broker call has no authoritative terminal receipt"
                     )
-                response = response_type.model_validate_json(
-                    str(existing["response_json"]), strict=True
-                )
-                if existing["response_digest"] != canonical_sha256(response):
-                    raise BrokerCallConflict(
-                        "broker success receipt digest does not match stored response bytes"
-                    )
-                return response
             current_usage = BrokerUsage()
             for usage_row in self._connection.execute(
                 """
                 SELECT usage_json FROM broker_calls
-                WHERE operation_id = ? AND state = 'succeeded'
+                WHERE operation_id = ? AND state != 'started' AND usage_json IS NOT NULL
                 """,
                 (operation.value,),
             ).fetchall():
@@ -226,66 +254,149 @@ class BrokerJournal:
                     )
                 )
             _assert_budget(budget, current_usage.plus(usage))
-            row = self._connection.execute(
-                """
-                SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence
-                FROM broker_calls WHERE operation_id = ?
-                """,
-                (operation.value,),
-            ).fetchone()
-            assert row is not None
-            sequence = int(row["next_sequence"])
-            self._connection.execute(
-                """
-                INSERT INTO broker_calls(
-                    operation_id, sequence, method, grant_id, idempotency_key,
-                    request_digest, request_json, state, response_model, usage_json,
-                    control_revision
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'started', ?, ?, ?)
-                """,
-                (
-                    operation.value,
-                    sequence,
-                    method,
-                    grant_id,
-                    idempotency_key,
-                    request_digest,
-                    canonical_json_bytes(request).decode(),
-                    response_type.__name__,
-                    canonical_json_bytes(usage).decode(),
-                    expected_control_revision,
-                ),
-            )
-        try:
-            if admission_check is not None:
+            if replay_rejected_before_send:
+                self._connection.execute(
+                    """
+                    UPDATE broker_calls
+                    SET state = 'started', grant_id = ?, usage_json = ?,
+                        failure_code = NULL, control_revision = ?
+                    WHERE operation_id = ? AND sequence = ?
+                      AND state = 'rejected_before_send'
+                    """,
+                    (
+                        grant_id,
+                        canonical_json_bytes(usage).decode(),
+                        expected_control_revision,
+                        operation.value,
+                        sequence,
+                    ),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise BrokerCallConflict("broker rejection changed during safe replay")
+            else:
+                row = self._connection.execute(
+                    """
+                    SELECT COALESCE(MAX(sequence), 0) + 1 AS next_sequence
+                    FROM broker_calls WHERE operation_id = ?
+                    """,
+                    (operation.value,),
+                ).fetchone()
+                assert row is not None
+                sequence = int(row["next_sequence"])
+                self._connection.execute(
+                    """
+                    INSERT INTO broker_calls(
+                        operation_id, sequence, method, grant_id, idempotency_key,
+                        request_digest, request_json, state, response_model, usage_json,
+                        control_revision
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'started', ?, ?, ?)
+                    """,
+                    (
+                        operation.value,
+                        sequence,
+                        method,
+                        grant_id,
+                        idempotency_key,
+                        request_digest,
+                        canonical_json_bytes(request).decode(),
+                        response_type.__name__,
+                        canonical_json_bytes(usage).decode(),
+                        expected_control_revision,
+                    ),
+                )
+        if sequence is None:
+            raise BrokerCallConflict("broker call sequence was not established")
+        if admission_check is not None:
+            try:
                 admission_check()
+            except Exception as error:
+                zero_usage_json = canonical_json_bytes(BrokerUsage()).decode()
+                with self._lock, self._connection:
+                    self._connection.execute(
+                        """
+                        UPDATE broker_calls
+                        SET state = 'rejected_before_send', failure_code = ?, usage_json = ?
+                        WHERE operation_id = ? AND sequence = ? AND state = 'started'
+                        """,
+                        (type(error).__name__, zero_usage_json, operation.value, sequence),
+                    )
+                raise
+        try:
             response = call()
             if not isinstance(response, response_type):
                 raise TypeError(
                     f"broker method {method} returned {type(response).__name__}, "
                     f"expected {response_type.__name__}"
                 )
+        except BrokerCallIndeterminate:
+            raise
+        except BrokerCallQuarantined as error:
+            zero_usage_json = canonical_json_bytes(BrokerUsage()).decode()
+            with self._lock, self._connection:
+                self._connection.execute(
+                    """
+                    UPDATE broker_calls
+                    SET state = 'failed', failure_code = ?, usage_json = ?,
+                        reconciliation_action = 'quarantine'
+                    WHERE operation_id = ? AND sequence = ?
+                    """,
+                    (
+                        error.reason_code,
+                        zero_usage_json,
+                        operation.value,
+                        sequence,
+                    ),
+                )
+            raise
+        except Exception as error:
+            zero_usage_json = canonical_json_bytes(BrokerUsage()).decode()
+            with self._lock, self._connection:
+                self._connection.execute(
+                    """
+                    UPDATE broker_calls
+                    SET state = 'failed', failure_code = ?, usage_json = ?
+                    WHERE operation_id = ? AND sequence = ?
+                    """,
+                    (
+                        type(error).__name__,
+                        zero_usage_json,
+                        operation.value,
+                        sequence,
+                    ),
+                )
+            raise
+        response_json = canonical_json_bytes(response).decode()
+        response_digest = canonical_sha256(response)
+        actual_usage = usage if committed_usage is None else committed_usage(response)
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE broker_calls
+                SET state = 'succeeded', response_digest = ?, response_json = ?, usage_json = ?
+                WHERE operation_id = ? AND sequence = ?
+                """,
+                (
+                    response_digest,
+                    response_json,
+                    canonical_json_bytes(actual_usage).decode(),
+                    operation.value,
+                    sequence,
+                ),
+            )
+        try:
+            _assert_budget(budget, current_usage.plus(actual_usage))
+            if post_commit_check is not None:
+                post_commit_check()
         except Exception as error:
             with self._lock, self._connection:
                 self._connection.execute(
                     """
                     UPDATE broker_calls SET state = 'failed', failure_code = ?
-                    WHERE operation_id = ? AND sequence = ?
+                    WHERE operation_id = ? AND sequence = ? AND state = 'succeeded'
                     """,
                     (type(error).__name__, operation.value, sequence),
                 )
             raise
-        response_json = canonical_json_bytes(response).decode()
-        response_digest = canonical_sha256(response)
-        with self._lock, self._connection:
-            self._connection.execute(
-                """
-                UPDATE broker_calls
-                SET state = 'succeeded', response_digest = ?, response_json = ?
-                WHERE operation_id = ? AND sequence = ?
-                """,
-                (response_digest, response_json, operation.value, sequence),
-            )
         return response
 
     def operation_control_state(self, operation: OperationRef) -> tuple[int, bool]:
@@ -311,7 +422,7 @@ class BrokerJournal:
             rows = self._connection.execute(
                 """
                 SELECT usage_json FROM broker_calls
-                WHERE operation_id = ? AND state = 'succeeded'
+                WHERE operation_id = ? AND state != 'started' AND usage_json IS NOT NULL
                 ORDER BY sequence
                 """,
                 (operation.value,),
@@ -339,9 +450,20 @@ class BrokerJournal:
                 failure_code = (
                     None if row["failure_code"] is None else str(row["failure_code"])
                 )
-                if raw_state in {"started", "succeeded", "failed"}:
+                if raw_state in {
+                    "started",
+                    "rejected_before_send",
+                    "succeeded",
+                    "failed",
+                }:
                     state = cast(
-                        Literal["started", "succeeded", "failed"], raw_state
+                        Literal[
+                            "started",
+                            "rejected_before_send",
+                            "succeeded",
+                            "failed",
+                        ],
+                        raw_state,
                     )
                 else:
                     state = "failed"
@@ -443,12 +565,18 @@ class BrokerJournal:
         request_digest: str,
         authority_digest: str,
         response: StrictModel,
+        committed_usage: BrokerUsage | None,
         action: Literal["receipt_recovered", "safe_replay"],
         reason_code: str,
         now_unix_ms: int,
     ) -> BrokerCallReconciliation:
         response_json = canonical_json_bytes(response).decode()
         response_digest = canonical_sha256(response)
+        usage_json = (
+            None
+            if committed_usage is None
+            else canonical_json_bytes(committed_usage).decode()
+        )
         reconciliation = BrokerCallReconciliation(
             sequence=sequence,
             method=method,
@@ -477,6 +605,7 @@ class BrokerJournal:
                 if (
                     row["response_json"] != response_json
                     or row["response_digest"] != response_digest
+                    or (usage_json is not None and row["usage_json"] != usage_json)
                 ):
                     raise BrokerCallConflict(
                         "terminal broker receipt conflicts with reconciled response"
@@ -488,6 +617,7 @@ class BrokerJournal:
                 """
                 UPDATE broker_calls
                 SET state = 'succeeded', response_digest = ?, response_json = ?,
+                    usage_json = COALESCE(?, usage_json),
                     failure_code = NULL, reconciliation_action = ?,
                     authority_digest = ?, reconciliation_json = ?,
                     compensation_json = NULL, reconciled_at_unix_ms = ?
@@ -496,6 +626,7 @@ class BrokerJournal:
                 (
                     response_digest,
                     response_json,
+                    usage_json,
                     action,
                     authority_digest,
                     reconciliation_json,
@@ -520,6 +651,7 @@ class BrokerJournal:
         reason_code: str,
         now_unix_ms: int,
         compensation_receipt: BrokerReceipt | None = None,
+        committed_usage: BrokerUsage | None = None,
     ) -> BrokerCallReconciliation:
         reconciliation = BrokerCallReconciliation(
             sequence=sequence,
@@ -531,6 +663,11 @@ class BrokerJournal:
             compensation_receipt=compensation_receipt,
         )
         reconciliation_json = canonical_json_bytes(reconciliation).decode()
+        usage_json = (
+            canonical_json_bytes(BrokerUsage()).decode()
+            if committed_usage is None
+            else canonical_json_bytes(committed_usage).decode()
+        )
         target_state = "started" if action == "pending" else "failed"
         with self._lock, self._connection:
             row = self._connection.execute(
@@ -554,6 +691,7 @@ class BrokerJournal:
                 UPDATE broker_calls
                 SET state = ?, failure_code = ?, reconciliation_action = ?,
                     authority_digest = ?, reconciliation_json = ?, compensation_json = ?,
+                    usage_json = CASE WHEN ? = 'started' THEN usage_json ELSE ? END,
                     reconciled_at_unix_ms = ?
                 WHERE operation_id = ? AND sequence = ? AND state = 'started'
                 """,
@@ -566,6 +704,8 @@ class BrokerJournal:
                     None
                     if compensation_receipt is None
                     else canonical_json_bytes(compensation_receipt).decode(),
+                    target_state,
+                    usage_json,
                     now_unix_ms,
                     operation.value,
                     sequence,
@@ -829,6 +969,8 @@ class TypedBrokerFacade:
         effects: FakeEffectBroker,
         evidence: FakeEvidenceProvider,
         now_ms: Callable[[], int],
+        model_broker_registry: ModelBrokerRegistry | None = None,
+        model_execution_journal: ModelExecutionJournal | None = None,
     ) -> None:
         self._journal = BrokerJournal(database_path)
         self._artifacts = artifacts
@@ -837,6 +979,8 @@ class TypedBrokerFacade:
         self._effects = effects
         self._evidence = evidence
         self._now_ms = now_ms
+        self._model_broker_registry = model_broker_registry
+        self._model_execution_journal = model_execution_journal
 
     def bind(
         self, envelope: RequestEnvelope, operation: OperationRef
@@ -848,6 +992,10 @@ class TypedBrokerFacade:
 
     def close(self) -> None:
         self._journal.close()
+        if self._model_execution_journal is not None:
+            self._model_execution_journal.close()
+        if self._model_broker_registry is not None:
+            self._model_broker_registry.close()
 
 
 class BoundBrokerFacade:
@@ -1032,6 +1180,7 @@ class BoundBrokerFacade:
                 idempotency_key=str(row["idempotency_key"]),
             )
             response: StrictModel | None = None
+            committed_usage: BrokerUsage | None = None
             action: Literal["receipt_recovered", "safe_replay"] = "safe_replay"
             reason_code = "broker_safe_read_replayed"
             try:
@@ -1056,10 +1205,88 @@ class BoundBrokerFacade:
                     assert isinstance(request, EvidenceQuery)
                     response = self._facade._evidence.query(request.text, context)
                 elif method == "model.request":
-                    reconciliations.append(
-                        unresolved("model_receipt_unavailable", pending=True)
+                    assert isinstance(request, ModelRequest)
+                    model_registry = self._facade._model_broker_registry
+                    model_journal = self._facade._model_execution_journal
+                    if model_registry is None or model_journal is None:
+                        reconciliations.append(
+                            unresolved("model_receipt_unavailable", pending=True)
+                        )
+                        continue
+                    try:
+                        model_response = model_journal.reconcile(
+                            operation=self._operation,
+                            request=request,
+                            context=context,
+                            registry=model_registry,
+                        )
+                    except ModelReceiptLookupUnavailable:
+                        reconciliations.append(
+                            unresolved("model_receipt_lookup_unavailable")
+                        )
+                        continue
+                    except ModelReceiptLookupFailed:
+                        reconciliations.append(unresolved("model_receipt_lookup_failed"))
+                        continue
+                    except ModelRouteDrift:
+                        reconciliations.append(unresolved("model_route_drift"))
+                        continue
+                    except ModelCallIndeterminate:
+                        reconciliations.append(
+                            unresolved("model_receipt_lookup_pending", pending=True)
+                        )
+                        continue
+                    if model_response is None:
+                        reconciliations.append(
+                            unresolved("model_receipt_lookup_pending", pending=True)
+                        )
+                        continue
+                    response = _legacy_model_receipt(model_response)
+                    committed_usage = BrokerUsage(
+                        model_requests=1,
+                        input_tokens=model_response.usage.input_tokens,
+                        output_tokens=model_response.usage.output_tokens,
                     )
-                    continue
+                    binding = model_journal.binding(self._operation)
+                    try:
+                        _assert_budget(
+                            self._envelope.budget,
+                            self._facade._journal.usage(self._operation).plus(
+                                committed_usage
+                            ),
+                        )
+                    except BrokerBudgetExceeded:
+                        reconciliations.append(
+                            self._facade._journal.record_unresolved_reconciliation(
+                                operation=self._operation,
+                                sequence=sequence,
+                                method=method,
+                                request_digest=request_digest,
+                                authority_digest=authority_digest,
+                                action="quarantine",
+                                reason_code="model_host_budget_exceeded",
+                                now_unix_ms=self._facade._now_ms(),
+                                committed_usage=committed_usage,
+                            )
+                        )
+                        continue
+                    if model_response.usage.output_tokens > binding.max_output_tokens:
+                        reconciliations.append(
+                            self._facade._journal.record_unresolved_reconciliation(
+                                operation=self._operation,
+                                sequence=sequence,
+                                method=method,
+                                request_digest=request_digest,
+                                authority_digest=authority_digest,
+                                action="quarantine",
+                                reason_code="model_route_usage_exceeded",
+                                now_unix_ms=self._facade._now_ms(),
+                                committed_usage=committed_usage,
+                            )
+                        )
+                        continue
+                    action = "receipt_recovered"
+                    reason_code = "model_receipt_recovered"
                 elif method == "subagent.result":
                     assert isinstance(request, SubagentResultRequest)
                     try:
@@ -1095,6 +1322,7 @@ class BoundBrokerFacade:
                     request_digest=request_digest,
                     authority_digest=authority_digest,
                     response=response,
+                    committed_usage=committed_usage,
                     action=action,
                     reason_code=reason_code,
                     now_unix_ms=self._facade._now_ms(),
@@ -1107,12 +1335,68 @@ class BoundBrokerFacade:
         )
 
     def model_request(self, request: ModelRequest, *, step_key: str) -> BrokerReceipt:
+        context, key = self._prepare("model.request", step_key)
+        model_registry = self._facade._model_broker_registry
+        model_journal = self._facade._model_execution_journal
+        if model_registry is not None and model_journal is not None:
+            binding = model_journal.binding(self._operation)
+            usage = BrokerUsage(
+                model_requests=1,
+                input_tokens=_token_units(request.prompt),
+                output_tokens=binding.max_output_tokens,
+            )
+            routed_response: ModelResponse | None = None
+
+            def routed_request() -> BrokerReceipt:
+                nonlocal routed_response
+                quarantine: BrokerCallQuarantined | None = None
+                try:
+                    routed_response = model_journal.invoke(
+                        operation=self._operation,
+                        request=request,
+                        context=context,
+                        registry=model_registry,
+                    )
+                except ModelCallIndeterminate as error:
+                    raise BrokerCallIndeterminate(str(error)) from error
+                except ModelRouteDrift:
+                    quarantine = BrokerCallQuarantined("model_route_drift")
+                if quarantine is not None:
+                    raise quarantine
+                assert routed_response is not None
+                return _legacy_model_receipt(routed_response)
+
+            def provider_usage(_response: StrictModel) -> BrokerUsage:
+                assert routed_response is not None
+                return BrokerUsage(
+                    model_requests=1,
+                    input_tokens=routed_response.usage.input_tokens,
+                    output_tokens=routed_response.usage.output_tokens,
+                )
+
+            def enforce_route_maximum() -> None:
+                assert routed_response is not None
+                if routed_response.usage.output_tokens > binding.max_output_tokens:
+                    raise BrokerBudgetExceeded(
+                        "provider output usage exceeded the bound model route maximum"
+                    )
+
+            return self._invoke(
+                "model.request",
+                key,
+                context,
+                request,
+                BrokerReceipt,
+                usage,
+                routed_request,
+                committed_usage=provider_usage,
+                post_commit_check=enforce_route_maximum,
+            )
         usage = BrokerUsage(
             model_requests=1,
             input_tokens=_token_units(request.prompt),
             output_tokens=1,
         )
-        context, key = self._prepare("model.request", step_key)
         return self._invoke(
             "model.request",
             key,
@@ -1356,6 +1640,9 @@ class BoundBrokerFacade:
         response_type: type[StrictModel],
         usage: BrokerUsage,
         call: Callable[[], StrictModel],
+        *,
+        committed_usage: Callable[[StrictModel], BrokerUsage] | None = None,
+        post_commit_check: Callable[[], None] | None = None,
     ):
         return self._facade._journal.invoke(
             operation=self._operation,
@@ -1367,11 +1654,25 @@ class BoundBrokerFacade:
             usage=usage,
             budget=self._envelope.budget,
             call=call,
+            committed_usage=committed_usage,
+            post_commit_check=post_commit_check,
         )
 
 
 def _token_units(text: str) -> int:
     return max(1, len(text.split()))
+
+
+def _legacy_model_receipt(response: ModelResponse) -> BrokerReceipt:
+    handle = response.route_receipt.provider_response_id or (
+        "model-" + response.route_receipt.receipt_digest.removeprefix("sha256:")[:24]
+    )
+    return BrokerReceipt(
+        kind="model",
+        handle=handle,
+        digest=response.route_receipt.receipt_digest,
+        value=response.output_text,
+    )
 
 
 def _assert_budget(budget: Budget, usage: BrokerUsage) -> None:

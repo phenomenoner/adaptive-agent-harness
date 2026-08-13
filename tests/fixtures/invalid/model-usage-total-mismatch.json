@@ -1,0 +1,12 @@
+{
+  "accounting_source": "reference",
+  "cache_read_tokens": null,
+  "cache_write_tokens": null,
+  "input_tokens": 4,
+  "output_tokens": 2,
+  "reasoning_tokens": null,
+  "retry_ordinal": 0,
+  "schema_version": "aar.model-usage.v1",
+  "total_tokens": 7,
+  "wasted": false
+}

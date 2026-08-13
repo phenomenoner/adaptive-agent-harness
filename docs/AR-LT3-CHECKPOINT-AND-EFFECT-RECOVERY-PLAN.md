@@ -139,7 +139,7 @@ cutover claim until fresh repository, package, rollback, supervisor, and MCP rea
 Source verification includes real IPython worker loss, restore/admission crash convergence, exact
 workspace policy drift and partial-checkpoint cases, broker authority/deadline/cancellation/tamper
 and reconnect cases, persisted-v4-to-v5 and interrupted migration recovery, schema/contract asset
-readback, Ruff, and compile smoke. Exact full-suite and package evidence is appended to `WAL.md`
+readback, Ruff, and compile smoke. Release-level full-suite and package evidence is published in the applicable release notes
 only after the final candidate bytes pass and are frozen.
 
 ### Complete installed cutover and public-maintenance closeout — 2026-08-12

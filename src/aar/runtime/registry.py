@@ -1119,6 +1119,8 @@ class OperationRegistry:
         self,
         envelope: RequestEnvelope,
         payload_json: str,
+        *,
+        admission: Callable[[sqlite3.Connection, OperationRef], None] | None = None,
     ) -> tuple[OperationRecord, bool]:
         operation = _operation_id(envelope)
         request_json = canonical_json_bytes(envelope).decode()
@@ -1158,6 +1160,8 @@ class OperationRegistry:
                     raise IdempotencyConflict(
                         "idempotency key already binds a different authority scope"
                     )
+                if admission is not None:
+                    admission(self._connection, operation)
                 return self._record(existing), False
 
             self._connection.execute(
@@ -1192,6 +1196,8 @@ class OperationRegistry:
                 now,
                 "intent_persisted",
             )
+            if admission is not None:
+                admission(self._connection, operation)
             return self.get(operation), True
 
     def bind_recovery_policy(

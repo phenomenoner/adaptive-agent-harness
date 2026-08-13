@@ -32,7 +32,7 @@ def test_reusable_smoke_pack_exercises_only_real_stdio_tools(tmp_path: Path) -> 
     assert report["observed"]["server_name"] == "aar-mcp"
     assert set(report["checks"].values()) == {"passed"}
     assert report["checks"]["analysis_dependencies"] == "passed"
-    assert report["observed"]["operation_skill_version"] == "0.8.0"
+    assert report["observed"]["operation_skill_version"] == "0.9.0"
     assert report["observed"]["client_protocol_version"] == "2026-07-28"
     assert report["observed"]["server_protocol_version"] == "2026-07-28"
 

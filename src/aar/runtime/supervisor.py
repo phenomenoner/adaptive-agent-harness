@@ -26,6 +26,7 @@ from mcp.shared.message import SessionMessage
 
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.mcp.server import AarMcpApplication, build_server
+from aar.runtime.model_broker import ModelBrokerRegistry
 from aar.runtime.process_identity import (
     ProcessStartIdentity,
     SupervisorDiscoveryRecord,
@@ -114,6 +115,8 @@ class SupervisorService:
         programmable_backend: Literal["plain", "ipython"] = "ipython",
         transport: Literal["unix", "tcp"] | None = None,
         dispatcher_concurrency: int = 2,
+        model_broker_registry: ModelBrokerRegistry | None = None,
+        default_model_route_profile: str | None = None,
     ) -> None:
         self.runtime_home = runtime_home.resolve()
         self.database_path = (
@@ -129,6 +132,8 @@ class SupervisorService:
         self.programmable_backend = programmable_backend
         self.transport = transport or ("tcp" if os.name == "nt" else "unix")
         self.dispatcher_concurrency = dispatcher_concurrency
+        self.model_broker_registry = model_broker_registry
+        self.default_model_route_profile = default_model_route_profile
         self.application: AarMcpApplication | None = None
         self.discovery: SupervisorDiscoveryRecord | None = None
         self.process_identity: ProcessStartIdentity | None = None
@@ -175,6 +180,8 @@ class SupervisorService:
             supervisor_protocol_version=SUPERVISOR_PROTOCOL_VERSION,
             supervisor_protocol_digest=SUPERVISOR_PROTOCOL_DIGEST,
             supervisor_process_identity_digest=canonical_sha256(self.process_identity),
+            model_broker_registry=self.model_broker_registry,
+            default_model_route_profile=self.default_model_route_profile,
         )
         host = self.application.host
         self._append_lifecycle("starting", reason="ownership_acquired")

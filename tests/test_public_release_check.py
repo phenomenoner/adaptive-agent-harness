@@ -21,6 +21,8 @@ SPEC.loader.exec_module(PUBLIC_RELEASE_CHECK)
         "docs/secrets/token.txt",
         "config/credentials/provider.json",
         "artifacts/rollback/generation/manifest.json",
+        "AGENTS.md",
+        "WAL.md",
     ],
 )
 def test_public_release_guard_rejects_nested_sensitive_paths(relative: str) -> None:
@@ -60,6 +62,20 @@ def test_public_release_guard_matches_opaque_task_ids_and_local_receipts() -> No
     receipt_pattern = PUBLIC_RELEASE_CHECK.BYTE_PATTERNS["local-receipt-path"]
     local_receipt = b".aar/" + b"codex-run-summary.json"
     assert receipt_pattern.search(b"retained `" + local_receipt + b"`")
+
+
+def test_public_release_guard_rejects_internal_project_provenance() -> None:
+    pattern = PUBLIC_RELEASE_CHECK.BYTE_PATTERNS["internal-project-provenance"]
+    internal_project = (
+        b"AAR-vs-"
+        + b"prime-agent-minions/"
+        + b"benchmark-"
+        + b"plan-2026-08-12"
+    )
+    placeholder_schema = b"https://" + b"local.invalid/aar-prime/run-manifest.schema.json"
+    assert pattern.search(internal_project)
+    assert pattern.search(placeholder_schema)
+    assert not pattern.search(b"docs/MODEL-ROUTING-AND-EVALUATION.md")
 
 
 def test_public_release_guard_accepts_current_release_identity() -> None:

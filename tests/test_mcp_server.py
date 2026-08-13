@@ -16,10 +16,12 @@ from aar.asset_models import (
     AgentFingerprint,
     Episode,
 )
+from aar.broker_models import ModelRouteCatalog, ModelRouteProfile
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.mcp.models import McpMutationContext
 from aar.mcp.server import _envelope, _envelope_handle, build_server
 from aar.rlm_models import RlmJobSpec
+from aar.runtime.model_broker import ReferenceModelBroker, StaticModelBrokerRegistry
 from aar.runtime.rlm import SimulatedRlmProcessLoss
 from aar.runtime.workspace_models import ProgrammableWorkspaceHandle, WorkspaceProgramSpec
 from aar.schemas import (
@@ -213,6 +215,64 @@ def test_in_process_discovery_and_capability_fallback_are_deterministic(
                 )
         finally:
             application.close()
+
+    asyncio.run(scenario())
+
+
+def test_build_server_injects_and_projects_non_secret_model_routes(tmp_path: Path) -> None:
+    class ClosingBroker(ReferenceModelBroker):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_calls = 0
+
+        def close(self) -> None:
+            self.close_calls += 1
+            super().close()
+
+    async def scenario() -> None:
+        profile = ModelRouteProfile(
+            profile_id="owner-gateway-v1",
+            provider_driver="owner-gateway-driver-v1",
+            provider="provider",
+            model="model",
+            reasoning_effort="high",
+            max_output_tokens=128,
+        )
+        catalog = ModelRouteCatalog.issue((profile,))
+        broker = ClosingBroker()
+        registry = StaticModelBrokerRegistry(
+            catalog,
+            brokers={profile.profile_id: broker},
+        )
+        application = build_server(
+            tmp_path / "model-routes.sqlite3",
+            now_ms=lambda: NOW_MS,
+            model_broker_registry=registry,
+            default_model_route_profile=profile.profile_id,
+        )
+        try:
+            async with Client(application.server) as client:
+                capabilities = await _capabilities(client)
+                assert capabilities["model_routes"] == catalog.model_dump(mode="json")
+                assert capabilities["model_broker"] == {
+                    "configured": True,
+                    "provider_connectivity": "not_probed",
+                    "default_profile_id": profile.profile_id,
+                    "catalog_digest": catalog.catalog_digest,
+                    "route_profile_count": 1,
+                    "journal_schema_versions": [1],
+                }
+                encoded = canonical_json_bytes(
+                    {
+                        "model_routes": capabilities["model_routes"],
+                        "model_broker": capabilities["model_broker"],
+                    }
+                )
+                assert b"credential-canary" not in encoded
+                assert b"authorization" not in encoded.lower()
+        finally:
+            application.close()
+        assert broker.close_calls == 1
 
     asyncio.run(scenario())
 

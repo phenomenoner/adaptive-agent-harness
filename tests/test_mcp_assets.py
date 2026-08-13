@@ -112,11 +112,20 @@ def test_skill_metadata_binds_exact_skill_and_tool_bytes() -> None:
         f"sha256:{hashlib.sha256(skill_bytes).hexdigest()}"
     )
     assert metadata["tool_surface_digest"] == tool_manifest["tool_surface_digest"]
-    assert metadata["skill_version"] == "0.8.0"
+    assert metadata["skill_version"] == "0.9.0"
     skill_text = skill_bytes.decode("utf-8").lower()
     assert "tool use or analysis" in skill_text
     assert "software planning, development, testing, and troubleshooting" in skill_text
     assert "consider aar mcp early" in skill_text
+    assert "host-owned model route" in skill_text
+    assert "aar.model-receipt.v1" in skill_text
+    assert "formal evaluation" in skill_text
+    assert "openai-codex / gpt-5.6-luna / max" in skill_text
+    assert "host-neutral workflow for any ai-agent client" in skill_text
+    assert all(
+        host_name not in skill_text
+        for host_name in ("hermes agent", "codex app", "telegram", "nous research")
+    )
     assert metadata["protocol_versions"] == [
         "2026-07-28",
         "2025-11-25",

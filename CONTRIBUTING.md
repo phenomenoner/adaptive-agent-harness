@@ -30,7 +30,7 @@ A good pull request includes:
 - explicit unsupported or unverified boundaries;
 - documentation updates when public behavior changes.
 
-Behavior-changing work should update the relevant schema/fixture, tests, architecture or plan document, and the append-only WAL when it closes a release gate.
+Behavior-changing work should update the relevant schema or fixture, tests, architecture or roadmap document, and public release notes when it changes a supported contract.
 
 ## Translations
 

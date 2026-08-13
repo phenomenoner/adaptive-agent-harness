@@ -64,10 +64,16 @@ BYTE_PATTERNS = {
         rb"(?:receipt|summary|trace)[A-Za-z0-9._/-]*",
         re.IGNORECASE,
     ),
+    "internal-project-provenance": re.compile(
+        rb"(?:AAR-vs-"
+        rb"prime-agent-minions/benchmark-"
+        rb"plan-[0-9-]+|https://local\.invalid/)",
+        re.IGNORECASE,
+    ),
 }
 
 PROHIBITED_PATH = re.compile(
-    r"(^|/)(?:\.env(?:$|\.)|\.data(?:/|$)|\.private(?:/|$)|secrets?(?:/|$)|"
+    r"(^|/)(?:AGENTS\.md$|WAL\.md$|\.env(?:$|\.)|\.data(?:/|$)|\.private(?:/|$)|secrets?(?:/|$)|"
     r"credentials?(?:/|$)|rollback(?:/|$)|runtime-workspace(?:/|$)|"
     r"[^/]*\.(?:sqlite3?|pem|key)$)",
     re.IGNORECASE,

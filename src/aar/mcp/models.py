@@ -11,7 +11,7 @@ from aar.asset_models import (
     AdaptiveAssetDocument,
     OutcomeObservation,
 )
-from aar.broker_models import BrokerCatalog, BrokerContractSet
+from aar.broker_models import BrokerCatalog, BrokerContractSet, ModelRouteCatalog
 from aar.continuity_models import OperationContinuitySnapshotV1, OperationEventPageV1
 from aar.rlm_models import RlmJobSnapshot
 from aar.runtime.models import (
@@ -319,6 +319,37 @@ class SupervisorCapabilityProjection(StrictModel):
     process_identity_digest: Digest | None = None
 
 
+class ModelBrokerCapabilityProjection(StrictModel):
+    """Credential-free configuration health; provider connectivity is not inferred."""
+
+    configured: bool
+    provider_connectivity: Literal["not_probed"] = "not_probed"
+    default_profile_id: str | None = None
+    catalog_digest: Digest | None = None
+    route_profile_count: Annotated[int, Field(ge=0, le=64, strict=True)] = 0
+    journal_schema_versions: tuple[PositiveCounter, ...] = ()
+
+    @model_validator(mode="after")
+    def configuration_evidence_is_consistent(self) -> Self:
+        if self.configured:
+            if self.default_profile_id is None or self.catalog_digest is None:
+                raise ValueError("configured model broker requires route authority evidence")
+            if self.route_profile_count < 1 or not self.journal_schema_versions:
+                raise ValueError(
+                    "configured model broker requires bounded route and journal evidence"
+                )
+        elif any(
+            (
+                self.default_profile_id is not None,
+                self.catalog_digest is not None,
+                self.route_profile_count != 0,
+                bool(self.journal_schema_versions),
+            )
+        ):
+            raise ValueError("unconfigured model broker cannot publish route authority evidence")
+        return self
+
+
 class CapabilitiesToolResult(StrictModel):
     server_name: str
     server_now_unix_ms: PositiveCounter
@@ -334,6 +365,8 @@ class CapabilitiesToolResult(StrictModel):
     schema_versions: tuple[tuple[str, str], ...]
     schema_bundle_digest: Digest
     fixture_set_digest: Digest
+    model_routes: ModelRouteCatalog | None = None
+    model_broker: ModelBrokerCapabilityProjection
     ready: RuntimeReady
     supervisor: SupervisorCapabilityProjection
     tool_names: tuple[str, ...]

@@ -1,5 +1,5 @@
 {
-  "fixture_set_digest": "sha256:9823b46de44475ad864df1bc234d44372ffe64747228b19526098fbd52f4f1ce",
+  "fixture_set_digest": "sha256:d0b4155f148de388ae5ebdbd6ae951d094d2feb289324f68fb33a5a6c68ae020",
   "fixtures": [
     {
       "document_digest": "sha256:c552dc91ca381fa91c9e826f4f02485cc9c85668c566a5dd62770a0515b3cb8d",
@@ -17,6 +17,42 @@
       "document_digest": "sha256:b10caa1867c6d4141015413c204859b5c534030d91aed93d9bdf04f77e8c3c8a",
       "model": "capability_set",
       "path": "invalid/capability-digest-mismatch.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:04314bbfcdb0895c02422b6adacae3dddd616d72eceb059029080f59ad211b15",
+      "model": "model_route_binding",
+      "path": "invalid/model-route-binding-profile-digest-mismatch.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:ee46e8413ed4ee00dbceef3a7c21a19ff5e0cc950768c45183d1877ea78e5df5",
+      "model": "model_route_catalog",
+      "path": "invalid/model-route-catalog-digest-mismatch.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:12d196d4a53429160f2fadccd9f2f5ef8cae7353e66f6afdd90ca01f927721ad",
+      "model": "model_route_catalog",
+      "path": "invalid/model-route-catalog-duplicate-profile.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:acab9e4077d0e0ca056379de0382a5100256c7f0ffc84b6e1e0c088f0885470c",
+      "model": "model_route_receipt",
+      "path": "invalid/model-route-receipt-effective-drift.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:ea7f63274a04222828679978c7ccd936c738cdeec39434e804cc051c1238286e",
+      "model": "model_route_receipt",
+      "path": "invalid/model-route-receipt-forbidden-fallback.json",
+      "valid": false
+    },
+    {
+      "document_digest": "sha256:9efa376281fc5f30d6e99d72e2aff5eac98cccb6757a9d80ea4c6b48fae1e777",
+      "model": "model_usage_record",
+      "path": "invalid/model-usage-total-mismatch.json",
       "valid": false
     },
     {
@@ -140,6 +176,36 @@
       "valid": true
     },
     {
+      "document_digest": "sha256:fc091d219843ca1dc77834ef6e65690ca0ed2ac159558f81ceeed864c3128460",
+      "model": "model_response",
+      "path": "valid/model-response.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:7366954b4c4ec9d78fa406a0b283128d868993fc75a246eaf5e77df8cc3bad2a",
+      "model": "model_route_binding",
+      "path": "valid/model-route-binding.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:73e9a8d652642b11d0b0eac221fd7686248eea3df7cea7b7fddce67e77ae6f8b",
+      "model": "model_route_catalog",
+      "path": "valid/model-route-catalog.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:2402516ed7a1ecc0f095de35f55c967c76ddc2453e390b9658b89ce23c7acf9d",
+      "model": "model_route_receipt",
+      "path": "valid/model-route-receipt.json",
+      "valid": true
+    },
+    {
+      "document_digest": "sha256:348d242ff1ac29f98dbd8fbc924d5fbadb044d396e54501b7ec2d7b9a6de2586",
+      "model": "model_usage_record",
+      "path": "valid/model-usage-record.json",
+      "valid": true
+    },
+    {
       "document_digest": "sha256:f0c77faeb106df4abd72c9f4f8f59731cacd7bffd22a4f8d7e479b6af99ab51a",
       "model": "operation_attempt_record",
       "path": "valid/operation-attempt-record.json",
@@ -245,6 +311,9 @@
     "artifact": "aar.artifact.v1",
     "broker": "aar.broker.v1",
     "envelope": "aar.envelope.v1",
+    "model_response": "aar.model-response.v1",
+    "model_route": "aar.model-route.v1",
+    "model_usage": "aar.model-usage.v1",
     "operation_continuity": "aar.operation-continuity.v1",
     "rlm": "aar.rlm.v1",
     "runtime": "aar.runtime.v1",

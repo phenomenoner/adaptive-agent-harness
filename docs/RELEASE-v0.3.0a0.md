@@ -32,7 +32,7 @@ The public source candidate reproduced:
 - frontend replacement, supervisor loss, stale-writer, single-owner, authoritative-receipt reuse, and durable RLM scenarios.
 
 The public staging tree was rebuilt and retested before publication. Earlier native-Windows and
-installed-Hermes rows in `HOST-COMPATIBILITY.md` and `WAL.md` are maintainer-reported historical
+installed-host rows in `HOST-COMPATIBILITY.md` are maintainer-reported historical
 context: their supporting host receipts are not committed here and are not independently auditable
 from this repository.
 

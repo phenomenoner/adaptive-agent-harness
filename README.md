@@ -4,11 +4,11 @@
 
 ### Give agents a workbench — not just a bigger prompt.
 
-**Host-composed RLM + persistent IPython + durable operations + host-owned authority**
+**Host-composed RLM + persistent IPython + durable operations + receipt-backed model routing**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
+[![Release](https://img.shields.io/badge/release-v0.3.0a2-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#project-status)
 
@@ -136,6 +136,15 @@ The governing rules are deliberately simple:
 - retained handles and receipts instead of “the tool probably ran”;
 - reconciliation when a call may have started but no authoritative receipt exists.
 
+### Receipt-backed model routing
+
+- owner-authored, digest-bound route catalogs with no provider credentials in AAR state;
+- exact requested-versus-effective provider, model, and reasoning-effort receipts;
+- provider-reported token accounting, retry ordinals, and explicit fallback chains;
+- an MCP Sampling gateway that keeps the physical provider call and credentials in the host;
+- fail-closed route drift and `indeterminate` classification when a sent call loses its receipt;
+- a pinned evidence contract for controlled AAR-versus-Prime-style evaluations.
+
 ### Durable operations
 
 - stable logical operation IDs separate from attempts, workers, leases, and frontend connections;
@@ -190,7 +199,7 @@ See [Why RLM + IPython](docs/WHY-RLM-AND-IPYTHON.md) for the deeper design ratio
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a2"
 ```
 
 ### Codex App setup
@@ -226,6 +235,7 @@ Detailed install and host notes:
 - [Architecture](ARCHITECTURE.md)
 - [Operation skill](skills/aar-operations/SKILL.md)
 - [Technical verification status](TECHNICAL-STATUS.md)
+- [Model routing and fair evaluation](docs/MODEL-ROUTING-AND-EVALUATION.md)
 
 ---
 
@@ -241,7 +251,8 @@ Host / orchestrator
           v
 Adaptive Agent Harness
   ├─ operation registry + event log + receipts
-  ├─ bounded RLM engine + broker journal
+  ├─ bounded RLM engine + durable model broker journal
+  ├─ route catalog + owner gateway + route/usage receipts
   ├─ programmable workspace manager
   ├─ durable supervisor + exact worker identity
   ├─ checkpoints, artifacts, assets, export/import
@@ -257,14 +268,20 @@ The MCP frontend is intentionally replaceable. It does not own the continuity da
 
 ## Project status
 
-Current public alpha: **`0.3.0a1`**.
+Current public alpha: **`0.3.0a2`**.
+
+This release adds a durable production-model boundary without turning AAR into a credential store or
+provider proxy. A host can bind one allowlisted route, perform the physical call, and return an
+attested route and usage receipt. The public evaluation adapter accepts only the exact
+`openai-codex / gpt-5.6-luna / max` route, provider-reported usage, no fallback, and no unaccounted
+retry. It defines admissible evidence; it does not publish a benchmark score or winner.
 
 Reproduced from this public candidate:
 
 - Python 3.11 through 3.14 coverage;
 - 30-tool MCP v7 surface;
 - additive SQLite schema through v5;
-- full repository run: **249 passed, 1 platform-gated skip**;
+- full repository run: **326 passed, 1 platform-gated skip**;
 - a clean exact-wheel supervisor/frontend probe on Linux/WSL;
 - durable supervisor, frontend replacement, process-loss, stale-writer, receipt-reuse, and policy-bound RLM successor scenarios.
 
@@ -281,7 +298,9 @@ Still open:
 - generic exactly-once effects;
 - package-registry publication and stable API guarantees.
 
-Read [TECHNICAL-STATUS.md](TECHNICAL-STATUS.md), [HOST-COMPATIBILITY.md](HOST-COMPATIBILITY.md), and [WAL.md](WAL.md) before making production claims.
+Read [TECHNICAL-STATUS.md](TECHNICAL-STATUS.md), [HOST-COMPATIBILITY.md](HOST-COMPATIBILITY.md), and
+[Model routing and fair evaluation](docs/MODEL-ROUTING-AND-EVALUATION.md) before making production
+claims.
 
 ---
 

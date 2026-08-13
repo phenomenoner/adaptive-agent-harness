@@ -10,6 +10,7 @@ import importlib.metadata
 import importlib.resources
 import json
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -22,7 +23,7 @@ from pydantic import JsonValue
 
 from aar.asset_models import AdaptiveAssetBundle, AdaptiveAssetRef, AssetKind
 from aar.assets import AssetConflict, AssetReferenceMissing
-from aar.broker_models import BrokerMethodName
+from aar.broker_models import BrokerMethodName, ModelRouteCatalog, ModelRouteProfile
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.mcp.models import (
     ArtifactResolveToolResult,
@@ -34,6 +35,7 @@ from aar.mcp.models import (
     CapabilitiesToolResult,
     CheckpointDescribeToolResult,
     IdentityValue,
+    ModelBrokerCapabilityProjection,
     OperationEventsToolResult,
     OperationToolResult,
     ProgramWorkspaceCheckpointToolResult,
@@ -57,6 +59,8 @@ from aar.mcp.models import McpMutationContextArgument as McpMutationContext
 from aar.mcp.models import McpReadContext as McpReadContextModel
 from aar.mcp.models import McpReadContextArgument as McpReadContext
 from aar.mcp.models import McpRlmMutationContextArgument as McpRlmMutationContext
+from aar.providers.gateway import GatewayDriverManifest, OwnerGatewayModelBroker
+from aar.providers.mcp_sampling import McpSamplingGatewayTransport
 from aar.rlm_models import RlmJobSpec
 from aar.runtime.brokers import (
     BrokerBudgetExceeded,
@@ -65,6 +69,7 @@ from aar.runtime.brokers import (
     BrokerGrantDenied,
 )
 from aar.runtime.ipython_backend import WorkspaceWorkerLost, WorkspaceWorkerProtocolError
+from aar.runtime.model_broker import ModelBrokerRegistry, StaticModelBrokerRegistry
 from aar.runtime.models import WorkspaceExecuteSpec, WorkspaceHandle
 from aar.runtime.ownership import RuntimeOwnershipLock
 from aar.runtime.reference_host import (
@@ -129,9 +134,9 @@ MCP_PROTOCOL_VERSIONS = (
     *reversed(MODERN_PROTOCOL_VERSIONS),
     *reversed(HANDSHAKE_PROTOCOL_VERSIONS),
 )
-OPERATION_SKILL_VERSION = "0.8.0"
-SCHEMA_BUNDLE_DIGEST = "sha256:a12c7a084236d474fc0a18f2d718b9733472b4f626bc0ff22cd57aafab3c98cd"
-FIXTURE_SET_DIGEST = "sha256:9823b46de44475ad864df1bc234d44372ffe64747228b19526098fbd52f4f1ce"
+OPERATION_SKILL_VERSION = "0.9.0"
+SCHEMA_BUNDLE_DIGEST = "sha256:6aea00d8ad6dfd8f867421a11c92f0f60a7e200d59622255d38983676e3f2e5e"
+FIXTURE_SET_DIGEST = "sha256:d0b4155f148de388ae5ebdbd6ae951d094d2feb289324f68fb33a5a6c68ae020"
 SERVER_INSTRUCTIONS = (
     "Call aar_capabilities first. For reference-host mutations, call aar_reference_context and "
     "copy its returned context unchanged. Every stateful public tool requires the outer argument "
@@ -620,6 +625,41 @@ async def tool_surface_manifest(server: MCPServer) -> dict[str, Any]:
     return {**core, "tool_surface_digest": canonical_sha256(core)}
 
 
+def hermes_mcp_sampling_luna_max_registry(
+    *,
+    now_ms=None,
+) -> tuple[StaticModelBrokerRegistry, McpSamplingGatewayTransport, str]:
+    """Build the explicit owner-controlled Hermes Luna route for MCP stdio."""
+
+    profile = ModelRouteProfile(
+        profile_id="hermes-luna-max-v1",
+        provider_driver="hermes-mcp-sampling-v1",
+        provider="openai-codex",
+        model="gpt-5.6-luna",
+        reasoning_effort="max",
+        max_output_tokens=8_192,
+        fallback_policy="none",
+        cache_policy="disabled",
+    )
+    clock = now_ms or (lambda: time.time_ns() // 1_000_000)
+    transport = McpSamplingGatewayTransport(now_ms=clock)
+    broker = OwnerGatewayModelBroker(
+        manifest=GatewayDriverManifest(
+            driver_id=profile.provider_driver,
+            driver_version="1.0.0",
+            lookup_supported=False,
+            cancellation_supported=True,
+        ),
+        transport=transport,
+        credential_resolver=lambda _binding: b"mcp-client-owned-authority",
+    )
+    registry = StaticModelBrokerRegistry(
+        ModelRouteCatalog.issue((profile,)),
+        brokers={profile.profile_id: broker},
+    )
+    return registry, transport, profile.profile_id
+
+
 def build_server(
     database_path: Path,
     *,
@@ -634,6 +674,9 @@ def build_server(
     supervisor_protocol_version: str | None = None,
     supervisor_protocol_digest: str | None = None,
     supervisor_process_identity_digest: str | None = None,
+    model_broker_registry: ModelBrokerRegistry | None = None,
+    default_model_route_profile: str | None = None,
+    mcp_sampling_transport: McpSamplingGatewayTransport | None = None,
 ) -> AarMcpApplication:
     database_path = database_path.resolve()
     database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -644,6 +687,8 @@ def build_server(
             programmable_backend=programmable_backend,
             enable_durable_dispatch=enable_durable_dispatch,
             dispatcher_concurrency=dispatcher_concurrency,
+            model_broker_registry=model_broker_registry,
+            default_model_route_profile=default_model_route_profile,
             **({} if now_ms is None else {"now_ms": now_ms}),
         )
     except BaseException:
@@ -678,6 +723,26 @@ def build_server(
         negotiated_protocol_version = request.protocol_version
         if negotiated_protocol_version is None:  # pragma: no cover
             raise RuntimeError("MCP request did not expose a negotiated protocol version")
+        model_routes = (
+            None
+            if host.model_broker_registry is None
+            else host.model_broker_registry.describe()
+        )
+        model_broker = (
+            ModelBrokerCapabilityProjection(configured=False)
+            if model_routes is None
+            else ModelBrokerCapabilityProjection(
+                configured=True,
+                default_profile_id=host.default_model_route_profile,
+                catalog_digest=model_routes.catalog_digest,
+                route_profile_count=len(model_routes.profiles),
+                journal_schema_versions=(
+                    ()
+                    if host.model_executions is None
+                    else host.model_executions.schema_versions()
+                ),
+            )
+        )
         return CapabilitiesToolResult(
             server_name=SERVER_NAME,
             server_now_unix_ms=host.now_ms(),
@@ -693,6 +758,8 @@ def build_server(
             schema_versions=tuple(sorted(SCHEMA_VERSIONS.items())),
             schema_bundle_digest=SCHEMA_BUNDLE_DIGEST,
             fixture_set_digest=FIXTURE_SET_DIGEST,
+            model_routes=model_routes,
+            model_broker=model_broker,
             ready=host.ready(),
             supervisor=supervisor_projection,
             tool_names=tuple(tool["name"] for tool in manifest["tools"]),
@@ -1556,25 +1623,68 @@ def build_server(
         annotations=MUTATING_IDEMPOTENT,
     )
     async def aar_rlm_execute(
+        request: Context,
         context: McpRlmMutationContext,
         query: str,
         strategy: Literal["baseline", "evidence_synthesis"],
         max_steps: int,
         start_only: bool = False,
     ) -> OperationToolResult:
+        operation: OperationRef | None = None
+        sampling_generation: object | None = None
         try:
+            if mcp_sampling_transport is not None:
+                capabilities = request.client_capabilities
+                if capabilities is None or capabilities.sampling is None:
+                    raise ReferenceHostError("MCP client did not authorize sampling")
+                if start_only:
+                    raise ReferenceHostError(
+                        "start_only is unavailable for an operation-scoped MCP sampling route"
+                    )
             spec = RlmJobSpec(query=query, strategy=strategy, max_steps=max_steps)
             envelope = _rlm_envelope(host, context, canonical_sha256(spec))
-            record = host.submit_rlm_durable(envelope, spec)
+            loop = asyncio.get_running_loop()
+
+            def bind_sampling(candidate: OperationRef) -> None:
+                nonlocal sampling_generation
+                assert mcp_sampling_transport is not None
+                sampling_generation = mcp_sampling_transport.bind(
+                    candidate,
+                    session=request.session,
+                    loop=loop,
+                    related_request_id=request.request_id,
+                )
+
+            record = host.submit_rlm_durable(
+                envelope,
+                spec,
+                **(
+                    {"before_dispatch": bind_sampling}
+                    if mcp_sampling_transport is not None
+                    else {}
+                ),
+            )
+            operation = record.operation
             if record.state is OperationState.ACCEPTED and not start_only:
                 timeout_s = max(
                     0.0,
                     (envelope.deadline_unix_ms - host.now_ms()) / 1000,
                 )
-                record = host.wait_rlm(record.operation, timeout_s=timeout_s)
+                record = await asyncio.to_thread(
+                    host.wait_rlm,
+                    record.operation,
+                    timeout_s=timeout_s,
+                )
             return _operation_result(record, host=host)
         except Exception as error:
-            return OperationToolResult(failure=_failure(error))
+            return OperationToolResult(failure=_failure(error, operation=operation))
+        finally:
+            if (
+                mcp_sampling_transport is not None
+                and operation is not None
+                and sampling_generation is not None
+            ):
+                mcp_sampling_transport.unbind(operation, sampling_generation)
 
     @server.tool(
         name="aar_rlm_status",
@@ -1899,7 +2009,19 @@ def main(argv: list[str] | None = None) -> int:
         choices=("plain", "ipython"),
         default="ipython",
     )
+    parser.add_argument(
+        "--hermes-mcp-sampling-luna-max",
+        action="store_true",
+        help=(
+            "Enable the explicit owner-controlled openai-codex/gpt-5.6-luna/max "
+            "MCP Sampling route; embedded stdio reference-host mode only."
+        ),
+    )
     args = parser.parse_args(argv)
+    if args.hermes_mcp_sampling_luna_max and not (
+        args.embedded_reference_host or args.database is not None
+    ):
+        parser.error("Hermes MCP Sampling requires embedded reference-host mode")
     if not args.embedded_reference_host and args.database is None:
         from aar.runtime.supervisor_client import main as supervisor_client_main
 
@@ -1909,9 +2031,19 @@ def main(argv: list[str] | None = None) -> int:
         return supervisor_client_main(client_args)
     if args.runtime_home is not None:
         parser.error("--runtime-home cannot be combined with embedded reference-host mode")
+    model_registry = None
+    sampling_transport = None
+    default_profile = None
+    if args.hermes_mcp_sampling_luna_max:
+        model_registry, sampling_transport, default_profile = (
+            hermes_mcp_sampling_luna_max_registry()
+        )
     application = build_server(
         _default_database() if args.database is None else args.database,
         programmable_backend=args.programmable_backend,
+        model_broker_registry=model_registry,
+        default_model_route_profile=default_profile,
+        mcp_sampling_transport=sampling_transport,
     )
     try:
         application.server.run(transport="stdio")

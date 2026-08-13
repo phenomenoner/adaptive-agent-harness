@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/phenomenoner/adaptive-agent-harness/blob/v0.3.0a2/src/aar/integrations/contracts/run-manifest.schema.json",
+  "title": "AAR vs Prime run manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "run_id", "case_id", "arm", "track", "attempt",
+    "contender", "fixture", "oracle", "route", "budgets", "status"
+  ],
+  "properties": {
+    "schema_version": {"const": "aar-prime.run-manifest.v1"},
+    "run_id": {"type": "string", "pattern": "^[A-Za-z0-9._-]{8,128}$"},
+    "case_id": {"enum": ["S01", "S02", "S03", "S04", "X-AAR-01", "X-PRIME-01"]},
+    "arm": {"enum": ["aar", "prime"]},
+    "track": {"enum": ["paired", "native", "architecture-probe"]},
+    "attempt": {"type": "integer", "minimum": 1},
+    "order_seed": {"type": "string"},
+    "contender": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "launch_digest"],
+      "properties": {
+        "name": {"type": "string"},
+        "version": {"type": "string"},
+        "adapter_version": {"type": ["string", "null"]},
+        "launch_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "tool_policy_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "fixture": {"$ref": "#/$defs/digestRef"},
+    "oracle": {"$ref": "#/$defs/digestRef"},
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requested_provider", "requested_model", "requested_effort",
+        "effective_provider", "effective_model", "effective_effort",
+        "route_policy_digest", "proof_status"
+      ],
+      "properties": {
+        "requested_provider": {"const": "openai-codex"},
+        "requested_model": {"const": "gpt-5.6-luna"},
+        "requested_effort": {"const": "max"},
+        "effective_provider": {"const": "openai-codex"},
+        "effective_model": {"const": "gpt-5.6-luna"},
+        "effective_effort": {"const": "max"},
+        "route_policy_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "proof_status": {"const": "verified"},
+        "cache_scope": {"type": ["string", "null"]}
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wall_time_seconds", "provider_total_tokens"],
+      "properties": {
+        "wall_time_seconds": {"type": "integer", "minimum": 1, "maximum": 1800},
+        "provider_total_tokens": {"type": "integer", "minimum": 1, "maximum": 80000},
+        "model_requests": {"type": ["integer", "null"], "minimum": 1}
+      }
+    },
+    "status": {
+      "enum": ["planned", "running", "succeeded", "failed", "timed_out", "cancelled", "indeterminate", "inadmissible"]
+    },
+    "started_at": {"type": ["string", "null"], "format": "date-time"},
+    "completed_at": {"type": ["string", "null"], "format": "date-time"},
+    "artifact_manifest": {"anyOf": [{"$ref": "#/$defs/digestRef"}, {"type": "null"}]},
+    "usage_ledger": {"anyOf": [{"$ref": "#/$defs/digestRef"}, {"type": "null"}]},
+    "inadmissible_reason": {"type": ["string", "null"], "maxLength": 512}
+  },
+  "$defs": {
+    "digestRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

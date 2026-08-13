@@ -1,191 +1,256 @@
-# Adaptive Agent Runtime Architecture
+# Adaptive Agent Harness Architecture
 
-**Status:** AR-0 through AR-3 locally verified; AR-4 and later managed-host layers remain gated
-**Updated:** 2026-08-09
+Adaptive Agent Harness (AAR) is a contract-first runtime for bounded, durable agent operations. It separates computation from authority: AAR can execute, persist, reconcile, evaluate, and propose; the embedding host retains credentials, policy, external effects, activation, and final delivery.
 
-## 1. Architectural split
+> AAR computes and proposes. The host authorizes and delivers.
+
+## System shape
 
 ```text
-Codex App      Hermes Agent       AHC
-    |               |              |
-    +------ MCP adapters ---------+|  public EXECUTE seam
-                                    |
-                            native AHC adapter
-                                    |  stronger managed seam
-                                    v
-                    +---------------------------+
-                    | AAR supervisor            |
-                    | schemas, operations,      |
-                    | grants, revisions, trace  |
-                    +-------------+-------------+
-                                  |
-                         private framed IPC
-                     +------------+------------+
-                     |                         |
-              workspace workers       adaptation workers
-              plain Python/IPython     assets/eval/proposals
-                     |
-                     v
-              typed broker proxy -> host-owned capabilities
++-------------------- AI-agent host --------------------+
+| identity · sessions · policy · credentials · delivery |
+|                                                       |
+| Codex / Hermes / direct host adapter                  |
++--------------------------+----------------------------+
+                           |
+                 MCP stdio or direct API
+                           |
++--------------------------v----------------------------+
+| Replaceable AAR frontend                              |
+| schema validation · request mapping · bounded output  |
++--------------------------+----------------------------+
+                           |
+       authenticated owner-private supervisor protocol
+                           |
++--------------------------v----------------------------+
+| Durable AAR supervisor                                |
+| operation registry · dispatcher · leases · receipts   |
+| recovery decisions · broker routing · worker control  |
++--------+-----------------+-------------------+---------+
+         |                 |                   |
++--------v-------+ +-------v--------+ +--------v---------+
+| Workspace     | | RLM and broker | | Adaptive assets |
+| workers       | | execution      | | and proposals   |
+| Python/IPython| | model/child/...| | import/export   |
++---------------+ +-------+--------+ +------------------+
+                          |
+                  host-owned gateways
+                          |
+                 provider or effect owner
 ```
 
-There is one semantic contract and more than one adapter. MCP messages, direct SDK calls, and any later native AHC transport must map to the same request envelope, operation state, generation/revision checks, failure categories, and artifact references.
+There is one semantic contract and several adapters. MCP calls, direct Python calls, and future native integrations must preserve the same identities, budgets, operation states, receipts, failures, and reconciliation rules.
 
-## 2. Why MCP is first but not everything
+## Authority boundary
 
-MCP is the practical common denominator for Codex App and Hermes. It provides a standard way to discover and call tools and, depending on the client/protocol era, structured results, progress, cancellation, resources, and long-running task mechanisms.
+AAR owns:
 
-It does not prove the host's identity namespace, durable admission, budget authority, external effects, child ownership, serving activation, or final delivery. AAR therefore treats MCP as an adapter with an explicit capability ceiling.
+- contract validation and canonicalization;
+- durable operation admission and lifecycle;
+- bounded workspace and RLM execution;
+- immutable adaptive assets;
+- trace, receipt, usage, and uncertainty records;
+- evaluation and proposal logic;
+- deterministic candidate preparation.
 
-`aar-codex-setup` is a host bootstrap adapter, not a second runtime contract. It locates the
-marketplace bundled in the installed wheel, verifies the installed tool-environment `aar-mcp`
-through one temporary programmable-worker dependency preflight, and installs the plugin as the
-single MCP transport authority. A matching legacy global registration is removed; a different
-global server with the same name fails closed for operator review. The bootstrap does not change
-tool semantics, grants, activation, effects, or delivery authority. Full cross-version and
-repository-wide verification stays outside the general-user installation path.
+The host owns:
 
-The current MCP specification has a modern per-request version/capability model, while earlier clients use an initialization handshake. AAR will measure target-client behavior and publish the exact supported matrix instead of binding core types to either era.
+- principal, lane, and session identity;
+- grants, budgets, policy, and admission authority;
+- provider credentials and physical provider calls;
+- authoritative external effects;
+- activation, promotion, rollback authorization, and final delivery.
 
-## 3. Runtime roles
+Process co-location does not transfer authority. An MCP annotation, visible skill, successful model response, or prepared candidate is not proof that an effect was authorized or delivered.
 
-| Role | Responsibility |
-|---|---|
-| Runtime supervisor | validate requests, own operation lifecycle, supervise workers, route brokers, reconcile uncertainty |
-| Workspace backend | execute and inspect code within one workspace generation |
-| MCP adapter | map MCP discovery/tools/resources/results to core operations without adding authority |
-| Direct host adapter | embed or call the same operations without MCP-specific types |
-| RLM engine | bounded model-program state machine and trace |
-| Asset service | immutable revisions, manifests, canonicalization, migrations |
-| Adaptation service | evidence ingest, evaluation, abstention, and shadow proposals |
-| Materializer | deterministic candidate and rollback preparation |
-| Runtime host | identity, grants, brokers, authoritative evidence, activation, and delivery |
+## Public contract
 
-Sharing a process never transfers authority between roles.
+The public narrow waist consists of:
 
-## 4. Operation model
+- strict Pydantic models;
+- generated JSON Schemas;
+- deterministic canonical JSON and content digests;
+- valid and invalid conformance fixtures;
+- opaque typed references rather than host-internal objects;
+- explicit capability, grant, budget, deadline, generation, revision, and idempotency fields;
+- structured failures and explicit indeterminate outcomes.
 
-Every accepted operation binds:
+Unknown fields fail closed. Version identifiers are independent by domain so one schema family can evolve without pretending the entire system changed atomically.
 
-- AAR envelope and payload-schema versions;
-- request id and idempotency key;
-- opaque host, principal, lane, and session references;
-- runtime and workspace generations;
-- expected workspace revision where applicable;
-- selected capability digest;
+## Durable operation lifecycle
+
+Every admitted operation binds:
+
+- schema and capability versions;
+- request and idempotency identity;
+- host, principal, lane, and session references;
+- runtime and relevant workspace generations;
+- expected revision where applicable;
 - deadline, grants, and budgets;
-- trace id and parent operation;
-- input digest and terminal classification.
+- input digest and trace relationship.
 
-State-changing intent is persisted before acceptance is acknowledged. Reusing an idempotency key with the same input digest returns the known state; a different digest is a conflict.
+State-changing intent is persisted before acceptance is acknowledged. Reusing an idempotency key with the same input digest returns known state; reusing it with different input is a conflict.
 
-Transport loss produces `indeterminate` when the effect cannot be proven. Retry waits for reconciliation rather than guessing that work failed.
+The registry distinguishes:
 
-## 5. MCP surface
+- accepted but not yet claimed;
+- running attempts with leases;
+- succeeded, failed, and cancelled terminal states;
+- indeterminate outcomes requiring reconciliation;
+- quarantined evidence that cannot be trusted or replayed.
 
-The AR-0 surface should remain deliberately small:
+Transport loss is not failure evidence. If an authoritative outcome cannot be proven, AAR preserves uncertainty instead of inventing success, failure, or a safe retry.
 
-- `aar_capabilities`
-- `aar_workspace_create`
-- `aar_workspace_attach`
-- `aar_workspace_execute`
-- `aar_workspace_inspect`
-- `aar_operation_status`
-- `aar_operation_cancel`
-- `aar_operation_reconcile`
-- `aar_checkpoint_describe`
-- `aar_artifact_resolve`
+## Supervisor and frontend lifecycle
 
-Names are provisional until schema fixtures freeze. Mutating tools carry explicit operation, generation, revision, deadline, and grant fields. Large outputs return artifact references. Long-running work returns an operation handle unless the negotiated client task mechanism is both supported and covered by conformance.
+One durable supervisor owns:
 
-MCP annotations, instructions, client/server self-identification, and tool catalog state are untrusted metadata for authorization purposes. The adapter exposes only the capabilities permitted by the host profile and still validates each call.
+- runtime and dispatcher generations;
+- operation and attempt claims;
+- worker processes;
+- leases and cancellation intent;
+- predecessor recovery;
+- broker journals and reconciliation decisions.
 
-### Operation guidance layers
+MCP frontends are replaceable clients of that supervisor. They attach through a signed discovery record and owner-private authenticated transport. A frontend exit does not imply operation cancellation, and a new frontend can read durable status and events.
 
-AAR ships three related but distinct surfaces:
+The supervisor validates native process identity rather than trusting a PID alone. Stale discovery, duplicate ownership, late writes, generation drift, malformed private frames, and oversized payloads fail closed.
 
-1. **Tool schemas:** machine-validated input/output contracts for each MCP operation.
-2. **Server instructions:** a short, self-contained statement of cross-tool constraints, authority limits, and safe defaults.
-3. **Bundled `aar-operations` skill:** the full agent-facing workflow for capability discovery, workspace lifecycle, long operations, cancellation/reconciliation, artifacts, and common failure recovery.
+## MCP surface
 
-The skill does not grant access and cannot repair missing host capabilities. Host bundles may adapt installation metadata, but the canonical skill bytes or a declared semantic translation must be versioned and digest-bound to the same MCP surface. A visible or installed skill is configuration evidence only; compatibility requires an executed guided workflow.
+`v0.3.0a2` exposes 30 local-stdio tools grouped by responsibility:
 
-## 6. Workspace boundary
+- capability and reference-context discovery;
+- deterministic reference workspace lifecycle;
+- programmable workspace lifecycle;
+- immutable adaptive asset lifecycle;
+- bounded RLM submission and status;
+- broker catalog and method schemas;
+- operation status, events, cancellation, and reconciliation;
+- checkpoint capability description;
+- bounded artifact resolution.
 
-`WorkspaceBackend` provides:
+Large outputs return artifact references rather than unbounded inline payloads. Long-running operations return durable handles; callers inspect events and status instead of holding one transport open indefinitely.
 
-```text
-create(spec) -> handle
-attach(handle, expected_generation, expected_revision) -> handle
-execute(handle, spec) -> event stream + result
-inspect(handle, query) -> snapshot
-interrupt(handle, operation) -> result
-checkpoint(handle, policy) -> manifest
-restore(checkpoint, spec) -> handle
-health(handle) -> health
-reconcile(handle, observed_revision) -> report
-close(handle, reason) -> result
-```
+MCP is an interoperability adapter, not the security authority. The server validates every call even if a host claims it has already approved the tool.
 
-The first deterministic backend is plain Python. The production interactive backend is IPython in a separately supervised worker. A live namespace is scoped to one generation and is never the sole durability record.
+## Agent guidance
 
-Checkpoint formats are explicit and portable for a conservative supported-value subset. Arbitrary pickle data is not the portable recovery format.
+AAR ships three related layers:
 
-The default package declares IPython, NumPy, and pandas so a fresh wheel installation provides the
-same baseline analysis environment on every supported Python version. Availability does not make
-NumPy arrays or pandas objects portable: callers must convert durable state to the declared JSON
-subset, and checkpoint manifests report remaining live objects as exclusions.
+1. **Tool schemas** define machine-validated inputs and outputs.
+2. **Server instructions** provide concise cross-tool constraints.
+3. **`aar-operations` skill** teaches the complete host-neutral workflow.
 
-## 7. Broker boundary
+The canonical skill uses only public `aar_*` tools. Generated Codex and Hermes copies must be byte-identical; host packaging may explain installation but may not fork operation semantics or expand authority.
 
-Model-written code can receive a typed facade such as:
+## Programmable workspaces
 
-```text
-aar.model.request(...)
-aar.agents.submit(...)
-aar.agents.status(...)
-aar.artifacts.put(...)
-aar.artifacts.read(...)
-aar.effects.propose(...)
-aar.evidence.query(...)
-aar.context.capabilities()
-```
+Workspace handles bind:
 
-The facade contains no provider credentials or host objects. Calls carry the parent operation, grant, deadline, budget, and idempotency context. The host's receipt is authoritative.
+- workspace and session identity;
+- backend kind and version;
+- backend capability digest;
+- runtime and workspace generations;
+- revision;
+- supported checkpoint formats and features.
 
-Codex and Hermes initial profiles need not expose all brokers. Missing capabilities must remain unavailable and visible in compatibility metadata. AHC can expose stronger brokers once its integration gates pass.
+The plain backend provides deterministic conformance behavior. The IPython backend provides persistent interactive Python with packaged NumPy and pandas support.
 
-## 8. Persistence
+Checkpoint manifests contain portable JSON-subset values, explicit exclusions, source identity, environment fingerprint, artifact references, and content digests. Restore creates a new generation. AAR does not claim to serialize arbitrary modules, file handles, sockets, generators, native state, or process stacks.
 
-Initial persistence uses:
+A programmable workspace is not a security sandbox. Multi-tenant or hostile execution requires a separate host isolation boundary.
 
-1. SQLite metadata in WAL mode for runtime generations, workspace/operation state, idempotency keys, checkpoint manifests, and reconciliation state.
-2. Content-addressed artifacts for code units, bounded outputs, checkpoints, traces, assets, and later candidate/rollback bundles.
+## Brokered RLM execution
 
-The metadata store does not contain arbitrary live Python objects. Each stored artifact has an explicit media type, size, digest, and compatibility metadata.
+RLM jobs are persisted state machines rather than hidden synchronous loops. They bind:
 
-## 9. Security posture
+- strategy and session;
+- outer operation and execution attempts;
+- cumulative budgets and deadlines;
+- typed broker grants;
+- step inputs, outputs, artifacts, and traces;
+- cancellation and recovery policy;
+- authoritative receipts.
 
-- Model-written code is untrusted.
-- Process isolation is containment, not authorization.
-- Grants are deny-by-default and scoped.
-- Provider credentials stay in the host.
-- Filesystem, subprocess, network, native extensions, and dynamic imports require backend policy.
-- Traces and artifacts have redaction and size limits.
-- Deserialization validates media type, schema, size, and digest.
-- A runtime crash cannot turn a pending effect into success.
-- Unsupported enforcement fails or is reported; it never silently degrades.
+Broker domains remain distinct:
 
-## 10. Decision checkpoints
+- model requests;
+- retained subagents;
+- proposal-only external effects;
+- content-addressed artifacts;
+- evidence retrieval.
 
-The following stay open until executable spikes produce evidence:
+A recovered job may reuse an authoritative committed receipt. An unresolved call remains indeterminate; it is not replayed merely because a frontend or worker disappeared.
 
-- exact Python build/package tool;
-- MCP SDK choice and its modern/legacy era support;
-- exact operation-skill packaging for Codex App and Hermes without duplicating workflow semantics;
-- whether one server process owns one or many workspaces for each host profile;
-- embedded IPython shell versus ipykernel-managed worker;
-- Windows process containment and resource enforcement details;
-- whether AHC requires a native transport for every managed operation or only a strict subset.
+## Receipt-backed model routing
 
-These are bounded implementation decisions, not reasons to weaken the stable schema or authority boundary.
+The model broker uses a host-authored, digest-bound route catalog. An admitted route profile freezes:
+
+- driver and provider;
+- request model and reasoning effort;
+- output-token bound;
+- fallback policy;
+- cache policy;
+- provider metadata constraints.
+
+Model-authored code cannot provide credentials, endpoint URLs, arbitrary model names, or alternate provider selectors.
+
+The first owner gateway uses MCP Sampling as a bidirectional back-channel. The MCP client performs the physical provider call and returns `aar.model-receipt.v1` metadata. AAR compares requested and effective provider, request model, response model, reasoning effort, API mode, retry ordinal, fallback chain, and provider-reported usage before committing the result.
+
+Under the strict `openai-codex / gpt-5.6-luna / max` profile:
+
+- exactly one physical request is permitted;
+- retry ordinal must be zero;
+- fallback must be empty;
+- provider usage must be present and internally consistent;
+- route drift or missing receipt evidence fails closed.
+
+A post-send timeout, cancellation race, disconnect, or ownership loss remains indeterminate unless an authoritative receipt resolves it. See [Receipt-backed model routing and fair evaluation](docs/MODEL-ROUTING-AND-EVALUATION.md).
+
+## Adaptive assets and materialization
+
+Adaptive assets are immutable, typed, and content-addressed. Manifests bind dependencies, schema versions, and body digests. Export is deterministic and dependency-closed; import validates the full bundle before mutation.
+
+Outcomes are explicit. Missing outcome evidence remains unknown rather than being inferred from absence.
+
+Materialization is prepare-only in AAR. It can create a deterministic candidate and rollback description, but activation remains a host-authorized operation outside the runtime.
+
+## Failure and recovery principles
+
+AAR uses several rules consistently:
+
+1. **Persist intent before dispatch.**
+2. **Fence writes by generation, attempt, lease, and revision.**
+3. **Treat transport loss as uncertainty, not failure.**
+4. **Reconcile before replay.**
+5. **Reuse authoritative receipts; reject malformed or conflicting evidence.**
+6. **Keep credentials and external authority outside AAR.**
+7. **Return bounded artifacts and event pages.**
+8. **Prefer explicit unsupported results over silent fallback.**
+
+These rules preserve changeability: providers, hosts, transports, workers, and storage implementations may change without changing the meaning of an accepted operation.
+
+## Deployment boundary
+
+Installing the package supplies executables and generated profiles. It does not:
+
+- create an operating-system service;
+- choose a runtime-home directory;
+- register a host automatically;
+- configure provider credentials;
+- authorize inference or external effects;
+- activate a candidate;
+- publish or deliver user-visible output.
+
+A deployment is active only after the installed package identity, supervisor identity, runtime generation, fresh frontend connection, tool surface, and relevant receipts have been read back.
+
+## Known architectural limits
+
+- MCP Sampling is deprecated in protocol revision `2026-07-28`; a replacement host-owned broker transport is required.
+- There is no portable provider lookup API for every post-send uncertainty.
+- The reference host is an executable conformance implementation, not a multi-tenant security boundary.
+- Exactly-once behavior is claimed only where authoritative state or receipts prove it.
+- Managed-host admission, external-effect execution, activation, and final delivery require separate host integrations.
+
+See [Technical Status](TECHNICAL-STATUS.md), [Host Compatibility](HOST-COMPATIBILITY.md), and the [Development Roadmap](DEVELOPMENT-PLAN.md) for the current public support boundary.

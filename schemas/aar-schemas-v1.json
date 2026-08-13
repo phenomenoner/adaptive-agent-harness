@@ -1,11 +1,14 @@
 {
-  "bundle_digest": "sha256:a12c7a084236d474fc0a18f2d718b9733472b4f626bc0ff22cd57aafab3c98cd",
-  "package_version": "0.3.0a1",
+  "bundle_digest": "sha256:6aea00d8ad6dfd8f867421a11c92f0f60a7e200d59622255d38983676e3f2e5e",
+  "package_version": "0.3.0a2",
   "schema_versions": {
     "adaptive_asset": "aar.adaptive-asset.v1",
     "artifact": "aar.artifact.v1",
     "broker": "aar.broker.v1",
     "envelope": "aar.envelope.v1",
+    "model_response": "aar.model-response.v1",
+    "model_route": "aar.model-route.v1",
+    "model_usage": "aar.model-usage.v1",
     "operation_continuity": "aar.operation-continuity.v1",
     "rlm": "aar.rlm.v1",
     "runtime": "aar.runtime.v1",
@@ -2273,6 +2276,7 @@
         "state": {
           "enum": [
             "started",
+            "rejected_before_send",
             "succeeded",
             "failed"
           ],
@@ -3764,6 +3768,1046 @@
         "prepares_rollback"
       ],
       "title": "MaterializerDescriptor",
+      "type": "object"
+    },
+    "model_response": {
+      "$defs": {
+        "EffectiveModelRoute": {
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Model",
+              "type": "string"
+            },
+            "provider": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Provider",
+              "type": "string"
+            },
+            "provider_driver": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Provider Driver",
+              "type": "string"
+            },
+            "reasoning_effort": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reasoning Effort"
+            },
+            "schema_version": {
+              "const": "aar.model-route.v1",
+              "default": "aar.model-route.v1",
+              "title": "Schema Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "provider_driver",
+            "provider",
+            "model"
+          ],
+          "title": "EffectiveModelRoute",
+          "type": "object"
+        },
+        "ModelRouteBinding": {
+          "additionalProperties": false,
+          "description": "Admission-time immutable binding to one exact catalog profile.",
+          "properties": {
+            "cache_policy": {
+              "enum": [
+                "disabled",
+                "run-scoped",
+                "provider-managed"
+              ],
+              "title": "Cache Policy",
+              "type": "string"
+            },
+            "catalog_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "title": "Catalog Digest",
+              "type": "string"
+            },
+            "fallback_policy": {
+              "enum": [
+                "none",
+                "explicit"
+              ],
+              "title": "Fallback Policy",
+              "type": "string"
+            },
+            "max_output_tokens": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "title": "Max Output Tokens",
+              "type": "integer"
+            },
+            "model": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Model",
+              "type": "string"
+            },
+            "profile_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "title": "Profile Digest",
+              "type": "string"
+            },
+            "profile_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Profile Id",
+              "type": "string"
+            },
+            "provider": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Provider",
+              "type": "string"
+            },
+            "provider_driver": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Provider Driver",
+              "type": "string"
+            },
+            "reasoning_effort": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reasoning Effort"
+            },
+            "schema_version": {
+              "const": "aar.model-route.v1",
+              "default": "aar.model-route.v1",
+              "title": "Schema Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "profile_id",
+            "catalog_digest",
+            "profile_digest",
+            "provider_driver",
+            "provider",
+            "model",
+            "max_output_tokens",
+            "fallback_policy",
+            "cache_policy"
+          ],
+          "title": "ModelRouteBinding",
+          "type": "object"
+        },
+        "ModelRouteReceipt": {
+          "additionalProperties": false,
+          "properties": {
+            "effective": {
+              "$ref": "#/$defs/EffectiveModelRoute"
+            },
+            "fallback_chain": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/EffectiveModelRoute"
+              },
+              "title": "Fallback Chain",
+              "type": "array"
+            },
+            "finish_reason": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Finish Reason",
+              "type": "string"
+            },
+            "lookup_supported": {
+              "default": false,
+              "title": "Lookup Supported",
+              "type": "boolean"
+            },
+            "provider_response_id": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Provider Response Id"
+            },
+            "receipt_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "title": "Receipt Digest",
+              "type": "string"
+            },
+            "requested": {
+              "$ref": "#/$defs/ModelRouteBinding"
+            },
+            "schema_version": {
+              "const": "aar.model-response.v1",
+              "default": "aar.model-response.v1",
+              "title": "Schema Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "requested",
+            "effective",
+            "finish_reason",
+            "receipt_digest"
+          ],
+          "title": "ModelRouteReceipt",
+          "type": "object"
+        },
+        "ModelUsageRecord": {
+          "additionalProperties": false,
+          "properties": {
+            "accounting_source": {
+              "enum": [
+                "reference",
+                "provider_reported",
+                "estimated"
+              ],
+              "title": "Accounting Source",
+              "type": "string"
+            },
+            "cache_read_tokens": {
+              "anyOf": [
+                {
+                  "maximum": 9223372036854775807,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cache Read Tokens"
+            },
+            "cache_write_tokens": {
+              "anyOf": [
+                {
+                  "maximum": 9223372036854775807,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Cache Write Tokens"
+            },
+            "input_tokens": {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "title": "Input Tokens",
+              "type": "integer"
+            },
+            "output_tokens": {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "title": "Output Tokens",
+              "type": "integer"
+            },
+            "reasoning_tokens": {
+              "anyOf": [
+                {
+                  "maximum": 9223372036854775807,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reasoning Tokens"
+            },
+            "retry_ordinal": {
+              "default": 0,
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "title": "Retry Ordinal",
+              "type": "integer"
+            },
+            "schema_version": {
+              "const": "aar.model-usage.v1",
+              "default": "aar.model-usage.v1",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "total_tokens": {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "title": "Total Tokens",
+              "type": "integer"
+            },
+            "wasted": {
+              "default": false,
+              "title": "Wasted",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "accounting_source",
+            "input_tokens",
+            "output_tokens",
+            "total_tokens"
+          ],
+          "title": "ModelUsageRecord",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "output_text": {
+          "maxLength": 1048576,
+          "title": "Output Text",
+          "type": "string"
+        },
+        "route_receipt": {
+          "$ref": "#/$defs/ModelRouteReceipt"
+        },
+        "schema_version": {
+          "const": "aar.model-response.v1",
+          "default": "aar.model-response.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/ModelUsageRecord"
+        }
+      },
+      "required": [
+        "output_text",
+        "route_receipt",
+        "usage"
+      ],
+      "title": "ModelResponse",
+      "type": "object"
+    },
+    "model_route_binding": {
+      "additionalProperties": false,
+      "description": "Admission-time immutable binding to one exact catalog profile.",
+      "properties": {
+        "cache_policy": {
+          "enum": [
+            "disabled",
+            "run-scoped",
+            "provider-managed"
+          ],
+          "title": "Cache Policy",
+          "type": "string"
+        },
+        "catalog_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Catalog Digest",
+          "type": "string"
+        },
+        "fallback_policy": {
+          "enum": [
+            "none",
+            "explicit"
+          ],
+          "title": "Fallback Policy",
+          "type": "string"
+        },
+        "max_output_tokens": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        },
+        "model": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+          "title": "Model",
+          "type": "string"
+        },
+        "profile_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Profile Digest",
+          "type": "string"
+        },
+        "profile_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+          "title": "Profile Id",
+          "type": "string"
+        },
+        "provider": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+          "title": "Provider",
+          "type": "string"
+        },
+        "provider_driver": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+          "title": "Provider Driver",
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reasoning Effort"
+        },
+        "schema_version": {
+          "const": "aar.model-route.v1",
+          "default": "aar.model-route.v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile_id",
+        "catalog_digest",
+        "profile_digest",
+        "provider_driver",
+        "provider",
+        "model",
+        "max_output_tokens",
+        "fallback_policy",
+        "cache_policy"
+      ],
+      "title": "ModelRouteBinding",
+      "type": "object"
+    },
+    "model_route_catalog": {
+      "$defs": {
+        "ModelRouteProfile": {
+          "additionalProperties": false,
+          "description": "Owner-authored, credential-free route policy.",
+          "properties": {
+            "cache_policy": {
+              "default": "disabled",
+              "enum": [
+                "disabled",
+                "run-scoped",
+                "provider-managed"
+              ],
+              "title": "Cache Policy",
+              "type": "string"
+            },
+            "fallback_policy": {
+              "default": "none",
+              "enum": [
+                "none",
+                "explicit"
+              ],
+              "title": "Fallback Policy",
+              "type": "string"
+            },
+            "max_output_tokens": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "title": "Max Output Tokens",
+              "type": "integer"
+            },
+            "model": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Model",
+              "type": "string"
+            },
+            "profile_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Profile Id",
+              "type": "string"
+            },
+            "provider": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Provider",
+              "type": "string"
+            },
+            "provider_driver": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Provider Driver",
+              "type": "string"
+            },
+            "reasoning_effort": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reasoning Effort"
+            },
+            "schema_version": {
+              "const": "aar.model-route.v1",
+              "default": "aar.model-route.v1",
+              "title": "Schema Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "profile_id",
+            "provider_driver",
+            "provider",
+            "model",
+            "max_output_tokens"
+          ],
+          "title": "ModelRouteProfile",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Canonical owner-authorized route catalog with no credential material.",
+      "properties": {
+        "catalog_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Catalog Digest",
+          "type": "string"
+        },
+        "profiles": {
+          "items": {
+            "$ref": "#/$defs/ModelRouteProfile"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Profiles",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "aar.model-route.v1",
+          "default": "aar.model-route.v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profiles",
+        "catalog_digest"
+      ],
+      "title": "ModelRouteCatalog",
+      "type": "object"
+    },
+    "model_route_effective": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+          "title": "Model",
+          "type": "string"
+        },
+        "provider": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+          "title": "Provider",
+          "type": "string"
+        },
+        "provider_driver": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+          "title": "Provider Driver",
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reasoning Effort"
+        },
+        "schema_version": {
+          "const": "aar.model-route.v1",
+          "default": "aar.model-route.v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_driver",
+        "provider",
+        "model"
+      ],
+      "title": "EffectiveModelRoute",
+      "type": "object"
+    },
+    "model_route_profile": {
+      "additionalProperties": false,
+      "description": "Owner-authored, credential-free route policy.",
+      "properties": {
+        "cache_policy": {
+          "default": "disabled",
+          "enum": [
+            "disabled",
+            "run-scoped",
+            "provider-managed"
+          ],
+          "title": "Cache Policy",
+          "type": "string"
+        },
+        "fallback_policy": {
+          "default": "none",
+          "enum": [
+            "none",
+            "explicit"
+          ],
+          "title": "Fallback Policy",
+          "type": "string"
+        },
+        "max_output_tokens": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        },
+        "model": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+          "title": "Model",
+          "type": "string"
+        },
+        "profile_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+          "title": "Profile Id",
+          "type": "string"
+        },
+        "provider": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+          "title": "Provider",
+          "type": "string"
+        },
+        "provider_driver": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+          "title": "Provider Driver",
+          "type": "string"
+        },
+        "reasoning_effort": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reasoning Effort"
+        },
+        "schema_version": {
+          "const": "aar.model-route.v1",
+          "default": "aar.model-route.v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile_id",
+        "provider_driver",
+        "provider",
+        "model",
+        "max_output_tokens"
+      ],
+      "title": "ModelRouteProfile",
+      "type": "object"
+    },
+    "model_route_receipt": {
+      "$defs": {
+        "EffectiveModelRoute": {
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Model",
+              "type": "string"
+            },
+            "provider": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Provider",
+              "type": "string"
+            },
+            "provider_driver": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Provider Driver",
+              "type": "string"
+            },
+            "reasoning_effort": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reasoning Effort"
+            },
+            "schema_version": {
+              "const": "aar.model-route.v1",
+              "default": "aar.model-route.v1",
+              "title": "Schema Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "provider_driver",
+            "provider",
+            "model"
+          ],
+          "title": "EffectiveModelRoute",
+          "type": "object"
+        },
+        "ModelRouteBinding": {
+          "additionalProperties": false,
+          "description": "Admission-time immutable binding to one exact catalog profile.",
+          "properties": {
+            "cache_policy": {
+              "enum": [
+                "disabled",
+                "run-scoped",
+                "provider-managed"
+              ],
+              "title": "Cache Policy",
+              "type": "string"
+            },
+            "catalog_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "title": "Catalog Digest",
+              "type": "string"
+            },
+            "fallback_policy": {
+              "enum": [
+                "none",
+                "explicit"
+              ],
+              "title": "Fallback Policy",
+              "type": "string"
+            },
+            "max_output_tokens": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "title": "Max Output Tokens",
+              "type": "integer"
+            },
+            "model": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Model",
+              "type": "string"
+            },
+            "profile_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "title": "Profile Digest",
+              "type": "string"
+            },
+            "profile_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Profile Id",
+              "type": "string"
+            },
+            "provider": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Provider",
+              "type": "string"
+            },
+            "provider_driver": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "title": "Provider Driver",
+              "type": "string"
+            },
+            "reasoning_effort": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reasoning Effort"
+            },
+            "schema_version": {
+              "const": "aar.model-route.v1",
+              "default": "aar.model-route.v1",
+              "title": "Schema Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "profile_id",
+            "catalog_digest",
+            "profile_digest",
+            "provider_driver",
+            "provider",
+            "model",
+            "max_output_tokens",
+            "fallback_policy",
+            "cache_policy"
+          ],
+          "title": "ModelRouteBinding",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "effective": {
+          "$ref": "#/$defs/EffectiveModelRoute"
+        },
+        "fallback_chain": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EffectiveModelRoute"
+          },
+          "title": "Fallback Chain",
+          "type": "array"
+        },
+        "finish_reason": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+          "title": "Finish Reason",
+          "type": "string"
+        },
+        "lookup_supported": {
+          "default": false,
+          "title": "Lookup Supported",
+          "type": "boolean"
+        },
+        "provider_response_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Response Id"
+        },
+        "receipt_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Receipt Digest",
+          "type": "string"
+        },
+        "requested": {
+          "$ref": "#/$defs/ModelRouteBinding"
+        },
+        "schema_version": {
+          "const": "aar.model-response.v1",
+          "default": "aar.model-response.v1",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requested",
+        "effective",
+        "finish_reason",
+        "receipt_digest"
+      ],
+      "title": "ModelRouteReceipt",
+      "type": "object"
+    },
+    "model_usage_record": {
+      "additionalProperties": false,
+      "properties": {
+        "accounting_source": {
+          "enum": [
+            "reference",
+            "provider_reported",
+            "estimated"
+          ],
+          "title": "Accounting Source",
+          "type": "string"
+        },
+        "cache_read_tokens": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cache Read Tokens"
+        },
+        "cache_write_tokens": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cache Write Tokens"
+        },
+        "input_tokens": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "output_tokens": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "reasoning_tokens": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reasoning Tokens"
+        },
+        "retry_ordinal": {
+          "default": 0,
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Retry Ordinal",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "aar.model-usage.v1",
+          "default": "aar.model-usage.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "total_tokens": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Total Tokens",
+          "type": "integer"
+        },
+        "wasted": {
+          "default": false,
+          "title": "Wasted",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "accounting_source",
+        "input_tokens",
+        "output_tokens",
+        "total_tokens"
+      ],
+      "title": "ModelUsageRecord",
       "type": "object"
     },
     "operation_attempt_record": {
@@ -7459,6 +8503,7 @@
             "state": {
               "enum": [
                 "started",
+                "rejected_before_send",
                 "succeeded",
                 "failed"
               ],
@@ -7972,6 +9017,7 @@
             "state": {
               "enum": [
                 "started",
+                "rejected_before_send",
                 "succeeded",
                 "failed"
               ],

@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
+[![Release](https://img.shields.io/badge/release-v0.3.0a2-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#stav-projektu)
 
@@ -190,7 +190,7 @@ Podrobnější odůvodnění návrhu a poznámky ke zdrojům najdete v části [
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a2"
 ```
 
 ### Nastavení Codex App
@@ -257,7 +257,13 @@ Frontend MCP je záměrně vyměnitelný. Nevlastní databázi kontinuity ani ž
 
 ## Stav projektu
 
-Aktuální veřejná alfa: **`0.3.0a1`**.
+Aktuální veřejná alfa: **`0.3.0a2`**.
+
+> **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
+> context. For `v0.3.0a2` receipt-backed model routing, current verification, and exact release
+> boundaries, read the canonical English [release notes](../RELEASE-v0.3.0a2.md) and
+> [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
+
 
 Reprodukováno z tohoto veřejného kandidáta:
 
@@ -278,7 +284,7 @@ Stále otevřené:
 - obecné efekty exactly-once;
 - publikace do registru balíčků a stabilní záruky API.
 
-Než začnete uvádět produkční tvrzení, přečtěte si [TECHNICAL-STATUS.md](../../TECHNICAL-STATUS.md), [HOST-COMPATIBILITY.md](../../HOST-COMPATIBILITY.md) a [WAL.md](../../WAL.md).
+Než začnete uvádět produkční tvrzení, přečtěte si [TECHNICAL-STATUS.md](../../TECHNICAL-STATUS.md), [HOST-COMPATIBILITY.md](../../HOST-COMPATIBILITY.md) a .
 
 ---
 

@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
+[![Release](https://img.shields.io/badge/release-v0.3.0a2-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#项目状态)
 
@@ -190,7 +190,7 @@ Adaptive Agent Harness 很适合：
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a2"
 ```
 
 ### Codex App 设置
@@ -257,7 +257,13 @@ MCP frontend 刻意可以替换。它不拥有 continuity database 或 worker li
 
 ## 项目状态
 
-当前公开 alpha：**`0.3.0a1`**。
+当前公开 alpha：**`0.3.0a2`**。
+
+> **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
+> context. For `v0.3.0a2` receipt-backed model routing, current verification, and exact release
+> boundaries, read the canonical English [release notes](../RELEASE-v0.3.0a2.md) and
+> [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
+
 
 从这个公开 candidate 中重现的结果：
 
@@ -278,7 +284,7 @@ MCP frontend 刻意可以替换。它不拥有 continuity database 或 worker li
 - generic exactly-once effects；
 - package-registry publication 和稳定的 API guarantees。
 
-在提出 production claims 前，请阅读 [TECHNICAL-STATUS.md](../../TECHNICAL-STATUS.md)、[HOST-COMPATIBILITY.md](../../HOST-COMPATIBILITY.md) 和 [WAL.md](../../WAL.md)。
+在提出 production claims 前，请阅读 [TECHNICAL-STATUS.md](../../TECHNICAL-STATUS.md)、[HOST-COMPATIBILITY.md](../../HOST-COMPATIBILITY.md)。
 
 ---
 

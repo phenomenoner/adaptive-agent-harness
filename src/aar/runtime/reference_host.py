@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import threading
 import time
 from collections.abc import Callable
@@ -16,7 +17,12 @@ from aar.assets import (
     AssetReferenceMissing,
     SimulatedAssetProcessLoss,
 )
-from aar.broker_models import BrokerReconciliationReport
+from aar.broker_models import (
+    BrokerReconciliationReport,
+    ModelResponse,
+    ModelRouteBinding,
+    ModelUsageRecord,
+)
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.continuity_models import (
     OperationWorkspaceCheckpointBoundaryV1,
@@ -48,6 +54,7 @@ from aar.runtime.continuity import (
 )
 from aar.runtime.dispatcher import AttemptFence, DispatchHost, DurableDispatcher
 from aar.runtime.ipython_backend import SupervisedIPythonWorkspaceBackend
+from aar.runtime.model_broker import ModelBrokerRegistry, ModelExecutionJournal
 from aar.runtime.models import (
     OperationRecord,
     RuntimeReady,
@@ -152,6 +159,9 @@ class ReferenceHost:
         programmable_backend: Literal["plain", "ipython"] = "ipython",
         enable_durable_dispatch: bool = False,
         dispatcher_concurrency: int = 2,
+        model_broker_registry: ModelBrokerRegistry | None = None,
+        default_model_route_profile: str | None = None,
+        model_execution_journal: ModelExecutionJournal | None = None,
     ) -> None:
         if programmable_backend not in {"plain", "ipython"}:
             raise ValueError(f"unsupported programmable backend: {programmable_backend}")
@@ -184,6 +194,21 @@ class ReferenceHost:
                 worker_manager=self.worker_manager,
             )
         self.models = FakeModelBroker()
+        if (model_broker_registry is None) != (default_model_route_profile is None):
+            raise ValueError(
+                "model_broker_registry and default_model_route_profile must be provided together"
+            )
+        if model_execution_journal is not None and model_broker_registry is None:
+            raise ValueError(
+                "model_execution_journal requires an injected model broker registry"
+            )
+        self.model_broker_registry = model_broker_registry
+        self.default_model_route_profile = default_model_route_profile
+        self.model_executions = (
+            None
+            if model_broker_registry is None
+            else model_execution_journal or ModelExecutionJournal(database_path)
+        )
         self.subagents = FakeSubagentBroker(database_path)
         self.effects = FakeEffectBroker()
         self.evidence = FakeEvidenceProvider(evidence_records)
@@ -195,6 +220,8 @@ class ReferenceHost:
             effects=self.effects,
             evidence=self.evidence,
             now_ms=now_ms,
+            model_broker_registry=self.model_broker_registry,
+            model_execution_journal=self.model_executions,
         )
         self.rlm = RlmEngine(database_path, self.brokers, now_ms)
         self.adaptive_assets = AdaptiveAssetStore(database_path)
@@ -438,10 +465,42 @@ class ReferenceHost:
     def inspect(self, handle: WorkspaceHandle) -> WorkspaceSnapshot:
         return self.workspace.inspect(handle)
 
-    def submit_rlm(self, envelope: RequestEnvelope, spec: RlmJobSpec) -> OperationRecord:
+    def submit_rlm(
+        self,
+        envelope: RequestEnvelope,
+        spec: RlmJobSpec,
+        *,
+        model_route_profile: str | None = None,
+    ) -> OperationRecord:
         self._validate_rlm_request(envelope, spec)
+        binding = None
+        if self.model_broker_registry is not None:
+            profile_id = model_route_profile or self.default_model_route_profile
+            if profile_id is None:
+                raise ReferenceHostError("model route profile is required")
+            binding = self.model_broker_registry.bind(profile_id)
+        admission_hook: Callable[[sqlite3.Connection, OperationRef], None] | None = None
+        if binding is not None:
+            assert self.model_executions is not None
+
+            def bind_route(
+                connection: sqlite3.Connection,
+                operation: OperationRef,
+            ) -> None:
+                assert binding is not None
+                assert self.model_executions is not None
+                self.model_executions.bind_operation_in_transaction(
+                    connection,
+                    operation,
+                    binding,
+                )
+
+            admission_hook = bind_route
+
         record, _created = self.registry.accept(
-            envelope, canonical_json_bytes(spec).decode()
+            envelope,
+            canonical_json_bytes(spec).decode(),
+            admission=admission_hook,
         )
         self.rlm.ensure(record.operation, spec)
         return record
@@ -450,6 +509,8 @@ class ReferenceHost:
         self,
         envelope: RequestEnvelope,
         spec: RlmJobSpec,
+        *,
+        before_dispatch: Callable[[OperationRef], None] | None = None,
     ) -> OperationRecord:
         if self.dispatcher is None:
             raise ReferenceHostError("durable RLM dispatch is not enabled")
@@ -466,6 +527,22 @@ class ReferenceHost:
             ),
         )
         if record.state is OperationState.ACCEPTED:
+            if before_dispatch is not None:
+                try:
+                    before_dispatch(record.operation)
+                except Exception:
+                    return self.registry.fail(
+                        record.operation,
+                        FailureEnvelope(
+                            category=FailureCategory.AUTHORITY,
+                            code="DISPATCH_PREREQUISITE_FAILED",
+                            message="durable dispatch prerequisite failed",
+                            retryable=False,
+                            certainty=OutcomeCertainty.CERTAIN,
+                            operation=record.operation,
+                        ),
+                        self.runtime_generation,
+                    )
             self.dispatcher.notify(record.operation)
         return record
 
@@ -971,11 +1048,31 @@ class ReferenceHost:
         spec: RlmJobSpec,
         *,
         failpoint: str | None = None,
+        model_route_profile: str | None = None,
     ) -> OperationRecord:
-        record = self.submit_rlm(envelope, spec)
+        record = self.submit_rlm(
+            envelope,
+            spec,
+            model_route_profile=model_route_profile,
+        )
         if record.state is not OperationState.ACCEPTED:
             return record
         return self.run_rlm(record.operation, failpoint=failpoint)
+
+    def model_route_binding(self, operation: OperationRef) -> ModelRouteBinding:
+        if self.model_executions is None:
+            raise ReferenceHostError("production model routing is not configured")
+        return self.model_executions.binding(operation)
+
+    def model_usage_records(self, operation: OperationRef) -> tuple[ModelUsageRecord, ...]:
+        if self.model_executions is None:
+            return ()
+        return self.model_executions.usage_records(operation)
+
+    def model_response(self, operation: OperationRef, *, ordinal: int) -> ModelResponse:
+        if self.model_executions is None:
+            raise RlmStateMissing("reference host has no production model journal")
+        return self.model_executions.response(operation, ordinal=ordinal)
 
     def rlm_status(
         self,

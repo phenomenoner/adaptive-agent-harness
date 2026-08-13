@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a1-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1)
+[![Release](https://img.shields.io/badge/release-v0.3.0a2-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#projektin-tila)
 
@@ -190,7 +190,7 @@ Katso [Miksi RLM + IPython](../../docs/WHY-RLM-AND-IPYTHON.md), jossa suunnittel
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a1"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a2"
 ```
 
 ### Codex Appin asetukset
@@ -257,7 +257,13 @@ MCP-käyttöliittymä on tarkoituksella vaihdettavissa. Se ei omista jatkuvuusti
 
 ## Projektin tila
 
-Nykyinen julkinen alfa: **`0.3.0a1`**.
+Nykyinen julkinen alfa: **`0.3.0a2`**.
+
+> **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
+> context. For `v0.3.0a2` receipt-backed model routing, current verification, and exact release
+> boundaries, read the canonical English [release notes](../RELEASE-v0.3.0a2.md) and
+> [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
+
 
 Tästä julkisesta ehdokkaasta toistettu:
 
@@ -278,7 +284,7 @@ Avoinna ovat edelleen:
 - yleiset exactly-once-vaikutukset;
 - pakettirekisterijulkaisu ja vakaat API-takuut.
 
-Lue [TECHNICAL-STATUS.md](../../TECHNICAL-STATUS.md), [HOST-COMPATIBILITY.md](../../HOST-COMPATIBILITY.md) ja [WAL.md](../../WAL.md) ennen tuotantoa koskevien väitteiden tekemistä.
+Lue [TECHNICAL-STATUS.md](../../TECHNICAL-STATUS.md), [HOST-COMPATIBILITY.md](../../HOST-COMPATIBILITY.md) ennen tuotantoa koskevien väitteiden tekemistä.
 
 ---
 

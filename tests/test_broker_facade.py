@@ -7,12 +7,15 @@ from pathlib import Path
 
 import pytest
 
+from aar.broker_models import BrokerReceipt, BrokerUsage
 from aar.runtime.brokers import (
     ArtifactPutRequest,
     ArtifactReadRequest,
     BrokerBudgetExceeded,
     BrokerCallConflict,
+    BrokerCallIndeterminate,
     BrokerGrantDenied,
+    BrokerJournal,
     EffectProposal,
     EvidenceQuery,
     ModelRequest,
@@ -143,6 +146,104 @@ def test_idempotent_replay_does_not_consume_budget_twice(tmp_path: Path) -> None
         assert len(bound.traces()) == 1
         with pytest.raises(BrokerBudgetExceeded):
             bound.model_request(request, step_key="step-2")
+    finally:
+        host.close()
+
+
+def test_pre_provider_admission_rejection_is_safe_to_revalidate_and_replay(
+    tmp_path: Path,
+) -> None:
+    journal = BrokerJournal(tmp_path / "pre-provider-rejection.sqlite3")
+    operation = OperationRef(value="operation-pre-provider-rejection")
+    request = EffectProposal(
+        effect_type="write.file",
+        payload_digest=f"sha256:{'a' * 64}",
+    )
+    response = BrokerReceipt(
+        kind="effect",
+        handle="proposal-safe-replay",
+        digest=f"sha256:{'b' * 64}",
+        value="proposal_only",
+    )
+    budget = Budget(
+        wall_time_ms=60_000,
+        model_requests=1,
+        input_tokens=1,
+        output_tokens=1,
+        child_operations=1,
+        artifact_bytes=1,
+    )
+    admission_checks = 0
+    provider_calls = 0
+    reject_second_check = True
+
+    def admission_check() -> None:
+        nonlocal admission_checks
+        admission_checks += 1
+        if reject_second_check and admission_checks == 2:
+            raise BrokerGrantDenied("authority changed before provider invocation")
+
+    def call() -> BrokerReceipt:
+        nonlocal provider_calls
+        provider_calls += 1
+        return response
+
+    def invoke() -> BrokerReceipt:
+        return journal.invoke(
+            operation=operation,
+            method="effect.propose",
+            grant_id="grant-effect-propose",
+            idempotency_key="safe-replay",
+            request=request,
+            response_type=BrokerReceipt,
+            usage=BrokerUsage(),
+            budget=budget,
+            call=call,
+            admission_check=admission_check,
+        )
+
+    try:
+        with pytest.raises(BrokerGrantDenied):
+            invoke()
+        assert admission_checks == 2
+        assert provider_calls == 0
+        trace = journal.traces(operation)[0]
+        assert trace.state == "rejected_before_send"
+        assert trace.failure_code == "BrokerGrantDenied"
+
+        reject_second_check = False
+        assert invoke() == response
+        assert admission_checks == 4
+        assert provider_calls == 1
+        trace = journal.traces(operation)[0]
+        assert trace.state == "succeeded"
+        assert trace.failure_code is None
+    finally:
+        journal.close()
+
+
+def test_provider_failure_remains_non_replayable_with_same_identity(tmp_path: Path) -> None:
+    host = ReferenceHost(tmp_path / "provider-failure-no-replay.sqlite3")
+    operation = OperationRef(value="operation-provider-failure-no-replay")
+    bound = host.brokers.bind(
+        broker_envelope(host, ("model.request",)),
+        operation,
+    )
+    provider_calls = 0
+
+    def fail_provider(*_args, **_kwargs):
+        nonlocal provider_calls
+        provider_calls += 1
+        raise RuntimeError("provider failed after invocation")
+
+    host.models.request = fail_provider  # type: ignore[method-assign]
+    request = ModelRequest(prompt="never replay unknown provider work")
+    try:
+        with pytest.raises(RuntimeError):
+            bound.model_request(request, step_key="unsafe-replay")
+        with pytest.raises(BrokerCallIndeterminate):
+            bound.model_request(request, step_key="unsafe-replay")
+        assert provider_calls == 1
     finally:
         host.close()
 
@@ -971,7 +1072,7 @@ def test_compensation_deadline_is_rechecked_immediately_before_provider_call(
         assert provider_calls == 0
         traces = rebound.traces()
         assert [trace.method for trace in traces] == ["model.request", "effect.propose"]
-        assert traces[1].state == "failed"
+        assert traces[1].state == "rejected_before_send"
         assert traces[1].failure_code == "BrokerDeadlineExpired"
     finally:
         second.close()

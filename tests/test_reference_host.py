@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from aar.canonical import canonical_sha256
+from aar.rlm_models import RlmJobSpec
 from aar.runtime.brokers import BrokerContext
 from aar.runtime.models import WorkspaceExecuteSpec
 from aar.runtime.reference_host import (
@@ -20,7 +21,7 @@ from aar.runtime.reference_host import (
 )
 from aar.runtime.registry import IdempotencyConflict, StaleRuntimeGeneration
 from aar.runtime.workspace import SimulatedWorkspaceTransactionLoss
-from aar.schemas import OperationRef, OperationState, PrincipalRef, SessionRef, WorkspaceRef
+from aar.schemas import Budget, OperationRef, OperationState, PrincipalRef, SessionRef, WorkspaceRef
 
 
 class ManualClock:
@@ -411,3 +412,63 @@ def test_durable_dispatch_can_start_only_after_owner_ready_gate(
     finally:
         host.close()
     host.close()
+
+
+def test_durable_rlm_binding_failure_is_terminal_and_idempotently_observable(
+    host: ReferenceHost, clock: ManualClock
+) -> None:
+    spec = RlmJobSpec(query="bind before dispatch", strategy="baseline", max_steps=1)
+    envelope = host.request_rlm_envelope(
+        request_id="request-binding-failure",
+        idempotency_key="idempotency-binding-failure",
+        principal=PrincipalRef(value="principal-binding-failure"),
+        session=SessionRef(value="session-binding-failure"),
+        spec=spec,
+        deadline_unix_ms=clock.now + 10_000,
+        budget=Budget(
+            wall_time_ms=10_000,
+            model_requests=1,
+            input_tokens=128,
+            output_tokens=64,
+        ),
+    )
+    binding_attempts = 0
+    host.start_durable_dispatch()
+
+    def reject_binding(_operation: OperationRef) -> None:
+        nonlocal binding_attempts
+        binding_attempts += 1
+        raise RuntimeError("sensitive owner-session binding detail")
+
+    failed = host.submit_rlm_durable(
+        envelope,
+        spec,
+        before_dispatch=reject_binding,
+    )
+
+    assert failed.state is OperationState.FAILED
+    assert failed.failure is not None
+    assert failed.failure.code == "DISPATCH_PREREQUISITE_FAILED"
+    assert failed.failure.message == "durable dispatch prerequisite failed"
+    assert failed.failure.operation == failed.operation
+    assert binding_attempts == 1
+    events = host.registry.events(failed.operation)
+    assert [event.state for event in events] == [
+        OperationState.ACCEPTED,
+        OperationState.ACCEPTED,
+        OperationState.FAILED,
+    ]
+    assert events[1].note == "recovery_policy_bound"
+    assert events[-1].note == "execution_failed"
+    assert not {"dispatch_requested", "execution_started"}.intersection(
+        event.note for event in events
+    )
+
+    replayed = host.submit_rlm_durable(
+        envelope,
+        spec,
+        before_dispatch=lambda _operation: (_ for _ in ()).throw(
+            AssertionError("terminal replay must not bind or dispatch")
+        ),
+    )
+    assert replayed == failed

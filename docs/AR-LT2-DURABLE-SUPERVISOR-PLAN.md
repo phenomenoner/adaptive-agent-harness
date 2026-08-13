@@ -275,7 +275,7 @@ commit `38f338255f38b266f0cbe4d87db6f659274d80c6`.
 Bound package and protocol identities:
 
 - package `adaptive-agent-runtime==0.2.0a0`;
-- exact local wheel SHA-256
+- immutable wheel SHA-256
   `e867c69c82139d567303591a8c94a204d9b779366e6e22927ad184ae6a6ad624`;
 - MCP surface `aar.mcp-tools.v7`, 30 tools, digest
   `sha256:370d8a3177e80e94523c07537fc6b3107beacd52956add61b0e31b9d32bf2555`;

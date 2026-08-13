@@ -12,8 +12,8 @@
     "version": "2.0.0"
   },
   "server_name": "aar-mcp",
-  "server_version": "0.3.0a1",
-  "tool_surface_digest": "sha256:93946b1b8730a09e4b08e96fb3862727a1e204e4a00efdcd3f80da932d6149b4",
+  "server_version": "0.3.0a2",
+  "tool_surface_digest": "sha256:23df7b0a63eef72f093dbc512642e63feacf5e87e77da8e4b5d8bcb8c089374b",
   "tool_surface_version": "aar.mcp-tools.v7",
   "tools": [
     {
@@ -120,6 +120,190 @@
               "digest"
             ],
             "title": "CapabilitySet",
+            "type": "object"
+          },
+          "ModelBrokerCapabilityProjection": {
+            "additionalProperties": false,
+            "description": "Credential-free configuration health; provider connectivity is not inferred.",
+            "properties": {
+              "catalog_digest": {
+                "anyOf": [
+                  {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Catalog Digest"
+              },
+              "configured": {
+                "title": "Configured",
+                "type": "boolean"
+              },
+              "default_profile_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Default Profile Id"
+              },
+              "journal_schema_versions": {
+                "default": [],
+                "items": {
+                  "maximum": 9223372036854775807,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "title": "Journal Schema Versions",
+                "type": "array"
+              },
+              "provider_connectivity": {
+                "const": "not_probed",
+                "default": "not_probed",
+                "title": "Provider Connectivity",
+                "type": "string"
+              },
+              "route_profile_count": {
+                "default": 0,
+                "maximum": 64,
+                "minimum": 0,
+                "title": "Route Profile Count",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "configured"
+            ],
+            "title": "ModelBrokerCapabilityProjection",
+            "type": "object"
+          },
+          "ModelRouteCatalog": {
+            "additionalProperties": false,
+            "description": "Canonical owner-authorized route catalog with no credential material.",
+            "properties": {
+              "catalog_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "title": "Catalog Digest",
+                "type": "string"
+              },
+              "profiles": {
+                "items": {
+                  "$ref": "#/$defs/ModelRouteProfile"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "title": "Profiles",
+                "type": "array"
+              },
+              "schema_version": {
+                "const": "aar.model-route.v1",
+                "default": "aar.model-route.v1",
+                "title": "Schema Version",
+                "type": "string"
+              }
+            },
+            "required": [
+              "profiles",
+              "catalog_digest"
+            ],
+            "title": "ModelRouteCatalog",
+            "type": "object"
+          },
+          "ModelRouteProfile": {
+            "additionalProperties": false,
+            "description": "Owner-authored, credential-free route policy.",
+            "properties": {
+              "cache_policy": {
+                "default": "disabled",
+                "enum": [
+                  "disabled",
+                  "run-scoped",
+                  "provider-managed"
+                ],
+                "title": "Cache Policy",
+                "type": "string"
+              },
+              "fallback_policy": {
+                "default": "none",
+                "enum": [
+                  "none",
+                  "explicit"
+                ],
+                "title": "Fallback Policy",
+                "type": "string"
+              },
+              "max_output_tokens": {
+                "maximum": 9223372036854775807,
+                "minimum": 1,
+                "title": "Max Output Tokens",
+                "type": "integer"
+              },
+              "model": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+                "title": "Model",
+                "type": "string"
+              },
+              "profile_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+                "title": "Profile Id",
+                "type": "string"
+              },
+              "provider": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+                "title": "Provider",
+                "type": "string"
+              },
+              "provider_driver": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+                "title": "Provider Driver",
+                "type": "string"
+              },
+              "reasoning_effort": {
+                "anyOf": [
+                  {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Reasoning Effort"
+              },
+              "schema_version": {
+                "const": "aar.model-route.v1",
+                "default": "aar.model-route.v1",
+                "title": "Schema Version",
+                "type": "string"
+              }
+            },
+            "required": [
+              "profile_id",
+              "provider_driver",
+              "provider",
+              "model",
+              "max_output_tokens"
+            ],
+            "title": "ModelRouteProfile",
             "type": "object"
           },
           "ReferenceGrantDescriptor": {
@@ -254,6 +438,20 @@
             "title": "Fixture Set Digest",
             "type": "string"
           },
+          "model_broker": {
+            "$ref": "#/$defs/ModelBrokerCapabilityProjection"
+          },
+          "model_routes": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ModelRouteCatalog"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "negotiated_protocol_version": {
             "title": "Negotiated Protocol Version",
             "type": "string"
@@ -370,6 +568,7 @@
           "schema_versions",
           "schema_bundle_digest",
           "fixture_set_digest",
+          "model_broker",
           "ready",
           "supervisor",
           "tool_names",
@@ -12344,6 +12543,7 @@
               "state": {
                 "enum": [
                   "started",
+                  "rejected_before_send",
                   "succeeded",
                   "failed"
                 ],

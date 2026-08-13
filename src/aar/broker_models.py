@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -19,7 +19,243 @@ from aar.schemas import (
     PositiveCounter,
     StrictModel,
 )
-from aar.versions import BROKER_SCHEMA_VERSION
+from aar.versions import (
+    BROKER_SCHEMA_VERSION,
+    MODEL_RESPONSE_SCHEMA_VERSION,
+    MODEL_ROUTE_SCHEMA_VERSION,
+    MODEL_USAGE_SCHEMA_VERSION,
+)
+
+ModelRouteValue = Annotated[
+    str,
+    Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9][A-Za-z0-9._~:/+-]*$", strict=True),
+]
+ReasoningEffort = ModelRouteValue | None
+FallbackPolicy = Literal["none", "explicit"]
+CachePolicy = Literal["disabled", "run-scoped", "provider-managed"]
+AccountingSource = Literal["reference", "provider_reported", "estimated"]
+
+
+class ModelRouteProfile(StrictModel):
+    """Owner-authored, credential-free route policy."""
+
+    schema_version: Literal["aar.model-route.v1"] = MODEL_ROUTE_SCHEMA_VERSION
+    profile_id: ModelRouteValue
+    provider_driver: ModelRouteValue
+    provider: ModelRouteValue
+    model: ModelRouteValue
+    reasoning_effort: ReasoningEffort = None
+    max_output_tokens: PositiveCounter
+    fallback_policy: FallbackPolicy = "none"
+    cache_policy: CachePolicy = "disabled"
+
+    @property
+    def profile_digest(self) -> str:
+        return canonical_sha256(self._digest_payload())
+
+    def _digest_payload(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "profile_id": self.profile_id,
+            "provider_driver": self.provider_driver,
+            "provider": self.provider,
+            "model": self.model,
+            "reasoning_effort": self.reasoning_effort,
+            "max_output_tokens": self.max_output_tokens,
+            "fallback_policy": self.fallback_policy,
+            "cache_policy": self.cache_policy,
+        }
+
+
+class ModelRouteCatalog(StrictModel):
+    """Canonical owner-authorized route catalog with no credential material."""
+
+    schema_version: Literal["aar.model-route.v1"] = MODEL_ROUTE_SCHEMA_VERSION
+    profiles: Annotated[
+        tuple[ModelRouteProfile, ...], Field(min_length=1, max_length=64)
+    ]
+    catalog_digest: Digest
+
+    @classmethod
+    def issue(cls, profiles: tuple[ModelRouteProfile, ...]) -> Self:
+        if len(profiles) > 64:
+            raise ValueError("model route catalog supports at most 64 profiles")
+        ordered = tuple(sorted(profiles, key=lambda item: item.profile_id))
+        payload = {
+            "schema_version": MODEL_ROUTE_SCHEMA_VERSION,
+            "profiles": [item.model_dump(mode="json") for item in ordered],
+        }
+        return cls(profiles=ordered, catalog_digest=canonical_sha256(payload))
+
+    @model_validator(mode="after")
+    def catalog_is_canonical_and_content_bound(self) -> Self:
+        ids = [item.profile_id for item in self.profiles]
+        if ids != sorted(ids) or len(ids) != len(set(ids)):
+            raise ValueError("model route profiles must be sorted by unique profile_id")
+        payload = {
+            "schema_version": self.schema_version,
+            "profiles": [item.model_dump(mode="json") for item in self.profiles],
+        }
+        if self.catalog_digest != canonical_sha256(payload):
+            raise ValueError("model route catalog digest mismatch")
+        return self
+
+
+class ModelRouteBinding(StrictModel):
+    """Admission-time immutable binding to one exact catalog profile."""
+
+    schema_version: Literal["aar.model-route.v1"] = MODEL_ROUTE_SCHEMA_VERSION
+    profile_id: ModelRouteValue
+    catalog_digest: Digest
+    profile_digest: Digest
+    provider_driver: ModelRouteValue
+    provider: ModelRouteValue
+    model: ModelRouteValue
+    reasoning_effort: ReasoningEffort = None
+    max_output_tokens: PositiveCounter
+    fallback_policy: FallbackPolicy
+    cache_policy: CachePolicy
+
+    @classmethod
+    def issue(cls, catalog: ModelRouteCatalog, profile: ModelRouteProfile) -> Self:
+        member = next(
+            (item for item in catalog.profiles if item.profile_id == profile.profile_id),
+            None,
+        )
+        if member is None or member != profile:
+            raise ValueError("model route profile is not an exact member of the catalog")
+        return cls(
+            profile_id=member.profile_id,
+            catalog_digest=catalog.catalog_digest,
+            profile_digest=member.profile_digest,
+            provider_driver=member.provider_driver,
+            provider=member.provider,
+            model=member.model,
+            reasoning_effort=member.reasoning_effort,
+            max_output_tokens=member.max_output_tokens,
+            fallback_policy=member.fallback_policy,
+            cache_policy=member.cache_policy,
+        )
+
+    @model_validator(mode="after")
+    def profile_digest_is_content_bound(self) -> Self:
+        profile = ModelRouteProfile(
+            profile_id=self.profile_id,
+            provider_driver=self.provider_driver,
+            provider=self.provider,
+            model=self.model,
+            reasoning_effort=self.reasoning_effort,
+            max_output_tokens=self.max_output_tokens,
+            fallback_policy=self.fallback_policy,
+            cache_policy=self.cache_policy,
+        )
+        if self.profile_digest != profile.profile_digest:
+            raise ValueError("model route profile digest mismatch")
+        return self
+
+
+class EffectiveModelRoute(StrictModel):
+    schema_version: Literal["aar.model-route.v1"] = MODEL_ROUTE_SCHEMA_VERSION
+    provider_driver: ModelRouteValue
+    provider: ModelRouteValue
+    model: ModelRouteValue
+    reasoning_effort: ReasoningEffort = None
+
+
+class ModelUsageRecord(StrictModel):
+    schema_version: Literal["aar.model-usage.v1"] = MODEL_USAGE_SCHEMA_VERSION
+    accounting_source: AccountingSource
+    input_tokens: BudgetCounter
+    output_tokens: BudgetCounter
+    cache_read_tokens: BudgetCounter | None = None
+    cache_write_tokens: BudgetCounter | None = None
+    reasoning_tokens: BudgetCounter | None = None
+    total_tokens: BudgetCounter
+    retry_ordinal: BudgetCounter = 0
+    wasted: bool = False
+
+    @model_validator(mode="after")
+    def total_is_exact(self) -> Self:
+        if self.total_tokens != self.input_tokens + self.output_tokens:
+            raise ValueError("model usage total must equal input plus output tokens")
+        return self
+
+
+class ModelRouteReceipt(StrictModel):
+    schema_version: Literal["aar.model-response.v1"] = MODEL_RESPONSE_SCHEMA_VERSION
+    requested: ModelRouteBinding
+    effective: EffectiveModelRoute
+    finish_reason: ModelRouteValue
+    provider_response_id: ModelRouteValue | None = None
+    fallback_chain: tuple[EffectiveModelRoute, ...] = ()
+    lookup_supported: bool = False
+    receipt_digest: Digest
+
+    @classmethod
+    def issue(
+        cls,
+        *,
+        requested: ModelRouteBinding,
+        effective: EffectiveModelRoute,
+        finish_reason: str,
+        provider_response_id: str | None = None,
+        fallback_chain: tuple[EffectiveModelRoute, ...] = (),
+        lookup_supported: bool = False,
+    ) -> Self:
+        payload = {
+            "requested": requested,
+            "effective": effective,
+            "finish_reason": finish_reason,
+            "provider_response_id": provider_response_id,
+            "fallback_chain": fallback_chain,
+            "lookup_supported": lookup_supported,
+        }
+        return cls(
+            requested=requested,
+            effective=effective,
+            finish_reason=finish_reason,
+            provider_response_id=provider_response_id,
+            fallback_chain=fallback_chain,
+            lookup_supported=lookup_supported,
+            receipt_digest=canonical_sha256(payload),
+        )
+
+    @model_validator(mode="after")
+    def receipt_is_content_bound_and_policy_compliant(self) -> Self:
+        payload = {
+            "requested": self.requested,
+            "effective": self.effective,
+            "finish_reason": self.finish_reason,
+            "provider_response_id": self.provider_response_id,
+            "fallback_chain": self.fallback_chain,
+            "lookup_supported": self.lookup_supported,
+        }
+        if self.receipt_digest != canonical_sha256(payload):
+            raise ValueError("model route receipt digest mismatch")
+        expected = (
+            self.requested.provider_driver,
+            self.requested.provider,
+            self.requested.model,
+            self.requested.reasoning_effort,
+        )
+        actual = (
+            self.effective.provider_driver,
+            self.effective.provider,
+            self.effective.model,
+            self.effective.reasoning_effort,
+        )
+        if actual != expected:
+            raise ValueError("effective model route drifted from the bound profile")
+        if self.requested.fallback_policy == "none" and self.fallback_chain:
+            raise ValueError("fallback chain is forbidden by the bound route profile")
+        return self
+
+
+class ModelResponse(StrictModel):
+    schema_version: Literal["aar.model-response.v1"] = MODEL_RESPONSE_SCHEMA_VERSION
+    output_text: Annotated[str, Field(max_length=1_048_576, strict=True)]
+    route_receipt: ModelRouteReceipt
+    usage: ModelUsageRecord
 
 BrokerMethodName = Literal[
     "artifact.put",
@@ -165,7 +401,7 @@ class BrokerCallTrace(StrictModel):
     grant_id: str
     idempotency_key: str
     request_digest: Digest
-    state: Literal["started", "succeeded", "failed"]
+    state: Literal["started", "rejected_before_send", "succeeded", "failed"]
     response_digest: Digest | None = None
     response_model: str
     usage_delta: BrokerUsage
@@ -330,6 +566,13 @@ BROKER_SCHEMA_MODELS: dict[str, type[StrictModel]] = {
     "broker_evidence_query": EvidenceQuery,
     "broker_method_contract": BrokerMethodContract,
     "broker_model_request": ModelRequest,
+    "model_response": ModelResponse,
+    "model_route_binding": ModelRouteBinding,
+    "model_route_catalog": ModelRouteCatalog,
+    "model_route_effective": EffectiveModelRoute,
+    "model_route_profile": ModelRouteProfile,
+    "model_route_receipt": ModelRouteReceipt,
+    "model_usage_record": ModelUsageRecord,
     "broker_receipt": BrokerReceipt,
     "broker_retained_subagent_handle": RetainedSubagentHandle,
     "broker_subagent_result_request": SubagentResultRequest,
