@@ -44,7 +44,7 @@ All notable public changes are documented here. The project is in public alpha; 
 
 ### Verified
 
-- public repository suite: 326 passed, 1 platform-gated skip;
+- public repository suite: 328 passed, 1 platform-gated skip;
 - credential-free model broker, benchmark adapter, and bidirectional MCP Sampling scenarios;
 - generated contract, MCP, Codex/Hermes host-profile, and bundled operation-skill assets agree with
   executable source;

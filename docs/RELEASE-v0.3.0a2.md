@@ -88,7 +88,13 @@ uv run ruff check .
 python3 tools/public_release_check.py
 ```
 
-The release source suite passes **326 tests** with one platform-gated Windows process-identity skip.
+The release source suite passes **328 tests** with one platform-gated Windows process-identity skip.
+
+> **Post-release correction:** The initial release text reported 326 passing tests. A fresh run of
+> the exact tagged source collected 329 tests and completed with 328 passed and the one documented
+> platform-gated skip. This corrects the published count; it does not change runtime bytes, the tag,
+> or the wheel.
+
 The only warning is the upstream SEP-2577 deprecation of MCP Sampling in protocol `2026-07-28`;
 clients using the supported Sampling-compatible protocol path remain covered by the integration
 tests and must still return the exact receipt described above.

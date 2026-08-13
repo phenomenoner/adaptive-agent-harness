@@ -84,7 +84,7 @@ See [Host Compatibility](HOST-COMPATIBILITY.md) for reproducible setup and verif
 
 The `v0.3.0a2` candidate was verified with:
 
-- **326 passed** repository tests;
+- **328 passed** repository tests;
 - **1 skipped** Windows-only process-identity gate on the Linux release host;
 - Ruff checks;
 - locked dependency resolution;

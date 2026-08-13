@@ -281,7 +281,7 @@ Reproduced from this public candidate:
 - Python 3.11 through 3.14 coverage;
 - 30-tool MCP v7 surface;
 - additive SQLite schema through v5;
-- full repository run: **326 passed, 1 platform-gated skip**;
+- full repository run: **328 passed, 1 platform-gated skip**;
 - a clean exact-wheel supervisor/frontend probe on Linux/WSL;
 - durable supervisor, frontend replacement, process-loss, stale-writer, receipt-reuse, and policy-bound RLM successor scenarios.
 
