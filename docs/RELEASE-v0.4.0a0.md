@@ -50,8 +50,20 @@ The Windows release workstation passed the focused public-plugin/package and fre
 gates. Its full repository run retains six known failures in legacy Sampling/process-owner lifecycle
 tests, so this release does not claim a full Windows supervisor-suite pass.
 
-The GitHub release attaches the exact wheel, its SHA-256 sidecar, the deterministic public plugin
-packet, and the packet's SHA-256 sidecar. Verify downloaded files before use.
+The release artifacts were built from commit
+`2b6862e0a72eb6365faf90fa5314e0b9ccb144bf` (tree
+`b00c6d12499a156f404de0ec466a350144045f07`):
+
+- `adaptive_agent_runtime-0.4.0a0-py3-none-any.whl` — 454,411 bytes, SHA-256
+  `17c7a85f1c20045203b75c98762e5d9c35f687a376e2ab9a2967a0d868450625`;
+- `aar-public-runtime-skill-0.4.0.zip` — 6,604 bytes, SHA-256
+  `39bf6f2c6c010f9518c7fcad0f5da6417f040048ea577df5874e10dd153fcbdf`.
+
+The source tree and the installed exact wheel generated identical 13-file plugin templates with
+manifest SHA-256 `4b3c40ae48dd99ffa5efd2a63f1c6fb4b1ad795a626e897b0518573854e0e613`.
+The template used non-production `vendor.dev` URLs only for deterministic local validation and is
+not attached as a submission-ready asset. The GitHub release attaches the wheel and URL-independent
+scoped skill ZIP with matching sidecars. Verify downloaded files before use.
 
 ## Publication boundary
 
