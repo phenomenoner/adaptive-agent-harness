@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -29,6 +30,18 @@ EXPECTED_TRANSLATIONS = {
     "README.vi.md",
     "README.zh-CN.md",
     "README.zh-TW.md",
+}
+
+ALLOWED_BINARY_SHA256 = {
+    "profiles/codex-public/adaptive-agent-workspace/assets/icon.png": (
+        "9aa1490c04409c53fccef5f977268c166ffbf1b1795492e8462ac6453bcc6390"
+    ),
+    "profiles/codex-public/adaptive-agent-workspace/assets/logo-dark.png": (
+        "fb905a1cf55f83f8e07e086626c15958fde7eb100519ca0eeec1adeda158eb8f"
+    ),
+    "profiles/codex-public/adaptive-agent-workspace/assets/logo.png": (
+        "fb905a1cf55f83f8e07e086626c15958fde7eb100519ca0eeec1adeda158eb8f"
+    ),
 }
 
 BYTE_PATTERNS = {
@@ -159,6 +172,21 @@ def release_identity_failures(
     return failures
 
 
+def binary_file_failure(relative: str, data: bytes) -> dict[str, str] | None:
+    expected = ALLOWED_BINARY_SHA256.get(relative)
+    if expected is None and b"\0" in data[:8192]:
+        return {"kind": "binary-file", "detail": relative}
+    if expected is None:
+        return None
+    actual = hashlib.sha256(data).hexdigest()
+    if actual != expected:
+        return {
+            "kind": "binary-file-digest",
+            "detail": f"{relative} -> sha256:{actual}",
+        }
+    return None
+
+
 def main() -> int:
     files = tracked_files()
     failures: list[dict[str, str]] = []
@@ -192,8 +220,11 @@ def main() -> int:
             failures.append({"kind": "prohibited-path", "detail": relative})
             continue
         data = path.read_bytes()
-        if b"\0" in data[:8192]:
-            failures.append({"kind": "binary-file", "detail": relative})
+        binary_failure = binary_file_failure(relative, data)
+        if binary_failure is not None:
+            failures.append(binary_failure)
+            continue
+        if relative in ALLOWED_BINARY_SHA256:
             continue
         for name, pattern in BYTE_PATTERNS.items():
             if pattern.search(data):

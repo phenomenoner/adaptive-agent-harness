@@ -12,8 +12,8 @@
     "version": "2.0.0"
   },
   "server_name": "aar-mcp",
-  "server_version": "0.3.0a2",
-  "tool_surface_digest": "sha256:23df7b0a63eef72f093dbc512642e63feacf5e87e77da8e4b5d8bcb8c089374b",
+  "server_version": "0.4.0a0",
+  "tool_surface_digest": "sha256:9b07c3d43c30104c2d2c16e6e5cff68fb82abc243e9b2fa52a4ae57cbf3f70c0",
   "tool_surface_version": "aar.mcp-tools.v7",
   "tools": [
     {

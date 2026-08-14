@@ -11,6 +11,7 @@ import importlib.resources
 import json
 import os
 import time
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -134,8 +135,8 @@ MCP_PROTOCOL_VERSIONS = (
     *reversed(MODERN_PROTOCOL_VERSIONS),
     *reversed(HANDSHAKE_PROTOCOL_VERSIONS),
 )
-OPERATION_SKILL_VERSION = "0.9.0"
-SCHEMA_BUNDLE_DIGEST = "sha256:6aea00d8ad6dfd8f867421a11c92f0f60a7e200d59622255d38983676e3f2e5e"
+OPERATION_SKILL_VERSION = "0.9.1"
+SCHEMA_BUNDLE_DIGEST = "sha256:f8cf0943103b407925fcbbbf5296a9c58a0cad85f60f7bae5ee35b8b1d3ccd44"
 FIXTURE_SET_DIGEST = "sha256:d0b4155f148de388ae5ebdbd6ae951d094d2feb289324f68fb33a5a6c68ae020"
 SERVER_INSTRUCTIONS = (
     "Call aar_capabilities first. For reference-host mutations, call aar_reference_context and "
@@ -629,7 +630,7 @@ def hermes_mcp_sampling_luna_max_registry(
     *,
     now_ms=None,
 ) -> tuple[StaticModelBrokerRegistry, McpSamplingGatewayTransport, str]:
-    """Build the explicit owner-controlled Hermes Luna route for MCP stdio."""
+    """Build the deprecated fixed Hermes Luna MCP Sampling compatibility route."""
 
     profile = ModelRouteProfile(
         profile_id="hermes-luna-max-v1",
@@ -2013,8 +2014,9 @@ def main(argv: list[str] | None = None) -> int:
         "--hermes-mcp-sampling-luna-max",
         action="store_true",
         help=(
-            "Enable the explicit owner-controlled openai-codex/gpt-5.6-luna/max "
-            "MCP Sampling route; embedded stdio reference-host mode only."
+            "DEPRECATED compatibility only: enable the fixed owner-controlled "
+            "openai-codex/gpt-5.6-luna/max MCP Sampling route in embedded stdio "
+            "reference-host mode. New integrations must use caller-delegated RLM."
         ),
     )
     args = parser.parse_args(argv)
@@ -2035,6 +2037,12 @@ def main(argv: list[str] | None = None) -> int:
     sampling_transport = None
     default_profile = None
     if args.hermes_mcp_sampling_luna_max:
+        warnings.warn(
+            "--hermes-mcp-sampling-luna-max is deprecated compatibility behavior; "
+            "migrate to caller-delegated RLM start/claim/host-execute/commit/status",
+            FutureWarning,
+            stacklevel=2,
+        )
         model_registry, sampling_transport, default_profile = (
             hermes_mcp_sampling_luna_max_registry()
         )

@@ -11,11 +11,15 @@ def test_package_metadata_declares_portable_contract_and_evidence_assets() -> No
     assert project["project"]["scripts"]["aar-codex-setup"] == (
         "aar.compat.codex_setup:main"
     )
+    assert project["project"]["scripts"]["aar-public-plugin-build"] == (
+        "aar.compat.public_plugin:main"
+    )
     assert project["project"]["dependencies"] == [
         "ipython>=9.16,<10",
         "mcp==2.0.0",
         "numpy>=2,<3",
         "pandas>=2.2,<4",
+        "PyJWT[crypto]>=2.10,<3",
         "pydantic>=2.12,<3",
     ]
     force_include = project["tool"]["hatch"]["build"]["targets"]["wheel"]["force-include"]

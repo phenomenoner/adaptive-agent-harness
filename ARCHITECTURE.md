@@ -118,7 +118,7 @@ The supervisor validates native process identity rather than trusting a PID alon
 
 ## MCP surface
 
-`v0.3.0a2` exposes 30 local-stdio tools grouped by responsibility:
+`v0.4.0a0` retains 30 local-stdio developer tools grouped by responsibility:
 
 - capability and reference-context discovery;
 - deterministic reference workspace lifecycle;
@@ -133,6 +133,39 @@ The supervisor validates native process identity rather than trusting a PID alon
 Large outputs return artifact references rather than unbounded inline payloads. Long-running operations return durable handles; callers inspect events and status instead of holding one transport open indefinitely.
 
 MCP is an interoperability adapter, not the security authority. The server validates every call even if a host claims it has already approved the tool.
+
+### Public Plugin Directory adapter
+
+The public product is a separate adapter, not remote exposure of the full local server:
+
+```text
+ChatGPT / Codex
+       |
+OAuth 2.1 bearer token + Streamable HTTP
+       |
+issuer + audience/resource + expiry + subject + scope verification
+       |
+opaque issuer/subject tenant key
+       |
+leased tenant runtime -> private SQLite database
+       |
+six workspace tools + five caller-delegated RLM tools
+```
+
+`aar-mcp-public` excludes programmable execution, provider credentials and endpoints,
+service-managed provider calls, external effects, activation, publication, and delivery. The main
+agent selects one model and optional reasoning effort for an RLM job. AAR persists that fixed route,
+exact prompts, pre-spend claim tickets, bounded caller observations, and deterministic continuation;
+the host performs each actual model call and compare-and-set commits the result.
+
+Waiting for a caller model result is durable state, not a background provider attempt. No provider
+lease is held across the handoff. A lost or uncertain call is not blindly replayed. Route evidence
+remains `caller_reported` unless a trusted host-receipt adapter binds stronger provenance. The fixed
+Hermes MCP Sampling route is deprecated compatibility behavior, not the public architecture.
+
+This adapter's source, deterministic plugin packet, and local Codex lifecycle proof do not establish
+production identity, internet reachability, operational controls, OpenAI review, approval, or
+Plugin Directory publication.
 
 ## Agent guidance
 

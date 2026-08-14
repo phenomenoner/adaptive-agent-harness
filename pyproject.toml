@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "adaptive-agent-runtime"
-version = "0.3.0a2"
+version = "0.4.0a0"
 description = "Host-neutral programmable execution and adaptation runtime for agent harnesses"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -26,17 +26,20 @@ dependencies = [
   "mcp==2.0.0",
   "numpy>=2,<3",
   "pandas>=2.2,<4",
+  "PyJWT[crypto]>=2.10,<3",
   "pydantic>=2.12,<3",
 ]
 
 [project.scripts]
 aar-contract = "aar.contract:main"
 aar-mcp = "aar.mcp.server:main"
+aar-mcp-public = "aar.mcp.public_server:main"
 aar-supervisor = "aar.runtime.supervisor:main"
 aar-mcp-assets = "aar.mcp.assets:main"
 aar-host-assets = "aar.compat.assets:main"
 aar-compat-smoke = "aar.compat.smoke:main"
 aar-codex-setup = "aar.compat.codex_setup:main"
+aar-public-plugin-build = "aar.compat.public_plugin:main"
 aar-rlm-benchmark = "aar.benchmark:main"
 
 [dependency-groups]

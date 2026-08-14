@@ -10,6 +10,7 @@ import pytest
 from mcp import Client
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
+import aar.mcp.server as server_module
 from aar.asset_models import (
     AdaptiveAssetBundle,
     AdaptiveAssetDocument,
@@ -32,6 +33,41 @@ from aar.schemas import (
     PrincipalRef,
     SessionRef,
 )
+
+
+def test_fixed_hermes_sampling_cli_warns_and_names_caller_delegated_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _Server:
+        def run(self, *, transport: str) -> None:
+            assert transport == "stdio"
+
+    class _Application:
+        server = _Server()
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        server_module,
+        "hermes_mcp_sampling_luna_max_registry",
+        lambda: (object(), object(), "deprecated-profile"),
+    )
+    monkeypatch.setattr(server_module, "build_server", lambda *_args, **_kwargs: _Application())
+
+    with pytest.warns(FutureWarning, match="caller-delegated RLM"):
+        assert (
+            server_module.main(
+                [
+                    "--database",
+                    str(tmp_path / "deprecated-sampling.sqlite3"),
+                    "--programmable-backend",
+                    "plain",
+                    "--hermes-mcp-sampling-luna-max",
+                ]
+            )
+            == 0
+        )
 
 ROOT = Path(__file__).resolve().parents[1]
 NOW_MS = 1_700_000_000_000

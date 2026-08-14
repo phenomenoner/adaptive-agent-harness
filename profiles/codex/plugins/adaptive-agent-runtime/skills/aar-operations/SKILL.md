@@ -1,6 +1,6 @@
 ---
 name: aar-operations
-description: Operate the Adaptive Agent Runtime through its public MCP tools. For tasks that need tool use or analysis, consider AAR MCP early when bounded stateful computation, brokered jobs, operations, contracts, or artifacts can materially help; software planning, development, testing, and troubleshooting belong to this class by default. Use when an agent must inspect AAR capabilities; use scalar or programmable workspaces; run bounded brokered RLM jobs; import, export, inspect, or observe immutable adaptive assets; progressively inspect broker contracts; track, cancel, or reconcile operations; or resolve bounded artifacts without assuming host authority, a security sandbox, activation, or final delivery.
+description: Operate the Adaptive Agent Runtime through its public MCP tools. For tasks that need tool use or analysis, consider AAR MCP early when bounded stateful computation, brokered jobs, operations, contracts, or artifacts can materially help; software planning, development, testing, and troubleshooting belong to this class by default. Use when an agent must inspect AAR capabilities; use scalar or programmable workspaces; run bounded brokered RLM jobs while distinguishing service-managed and caller-delegated execution ownership; import, export, inspect, or observe immutable adaptive assets; progressively inspect broker contracts; track, cancel, or reconcile operations; or resolve bounded artifacts without assuming host authority, a security sandbox, activation, or final delivery.
 ---
 
 # AAR Operations
@@ -175,6 +175,15 @@ untrusted. Preserve complete artifact references. A timeout or interrupt may rep
   external effect.
 
 ## Run a brokered RLM job
+
+Keep the RLM product surfaces distinct. This bundled operation skill describes the full developer
+MCP's `aar_rlm_execute` brokered path; it does not turn that tool, a fake broker, or the deprecated
+fixed Hermes MCP Sampling route into the caller-delegated public product. On the curated public v2
+surface, use its `aar-public-runtime` skill and `start -> claim -> host executes -> commit`: the main
+agent fixes one executor/model/optional-effort route at job start, every claim ticket inherits it,
+and a different route requires a separate job. AAR never receives provider credentials or performs
+that public model call. Public claim/commit/cancel retries reuse the original idempotency key;
+fresh terminal keys conflict, and retained command markers are digest-only and bounded per job.
 
 1. Call `aar_rlm_execute` with one declared strategy (`baseline` or `evidence_synthesis`), an
    explicit `max_steps`, the current `rlm.execute` grant, and only the broker grants required by

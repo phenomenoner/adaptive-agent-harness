@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.3.0a2-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a2)
+[![Release](https://img.shields.io/badge/release-v0.4.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#project-status)
 
@@ -162,6 +162,22 @@ The governing rules are deliberately simple:
 - deterministic reference brokers for development and conformance testing;
 - host-neutral boundaries that do not require AHC, Prime Agent, or NOOA.
 
+### A curated public ChatGPT and Codex plugin
+
+- six OAuth-authenticated, tenant-private structured-workspace tools;
+- five caller-delegated RLM tools for start, pre-spend claim, ticket-bound commit, status, and
+  cancellation;
+- one main-agent-selected model and optional reasoning effort per job, inherited by every call;
+- host-owned model execution and credentials—AAR persists the plan, tickets, bounded observations,
+  receipts, and continuation state;
+- deterministic plugin, scoped skill ZIP, reviewer cases, brand assets, and container profile.
+
+The tagged source includes the public plugin candidate, but GitHub availability is not Plugin
+Directory publication. Production HTTPS/OAuth, a reviewer account, OpenAI review and approval, and
+the publisher's final publish action remain separate gates. See
+[Public plugin and submission boundary](docs/PUBLIC-PLUGIN.md) and
+[Caller-delegated RLM design](docs/PUBLIC-RLM-PRODUCT-BOUNDARY.md).
+
 ---
 
 ## Where it shines
@@ -199,7 +215,7 @@ See [Why RLM + IPython](docs/WHY-RLM-AND-IPYTHON.md) for the deeper design ratio
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a2"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a0"
 ```
 
 ### Codex App setup
@@ -236,6 +252,8 @@ Detailed install and host notes:
 - [Operation skill](skills/aar-operations/SKILL.md)
 - [Technical verification status](TECHNICAL-STATUS.md)
 - [Model routing and fair evaluation](docs/MODEL-ROUTING-AND-EVALUATION.md)
+- [Public plugin and submission boundary](docs/PUBLIC-PLUGIN.md)
+- [Caller-delegated RLM design](docs/PUBLIC-RLM-PRODUCT-BOUNDARY.md)
 
 ---
 
@@ -268,20 +286,21 @@ The MCP frontend is intentionally replaceable. It does not own the continuity da
 
 ## Project status
 
-Current public alpha: **`0.3.0a2`**.
+Current public alpha: **`0.4.0a0`**.
 
-This release adds a durable production-model boundary without turning AAR into a credential store or
-provider proxy. A host can bind one allowlisted route, perform the physical call, and return an
-attested route and usage receipt. The public evaluation adapter accepts only the exact
-`openai-codex / gpt-5.6-luna / max` route, provider-reported usage, no fallback, and no unaccounted
-retry. It defines admissible evidence; it does not publish a benchmark score or winner.
+This release retains the durable production-model boundary from `v0.3.0a2` and adds the separate
+eleven-tool public plugin profile. For a public RLM job, the main agent fixes one callable model and
+optional effort at start, the host performs each actual model call, and AAR enforces pre-spend
+claim tickets, idempotent bounded commits, restart recovery, and honest caller-reported or
+host-receipt-bound provenance. The service does not receive provider credentials or silently choose
+a provider route.
 
 Reproduced from this public candidate:
 
 - Python 3.11 through 3.14 coverage;
 - 30-tool MCP v7 surface;
 - additive SQLite schema through v5;
-- full repository run: **328 passed, 1 platform-gated skip**;
+- full public repository suite across the Python 3.11–3.14 Linux CI matrix;
 - a clean exact-wheel supervisor/frontend probe on Linux/WSL;
 - durable supervisor, frontend replacement, process-loss, stale-writer, receipt-reuse, and policy-bound RLM successor scenarios.
 
@@ -290,13 +309,18 @@ Earlier native-Windows and installed-Hermes compatibility rows are retained as
 public repository, so those rows are not independently auditable from this tree and are not release
 criteria for the public source candidate.
 
+The Windows release workstation passes the focused public-plugin, package, and local Codex
+acceptance gates. Its full repository run still has six known failures in legacy MCP Sampling and
+process-owner lifecycle tests; those paths are not used by the remote public container and are not
+claimed as a full Windows supervisor gate for this release.
+
 Still open:
 
 - portable automatic restoration of broader IPython workspace state into a new generation;
 - general external-effect reconciliation adapters;
-- multi-tenant security isolation;
+- multi-tenant isolation for arbitrary local programmable execution;
 - generic exactly-once effects;
-- package-registry publication and stable API guarantees.
+- package-registry publication, official Plugin Directory publication, and stable API guarantees.
 
 Read [TECHNICAL-STATUS.md](TECHNICAL-STATUS.md), [HOST-COMPATIBILITY.md](HOST-COMPATIBILITY.md), and
 [Model routing and fair evaluation](docs/MODEL-ROUTING-AND-EVALUATION.md) before making production

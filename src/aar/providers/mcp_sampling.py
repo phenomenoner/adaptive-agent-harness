@@ -37,7 +37,10 @@ class _SessionBinding:
 
 
 class McpSamplingGatewayTransport:
-    """Schedule bounded sampling calls on an operation's owning MCP session."""
+    """Deprecated compatibility transport for an operation's owning MCP session.
+
+    New public integrations use caller-delegated RLM and must not depend on MCP Sampling.
+    """
 
     def __init__(
         self,

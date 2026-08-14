@@ -17,7 +17,7 @@ That implies:
 - provider credentials, external effects, activation, and final delivery stay in the host;
 - missing authority or evidence fails closed instead of being inferred.
 
-## Available in `v0.3.0a2`
+## Available in `v0.4.0a0`
 
 ### Contract and MCP surface
 
@@ -65,11 +65,38 @@ That implies:
 
 See [Receipt-backed model routing and fair evaluation](docs/MODEL-ROUTING-AND-EVALUATION.md) for the exact public contract.
 
+### Public ChatGPT and Codex plugin candidate
+
+- OAuth-authenticated Streamable HTTP with six tenant-workspace tools;
+- five caller-delegated RLM tools for start, claim, commit, status, and cancellation;
+- one main-agent-selected executor, model, and optional reasoning effort per job;
+- durable route, prompt, ticket, bounded observation, idempotency, and restart state;
+- deterministic plugin/skill/reviewer packet and a non-root container profile;
+- local exact-wheel and fresh Codex model-call acceptance with no provider credentials in AAR.
+
+The source release is not a Plugin Directory publication. Production deployment, OAuth metadata,
+reviewer access, public policy pages and controls, ChatGPT execution, portal scan, OpenAI review,
+approval, and publisher action remain external gates.
+
 ## Near-term priorities
 
-### Replace deprecated MCP Sampling
+### Deploy and qualify the public profile
 
-MCP Sampling is deprecated in protocol revision `2026-07-28`. A future host-owned model broker transport should retain the same route and receipt invariants while removing dependence on that back-channel.
+The next public-product step is operational rather than another in-process provider abstraction:
+
+- deploy one public HTTPS endpoint with verified OAuth resource and authorization metadata;
+- operate rate, storage, retention, deletion, backup, abuse, and incident controls;
+- run all reviewer cases against production with a no-MFA reviewer account;
+- execute fresh caller-delegated lifecycles from supported Codex and ChatGPT hosts;
+- submit only after the portal discovers the expected eleven tools and exact skill snapshot.
+
+OpenAI review, approval, and the publisher's final publish action remain separate states.
+
+### Retire deprecated MCP Sampling
+
+MCP Sampling is deprecated in protocol revision `2026-07-28`. The fixed Hermes route remains only
+for compatibility. Remove it after supported callers migrate to the caller-delegated lifecycle or a
+replacement host-owned broker transport that preserves the same route and receipt invariants.
 
 Acceptance requirements:
 
@@ -141,7 +168,7 @@ A formal run is admissible only when every contender proves the same effective r
 - remote stores, strategy plugins, evaluators, and observability exporters;
 - conformance kits for non-Python consumers;
 - package-registry publication and compatibility policy;
-- multi-tenant isolation only after a separate security design and threat model.
+- hostile multi-tenant programmable execution only after a separate security design and threat model.
 
 ## Non-goals
 

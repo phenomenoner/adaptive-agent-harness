@@ -2,6 +2,48 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
+## [0.4.0a0] — 2026-08-14
+
+### Added
+
+- add an OAuth-authenticated public Plugin Directory profile with six bounded tenant-workspace
+  tools and five caller-delegated RLM coordination tools;
+- let the main agent select one executor, model, and optional reasoning effort per job while the
+  host retains provider credentials and performs every actual model call;
+- add durable start, pre-spend claim, ticket-bound commit, status, cancellation, restart, tenant
+  isolation, idempotency, compare-and-set, and bounded command-history behavior;
+- add a scoped public runtime skill, deterministic plugin and skill-ZIP builder, reviewer cases,
+  public deployment profile, and explicit privacy, retention, and submission gates.
+
+### Changed
+
+- deprecate the fixed Hermes Luna/max MCP Sampling flag as compatibility-only; new public RLM
+  integrations use caller-delegated execution;
+- update the bundled `aar-operations` workflow to `0.9.1`, retaining the host-owned model-route
+  guidance from `v0.3.0a2` and adding caller-delegated retry and terminal-key boundaries;
+- keep generated Codex starter prompts within the host's 128-character limit;
+- reserve package identity `0.4.0a0` for the expanded executable bytes.
+
+### Verified
+
+- exact-wheel public HTTP, authentication, tenant isolation, quota, restart, idempotency,
+  concurrency, claim/commit/cancel, and package-asset checks;
+- deterministic plugin trees and scoped skill ZIPs with five positive and three negative reviewer
+  cases;
+- a fresh local Codex marketplace-derived lifecycle that persisted workspace state and completed an
+  actual caller-delegated `gpt-5.6-sol` / `max` call;
+- an independent fixed-point review covering 77 required cells with no actionable findings;
+- public-repository release hygiene, generated-contract parity, bundled-skill parity, locked
+  dependencies, Ruff, and the full Python 3.11–3.14 Linux CI repository suite.
+
+### Boundaries
+
+- GitHub source, tag, release assets, and a submission packet do not constitute official Plugin
+  Directory publication;
+- production HTTPS/OAuth, reviewer execution, public policy and operational controls, ChatGPT
+  execution, portal scan, OpenAI review, approval, and publisher action remain separate gates;
+- caller-reported or host-receipt-bound model provenance is not provider-signed attestation.
+
 ## [0.3.0a2] — 2026-08-14
 
 ### Added
@@ -116,3 +158,4 @@ All notable public changes are documented here. The project is in public alpha; 
 [0.3.0a0]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a0
 [0.3.0a1]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1
 [0.3.0a2]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a2
+[0.4.0a0]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a0

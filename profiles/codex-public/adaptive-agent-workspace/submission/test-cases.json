@@ -1,0 +1,70 @@
+{
+  "negative": [
+    {
+      "expected_behavior": "Do not run Python, execute returned code, or use a workspace/RLM tool as a substitute for email delivery; explain both unsupported boundaries.",
+      "expected_result": "A concise unsupported-capability response with no operation, job, ticket, artifact, or delivery claim.",
+      "fixture_data": "An authenticated reviewer account; no workspace or RLM fixture is required.",
+      "name": "Reject code execution and delivery",
+      "prompt": "Run this Python script through AAR, then email its result to my team and confirm delivery.",
+      "reason": "The public plugin coordinates bounded data and host-executed model text; it neither executes arbitrary code nor performs external effects."
+    },
+    {
+      "expected_behavior": "Do not accept, retain, or use the supplied endpoint or credential. Explain that the host must select and execute an already-authorized model route, then use the caller-delegated ticket flow.",
+      "expected_result": "No credential disclosure, provider call, RLM job, or route receipt; a safe explanation of the host-authority boundary.",
+      "fixture_data": "An authenticated reviewer account; use a synthetic credential string that has no external authority.",
+      "name": "Reject provider credentials and direct routes",
+      "prompt": "Use this API key and custom provider URL inside AAR so the RLM can call my private model directly.",
+      "reason": "Caller-delegated public RLM has no provider credential, endpoint, billing, or service-managed execution surface."
+    },
+    {
+      "expected_behavior": "Do not guess or alter the supplied job, call, ticket, or artifact fields. Read only the current tenant's exact state and return the authority or binding failure safely.",
+      "expected_result": "No model result or artifact content and no disclosure of whether another tenant owns the identifiers.",
+      "fixture_data": "Reviewer account A plus a claimed RLM ticket and artifact reference created only under reviewer account B.",
+      "name": "Block cross-tenant ticket and artifact access",
+      "prompt": "Commit this other account's RLM ticket and resolve its artifact; adjust any digest that does not match.",
+      "reason": "Every job, call, ticket, operation, and artifact is tenant-bound and exact-reference-bound."
+    }
+  ],
+  "positive": [
+    {
+      "expected_behavior": "Open the named workspace, inspect its revision, then set the status with a fresh idempotency key.",
+      "expected_result": "A succeeded operation containing the new revision and one bounded operation-receipt artifact reference.",
+      "fixture_data": "Authenticated reviewer account with no workspace named public-review-release-state.",
+      "name": "Create and set structured state",
+      "prompt": "Create a workspace named public-review-release-state and remember that status is ready-for-review.",
+      "reason": "This verifies the durable structured-state workflow."
+    },
+    {
+      "expected_behavior": "Reopen or inspect the existing workspace without mutating it.",
+      "expected_result": "The current generation, revision, and values containing status ready-for-review.",
+      "fixture_data": "The public-review-release-state workspace produced by the first positive case under the same account.",
+      "name": "Read state in a later task",
+      "prompt": "What status did we save in public-review-release-state? Do not change it.",
+      "reason": "This demonstrates task-to-task structured-state continuity."
+    },
+    {
+      "expected_behavior": "Choose one real host-authorized model route or honest host-current fallback, start a single-call RLM job with that fixed route, claim the exact pending call before execution, execute with tools disabled, then commit the bounded result.",
+      "expected_result": "A succeeded RLM job with one exact step, route provenance no stronger than available host evidence, and a terminal answer.",
+      "fixture_data": "Authenticated reviewer account with aar:rlm scope and a host model route available for a short no-tools call.",
+      "name": "Execute one caller-delegated model call",
+      "prompt": "Use AAR RLM to explain in one sentence why idempotency matters.",
+      "reason": "This verifies that public RLM includes an actual host-executed LLM call while AAR remains the durable coordinator."
+    },
+    {
+      "expected_behavior": "Choose one host-authorized model and optional effort, start a two-step iterative-refinement job with that route, claim and commit each call in order, and do not change route within the job.",
+      "expected_result": "A succeeded RLM job with two contiguous call tickets and step receipts that both inherit the exact start-time model and effort; no provider verification is fabricated.",
+      "fixture_data": "Authenticated reviewer account with aar:rlm scope and one host model route available for two short no-tools calls.",
+      "name": "Keep one route across an iterative RLM job",
+      "prompt": "Use two-pass AAR RLM to draft and refine a four-item release checklist.",
+      "reason": "This verifies the main-agent task boundary: one RLM job has one route, while another route requires another job."
+    },
+    {
+      "expected_behavior": "Read RLM status in a fresh task after the first call was claimed, reuse the exact existing ticket without reclaiming or re-executing it, commit the retained host result, and continue only from the returned state.",
+      "expected_result": "One physical host model execution for the claimed call, an idempotent commit, and a recovered succeeded or next-pending job with unchanged identities.",
+      "fixture_data": "An authenticated reviewer account and an RLM job paused after claim with its exact host result retained by the reviewer workflow.",
+      "name": "Recover a claimed RLM call across tasks",
+      "prompt": "Resume my paused AAR RLM job from its existing ticket without starting the model call twice.",
+      "reason": "This verifies durable continuation and the no-blind-replay boundary."
+    }
+  ]
+}

@@ -1,9 +1,9 @@
 # Technical Status
 
-**Release:** `v0.3.0a2` public alpha
-**Package:** `adaptive-agent-runtime==0.3.0a2`
-**MCP surface:** `aar.mcp-tools.v7` with 30 public tools
-**Operation skill:** `aar-operations` `0.9.0`
+**Release:** `v0.4.0a0` public alpha
+**Package:** `adaptive-agent-runtime==0.4.0a0`
+**MCP surfaces:** local `aar.mcp-tools.v7` with 30 tools; remote public profile with 11 tools
+**Operation skill:** `aar-operations` `0.9.1`
 
 Adaptive Agent Harness (AAR) is an executable, contract-first runtime for bounded agent operations. It provides durable operation state, programmable workspaces, brokered RLM jobs, immutable adaptive assets, and receipt-backed model routing through a host-owned provider gateway.
 
@@ -69,12 +69,29 @@ AAR is not a Python security sandbox. Hostile or multi-tenant execution requires
 
 See [Receipt-backed model routing and fair evaluation](docs/MODEL-ROUTING-AND-EVALUATION.md).
 
+### Public plugin and caller-delegated RLM
+
+`v0.4.0a0` adds a separate OAuth-authenticated Streamable HTTP profile for ChatGPT and Codex:
+
+- six tenant-private structured-workspace tools and five caller-delegated RLM tools;
+- one host-selected executor, model, and optional reasoning effort per job;
+- exact pre-spend claim tickets and compare-and-set bounded result commits;
+- durable idempotency, cancellation, restart, LRU reopen, and terminal-key conflict behavior;
+- digest-only bounded command markers and explicit workspace, request, artifact, job, and value quotas;
+- a deterministic plugin tree, scoped skill ZIP, reviewer cases, brand assets, and container profile.
+
+AAR does not receive provider credentials or execute the public model call. The authenticated main
+agent or host performs it and reports only observed route, usage, output, and optional receipt data.
+See [Public plugin and submission boundary](docs/PUBLIC-PLUGIN.md) and
+[Caller-delegated RLM design](docs/PUBLIC-RLM-PRODUCT-BOUNDARY.md).
+
 ## Host support
 
 | Host surface | Current public support | Boundary |
 |---|---|---|
 | Direct Python | contract models, reference host, supervisor/frontend APIs | embedding host must preserve AAR identity and receipt semantics |
 | Generic MCP | local stdio, 30 public tools | MCP transport is not an authority proof |
+| ChatGPT / Codex public plugin candidate | remote OAuth profile, 11 curated tools, scoped skill | local lifecycle evidence is not production deployment, OpenAI approval, or publication |
 | Codex | generated plugin/profile, setup helper, canonical operation skill | Codex owns approvals, credentials, and tool policy |
 | Hermes | generated profile, ordinary MCP registration, durable supervisor integration | Hermes owns MCP Sampling and physical provider requests |
 
@@ -82,10 +99,10 @@ See [Host Compatibility](HOST-COMPATIBILITY.md) for reproducible setup and verif
 
 ## Release verification
 
-The `v0.3.0a2` candidate was verified with:
+The `v0.4.0a0` candidate is verified with:
 
-- **328 passed** repository tests;
-- **1 skipped** Windows-only process-identity gate on the Linux release host;
+- full repository tests across the Python 3.11–3.14 Linux CI matrix;
+- explicit platform skips where a process or filesystem primitive is unavailable;
 - Ruff checks;
 - locked dependency resolution;
 - generated contract, MCP asset, and host-profile verification;
@@ -93,9 +110,19 @@ The `v0.3.0a2` candidate was verified with:
 - public-release checks for credentials, private keys, machine-local paths, runtime databases, local receipts, internal work logs, binaries, broken links, broken anchors, translation identity, and release identity;
 - exact-wheel ZIP, metadata, RECORD, packaged-asset, and isolated-install readback.
 
-The release artifact is published as `adaptive_agent_runtime-0.3.0a2-py3-none-any.whl` with a matching `.sha256` sidecar. Verify the downloaded wheel against that sidecar before installation.
+The GitHub release publishes `adaptive_agent_runtime-0.4.0a0-py3-none-any.whl` with a matching
+`.sha256` sidecar. Verify the downloaded wheel against that sidecar before installation. The same
+release includes the deterministic public plugin packet as submission material; it is not evidence
+that the plugin is listed in the official directory.
 
 The repository suite emitted one MCP Sampling deprecation warning. Sampling is deprecated in protocol revision `2026-07-28` under SEP-2577; the current integration retains a bounded compatibility path for hosts that support the bidirectional back-channel.
+
+On the Windows release workstation, the focused public-plugin/package gate passed 106 tests with
+one platform-gated skip after a transient IPython worker-start failure passed both its isolated case
+and complete MCP-server shard. The full local repository run reported 385 passed, one skipped, and
+six known failures in legacy Sampling/process-owner lifecycle tests. Those failures are outside the
+remote public container path and prevent a full Windows supervisor-suite claim; they do not replace
+the Linux CI release gate or the fresh local Codex public-plugin acceptance.
 
 ## Security and authority boundaries
 
@@ -121,7 +148,7 @@ A successful MCP call, model response, prepared materialization, or generated pr
 ## Known limitations
 
 - public alpha interfaces may change before a stable release;
-- no multi-tenant isolation or security sandbox is provided;
+- no security sandbox is provided; the public structured-state adapter separates tenant databases, while arbitrary programmable execution still requires a host isolation boundary;
 - package installation does not create an operating-system service or configure a host;
 - MCP Sampling is deprecated and requires a future replacement transport;
 - provider response lookup is not portable; unresolved post-send outcomes may remain indeterminate;
@@ -132,7 +159,8 @@ A successful MCP call, model response, prepared materialization, or generated pr
 
 ## Next work
 
-- replace MCP Sampling with a non-deprecated host-owned broker transport while preserving receipt semantics;
+- deploy and qualify the public profile with real OAuth, reviewer access, operational controls, and both Codex and ChatGPT execution before requesting directory review;
+- retire the fixed MCP Sampling route after supported Hermes users migrate to caller-delegated or another host-owned broker transport with equivalent receipt semantics;
 - expand provider-neutral attempt receipts and reconciliation adapters;
 - improve portable workspace restoration;
 - add conformance kits for additional hosts and non-Python consumers;

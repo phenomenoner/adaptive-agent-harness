@@ -1,0 +1,4 @@
+interface:
+  display_name: "Adaptive Agent Runtime"
+  short_description: "Coordinate durable workspaces and caller-delegated RLM"
+  default_prompt: "Use $aar-public-runtime for bounded durable state or host-executed, receipt-bound RLM work."

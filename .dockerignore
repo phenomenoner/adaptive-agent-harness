@@ -1,0 +1,14 @@
+.aar
+.codegraph
+.debug
+.git
+.github
+.pytest_cache
+.ruff_cache
+.venv
+**/__pycache__
+**/*.pyc
+dist
+roadmap.local.html
+WAL.md
+README.local.md

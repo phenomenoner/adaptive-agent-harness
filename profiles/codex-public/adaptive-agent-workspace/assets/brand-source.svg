@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Adaptive Agent Runtime geometric mark">
+  <rect width="1024" height="1024" fill="#061638"/>
+  <path d="M208 366 512 178l304 188v116L512 294 208 482Z" fill="#12C7F4"/>
+  <path d="m160 456 104 60v202l248 144v120L160 778Z" fill="#FFB719"/>
+  <path d="m864 456-104 60v202L512 862v120l352-204Z" fill="#F7F4EA"/>
+  <path d="m512 402 132 76-132 76-132-76Z" fill="#F7F4EA"/>
+  <path d="m380 510 116 67v151l-116-67Z" fill="#E4E8E8"/>
+  <path d="m528 577 116-67v151l-116 67Z" fill="#F7F4EA"/>
+</svg>

@@ -12,7 +12,8 @@ Security fixes currently target the latest tagged public alpha only.
 
 | Version | Supported |
 |---|---|
-| `0.3.x` alpha | Yes |
+| `0.4.x` alpha | Yes |
+| `0.3.x` alpha | Security fixes only when explicitly backported |
 | Earlier untagged snapshots | No |
 
 ## Reporting a vulnerability
@@ -29,6 +30,38 @@ Use GitHub's **Report a vulnerability** private advisory flow for this repositor
 - suggested mitigation, if known.
 
 Do not attach real secrets, private runtime databases, or production receipts. Use synthetic fixtures and redact identifiers.
+
+## Public remote plugin boundary
+
+The public Plugin Directory profile is deliberately narrower than the local `aar-mcp` developer
+surface. `aar-mcp-public` exposes six structured-workspace tools and five caller-delegated RLM
+coordination tools. It does not expose arbitrary Python, accept provider credentials or endpoints,
+perform the actual model call, execute external effects, activate artifacts, publish, or deliver
+messages.
+
+- Access tokens must be asymmetrically signed JWTs bound to the configured issuer, exact MCP
+  audience/resource, expiry, non-empty subject, and required scopes. Tokens are request
+  credentials and are not persisted in AAR runtime databases.
+- The exact issuer and verified subject are hashed into an opaque tenant key. Each tenant owns a
+  separate directory, SQLite database, runtime lock, principal, and session.
+- Workspace mutations require exact generation and revision values plus a content-bound
+  idempotency key. Cross-tenant operation, artifact, and RLM handles fail without disclosing
+  another tenant's data.
+- Every RLM job binds one host-selected executor, model, and optional reasoning effort. AAR issues
+  a pre-spend claim ticket; only the host executes the ticketed prompt, and the commit must match
+  its exact job, call, route, prompt digest, revision, and bounded output.
+- Claim, commit, cancel, request, active-runtime, workspace, key, value, state, artifact, and RLM
+  limits fail closed. Terminal retries must reuse the original idempotency key; retained command
+  markers are digest-only and bounded per job.
+- The v1 SQLite topology requires one authoritative process for a data root, or deterministic
+  tenant routing to exclusive owners and persistent volumes.
+- Production operators remain responsible for HTTPS ingress, OAuth metadata and key rotation,
+  rate limiting, abuse detection, volume quotas, encryption and backup, retention and account
+  deletion, purge verification, monitoring, incident response, and accurate public policies.
+
+The optional domain-verification token must enter only through the deployment secret mechanism.
+Configuration readback reports only whether it exists; the token must not enter source, logs,
+plugin artifacts, or test fixtures.
 
 ## Operational guidance
 

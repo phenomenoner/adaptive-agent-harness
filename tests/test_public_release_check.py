@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 from pathlib import Path
 
@@ -12,6 +13,36 @@ SPEC = importlib.util.spec_from_file_location(
 assert SPEC is not None and SPEC.loader is not None
 PUBLIC_RELEASE_CHECK = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PUBLIC_RELEASE_CHECK)
+
+
+def test_public_release_guard_binds_only_exact_brand_binary_assets() -> None:
+    expected_paths = {
+        "profiles/codex-public/adaptive-agent-workspace/assets/icon.png",
+        "profiles/codex-public/adaptive-agent-workspace/assets/logo-dark.png",
+        "profiles/codex-public/adaptive-agent-workspace/assets/logo.png",
+    }
+    assert set(PUBLIC_RELEASE_CHECK.ALLOWED_BINARY_SHA256) == expected_paths
+    for relative, expected in PUBLIC_RELEASE_CHECK.ALLOWED_BINARY_SHA256.items():
+        content = (ROOT / relative).read_bytes()
+        assert hashlib.sha256(content).hexdigest() == expected
+        assert PUBLIC_RELEASE_CHECK.binary_file_failure(relative, content) is None
+
+
+def test_public_release_guard_rejects_unlisted_or_modified_binary() -> None:
+    unlisted = PUBLIC_RELEASE_CHECK.binary_file_failure(
+        "profiles/codex-public/unlisted.png", b"\x89PNG\0unlisted"
+    )
+    assert unlisted == {
+        "kind": "binary-file",
+        "detail": "profiles/codex-public/unlisted.png",
+    }
+
+    relative = "profiles/codex-public/adaptive-agent-workspace/assets/icon.png"
+    modified = PUBLIC_RELEASE_CHECK.binary_file_failure(
+        relative, (ROOT / relative).read_bytes() + b"\0modified"
+    )
+    assert modified is not None
+    assert modified["kind"] == "binary-file-digest"
 
 
 @pytest.mark.parametrize(

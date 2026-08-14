@@ -187,6 +187,12 @@ class DeterministicWorkspace:
     def current_handle(self, workspace: WorkspaceRef) -> WorkspaceHandle:
         return self._handle(self._workspace_row(workspace))
 
+    def count(self) -> int:
+        with self._lock:
+            row = self._connection.execute("SELECT COUNT(*) AS count FROM workspaces").fetchone()
+            assert row is not None
+            return int(row["count"])
+
     def attach(
         self,
         workspace: WorkspaceRef,
