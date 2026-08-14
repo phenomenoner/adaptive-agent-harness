@@ -53,16 +53,16 @@ gates. Its full repository run retains six known failures in legacy Sampling/pro
 tests, so this release does not claim a full Windows supervisor-suite pass.
 
 The release artifacts were built from commit
-`2b6862e0a72eb6365faf90fa5314e0b9ccb144bf` (tree
-`b00c6d12499a156f404de0ec466a350144045f07`):
+`f8edda3d36df69c95c48f93c0f4c3c798dd0f21e` (tree
+`0c3a01bd3a29bd169e6369cb22180b64da97df85`):
 
-- `adaptive_agent_runtime-0.4.0a0-py3-none-any.whl` — 454,411 bytes, SHA-256
-  `17c7a85f1c20045203b75c98762e5d9c35f687a376e2ab9a2967a0d868450625`;
+- `adaptive_agent_runtime-0.4.0a0-py3-none-any.whl` — 454,421 bytes, SHA-256
+  `bedec4cd1b3d47cf79c81bfb5e8653b6ce22ce5c7fa6fe2463ad576b5480063e`;
 - `aar-public-runtime-skill-0.4.0.zip` — 6,604 bytes, SHA-256
   `39bf6f2c6c010f9518c7fcad0f5da6417f040048ea577df5874e10dd153fcbdf`.
 
 The source tree and the installed exact wheel generated identical 13-file plugin templates with
-manifest SHA-256 `4b3c40ae48dd99ffa5efd2a63f1c6fb4b1ad795a626e897b0518573854e0e613`.
+manifest SHA-256 `6247e6c15daffb0bb5412d42502d5c3d0059572f2db99909f64f6ab05df9c0f6`.
 The template used non-production `vendor.dev` URLs only for deterministic local validation and is
 not attached as a submission-ready asset. The GitHub release attaches the wheel and URL-independent
 scoped skill ZIP with matching sidecars. Verify downloaded files before use.
