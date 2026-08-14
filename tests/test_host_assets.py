@@ -57,11 +57,16 @@ def test_codex_plugin_uses_single_development_cachebuster() -> None:
             / "profiles/codex/plugins/adaptive-agent-runtime/.codex-plugin/plugin.json"
         ).read_text(encoding="utf-8")
     )
-    assert manifest["version"].startswith("0.3.0+codex.")
+    assert manifest["version"].startswith("0.4.0+codex.")
     assert manifest["version"].count("+codex.") == 1
     interface_text = json.dumps(manifest["interface"]).lower()
     assert "tool use or analysis" in interface_text
     assert "software planning, development, testing, and troubleshooting" in interface_text
+
+
+def test_hermes_distribution_tracks_current_profile_release() -> None:
+    distribution = (ROOT / HERMES_ROOT / "distribution.yaml").read_text(encoding="utf-8")
+    assert "version: 0.4.0\n" in distribution
 
 
 def test_hermes_runtime_config_and_review_map_are_equivalent() -> None:

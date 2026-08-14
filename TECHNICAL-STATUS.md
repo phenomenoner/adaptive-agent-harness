@@ -99,9 +99,8 @@ See [Host Compatibility](HOST-COMPATIBILITY.md) for reproducible setup and verif
 
 ## Release verification
 
-The `v0.4.0a0` candidate is verified with:
+The `v0.4.0a0` candidate has local verification for:
 
-- full repository tests across the Python 3.11–3.14 Linux CI matrix;
 - explicit platform skips where a process or filesystem primitive is unavailable;
 - Ruff checks;
 - locked dependency resolution;
@@ -109,6 +108,9 @@ The `v0.4.0a0` candidate is verified with:
 - canonical skill parity across the source, Codex, and Hermes copies;
 - public-release checks for credentials, private keys, machine-local paths, runtime databases, local receipts, internal work logs, binaries, broken links, broken anchors, translation identity, and release identity;
 - exact-wheel ZIP, metadata, RECORD, packaged-asset, and isolated-install readback.
+
+The exact commit must also pass the full Python 3.11–3.14 Linux GitHub Actions matrix before the
+`v0.4.0a0` tag is created.
 
 The GitHub release publishes `adaptive_agent_runtime-0.4.0a0-py3-none-any.whl` with a matching
 `.sha256` sidecar. Verify the downloaded wheel against that sidecar before installation. The same

@@ -295,12 +295,12 @@ claim tickets, idempotent bounded commits, restart recovery, and honest caller-r
 host-receipt-bound provenance. The service does not receive provider credentials or silently choose
 a provider route.
 
-Reproduced from this public candidate:
+Release evidence for this public candidate includes:
 
 - Python 3.11 through 3.14 coverage;
 - 30-tool MCP v7 surface;
 - additive SQLite schema through v5;
-- full public repository suite across the Python 3.11–3.14 Linux CI matrix;
+- a required pre-tag full repository run across the Python 3.11–3.14 Linux CI matrix;
 - a clean exact-wheel supervisor/frontend probe on Linux/WSL;
 - durable supervisor, frontend replacement, process-loss, stale-writer, receipt-reuse, and policy-bound RLM successor scenarios.
 

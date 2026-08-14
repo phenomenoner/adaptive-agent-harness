@@ -34,7 +34,10 @@ All notable public changes are documented here. The project is in public alpha; 
   actual caller-delegated `gpt-5.6-sol` / `max` call;
 - an independent fixed-point review covering 77 required cells with no actionable findings;
 - public-repository release hygiene, generated-contract parity, bundled-skill parity, locked
-  dependencies, Ruff, and the full Python 3.11–3.14 Linux CI repository suite.
+  dependencies, and Ruff.
+
+The release process withholds the tag until the exact commit passes the full Python 3.11–3.14
+Linux GitHub Actions repository matrix.
 
 ### Boundaries
 

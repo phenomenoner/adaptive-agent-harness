@@ -186,7 +186,7 @@ def test_configure_codex_upgrades_previous_plugin_cachebuster(tmp_path: Path) ->
             / "plugins/adaptive-agent-runtime/.codex-plugin/plugin.json"
         ).read_text(encoding="utf-8")
     )["version"]
-    previous_version = "0.1.0+codex.20260809083709"
+    previous_version = "0.3.0+codex.20260812160000"
     assert expected_version != previous_version
     aar_mcp = Path(r"C:\tools\aar-mcp.exe")
     calls: list[tuple[str, ...]] = []

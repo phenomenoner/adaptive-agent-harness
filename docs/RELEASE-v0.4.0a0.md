@@ -35,16 +35,18 @@ local developer profile, not the remote public-directory profile.
 
 ## Verification
 
-The candidate passed:
+The candidate passed these local gates:
 
-- locked dependency, generated contract, MCP asset, host-profile, bundled-skill, Ruff, and full
-  Python 3.11–3.14 Linux CI repository checks;
+- locked dependency, generated contract, MCP asset, host-profile, bundled-skill, and Ruff checks;
 - exact-wheel public HTTP/authentication, isolation, quota, restart, idempotency, concurrency, and
   RLM lifecycle tests;
 - deterministic plugin and scoped-skill generation;
 - a fresh local Codex marketplace-derived run that persisted workspace state and completed an
   actual caller-delegated `gpt-5.6-sol` / `max` model call;
 - an independent final review of 77 required cells with no actionable findings.
+
+The exact commit must also pass the full Python 3.11–3.14 Linux GitHub Actions repository matrix
+before the `v0.4.0a0` tag is created.
 
 The Windows release workstation passed the focused public-plugin/package and fresh local Codex
 gates. Its full repository run retains six known failures in legacy Sampling/process-owner lifecycle
