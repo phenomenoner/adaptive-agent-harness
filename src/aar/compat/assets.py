@@ -189,7 +189,8 @@ cleanup is deliberately non-destructive and retains generation-specific control 
 delete a successor by pathname or visible bytes. If native process identity is temporarily
 unavailable, do not delete control files or start a second owner.
 
-When setup reports `restart_required: true`, restart Codex Desktop, start a fresh task, load the
+When setup reports `restart_required: true`, or a preserved manual receipt reports
+`restart_required_after_manual_apply: true`, restart Codex Desktop, start a fresh task, load the
 deferred capability tool when needed, and make one native `aar_capabilities` call. The old task's
 catalog or a same-task transport error cannot prove that the candidate was picked up. Invoke
 `$aar-operations` for public MCP workflows. Use `$aar-ipython-codegraph` only for explicitly

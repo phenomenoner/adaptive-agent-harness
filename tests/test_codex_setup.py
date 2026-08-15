@@ -226,6 +226,7 @@ def _manual_report(
     assert report["status"] == "manual_authority_required"
     assert report["configuration_changed"] is False
     assert report["completed_mutations"] == []
+    assert report["restart_required_after_manual_apply"] is True
     assert state.snapshot() == before
     assert not any(_is_mutating_codex_call(call) for call in state.calls)
     return report
@@ -511,6 +512,7 @@ def test_configure_codex_is_a_noop_when_plugin_and_mcp_are_current(tmp_path: Pat
     assert report["status"] == "already_configured"
     assert report["configuration_required"] is False
     assert report["manual_plan"] == []
+    assert report["restart_required_after_manual_apply"] is False
     assert report["mcp_authority"] == "plugin"
     assert state.snapshot() == before
     assert not any(_is_mutating_codex_call(call) for call in state.calls)
@@ -532,6 +534,56 @@ def test_configure_codex_plans_previous_plugin_cachebuster_upgrade(tmp_path: Pat
     assert _plan_stages(report) == ["plugin-add"]
     assert report["plugin_change_required"] is True
     assert report["plugin_changed"] is False
+
+
+def test_manual_plan_receipt_preserves_restart_handoff_without_persistent_state(
+    tmp_path: Path,
+) -> None:
+    marketplace = ROOT / "profiles" / "codex"
+    prior = {
+        "pluginId": codex_setup.PLUGIN_SELECTOR,
+        "version": "0.3.0+codex.20260812160000",
+        "enabled": True,
+    }
+    planned_state = _FakeCodexState(
+        tmp_path / "planned.toml",
+        marketplace,
+        marketplace_root=marketplace,
+        plugin=prior,
+    )
+
+    manual = _manual_report(
+        planned_state,
+        marketplace,
+        Path("/tools/aar-mcp"),
+        planned_state.config,
+    )
+
+    assert _plan_stages(manual) == ["plugin-add"]
+    assert manual["restart_required_after_manual_apply"] is True
+
+    current = {
+        "pluginId": codex_setup.PLUGIN_SELECTOR,
+        "version": codex_setup._plugin_version(marketplace),
+        "enabled": True,
+    }
+    applied_state = _FakeCodexState(
+        tmp_path / "applied.toml",
+        marketplace,
+        marketplace_root=marketplace,
+        plugin=current,
+    )
+    observed = configure_codex(
+        Path(r"C:\tools\codex.cmd"),
+        Path(r"C:\tools\aar-mcp.exe"),
+        marketplace,
+        invoke=applied_state.invoke,
+        codex_config=applied_state.config,
+    )
+
+    assert observed["status"] == "already_configured"
+    assert observed["restart_required_after_manual_apply"] is False
+    assert manual["restart_required_after_manual_apply"] is True
 
 
 def test_configure_codex_rejects_conflicting_global_mcp_override(tmp_path: Path) -> None:
@@ -638,6 +690,7 @@ def test_main_returns_manual_authority_required_without_starting_runtime(
         "authority_disposition": "NO_ATOMIC_AUTHORITY",
         "configuration_changed": False,
         "manual_plan": [{"stage": "plugin-add"}],
+        "restart_required_after_manual_apply": True,
         "status": "manual_authority_required",
     }
     monkeypatch.setattr(codex_setup, "resolve_aar_mcp", lambda command: aar_mcp)
@@ -664,6 +717,7 @@ def test_main_returns_manual_authority_required_without_starting_runtime(
     assert report["codex"] == configured
     assert report["codex_runtime"] is None
     assert report["restart_required"] is False
+    assert report["restart_required_after_manual_apply"] is True
 
 
 def test_main_stop_runtime_uses_exact_selected_runtime_home(

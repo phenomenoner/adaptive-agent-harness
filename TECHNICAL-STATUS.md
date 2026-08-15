@@ -7,7 +7,7 @@
 
 The machine-readable authority for this page and the other five public release surfaces is
 [`profiles/release-status-v1.json`](profiles/release-status-v1.json). It records the candidate as
-`candidate_unreleased`, the 62-row repair matrix, and the pending external receipts. The preceding
+`candidate_unreleased`, the 63-row repair matrix, and the pending external receipts. The preceding
 `v0.4.0a5` candidate is **blocked, unreleased, and historical**; it is not the current release.
 
 Adaptive Agent Harness (AAR) is an executable, contract-first runtime for bounded agent operations.
@@ -91,7 +91,7 @@ See [Host Compatibility](HOST-COMPATIBILITY.md) for commands and evidence bounda
 
 ## Verification state
 
-The candidate has **62** required lifecycle repair rows. The status authority records all of the
+The candidate has **63** required lifecycle repair rows. The status authority records all of the
 following as `PENDING` until exact receipts are bound:
 
 The planned evidence altitudes are T1 (the matrix), T2 (real component seams), and T3 (fresh-host

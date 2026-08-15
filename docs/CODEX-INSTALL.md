@@ -41,6 +41,11 @@ read-only setup inspection. A conflict or uncertain effect is a stop-and-reconci
 not repeat a mutation blindly. If a future provider adapter exposes idempotency, reuse the original
 key only for a byte-identical request.
 
+The manual receipt sets `restart_required_after_manual_apply: true` whenever its ordered plan is
+non-empty. Preserve that receipt across the operator-authorized steps: after the plan is applied and
+readback is current, restart Codex Desktop even if the subsequent already-configured receipt has
+`restart_required: false`. No persistent installer ledger is needed for this handoff.
+
 The candidate's supervisor endpoint, credential, and shutdown-request paths use generation-unique
 names; `discovery.json` is a stable pointer carrying the publication ID and advances atomically.
 Normal lifecycle startup, stale-owner handling, shutdown consumption, and terminal cleanup are
@@ -82,7 +87,7 @@ wheel has passed its preflight. It does not grant provider mutation authority.
 
 Release maintainers additionally run Ruff, focused regressions, the full repository suite, Python
 3.11–3.14 compatibility, exact-wheel readback, fresh Codex scenarios, and the caller-delegated
-Luna/max drill. The current 62-row matrix and these release receipts remain pending in the status
+Luna/max drill. The current 63-row matrix and these release receipts remain pending in the status
 authority; local installation is not official Plugin Directory deployment or publication.
 
 The setup command does not grant provider credentials, external effects, activation, publication,

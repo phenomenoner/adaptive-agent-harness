@@ -13,7 +13,7 @@
     "transport": "stdio"
   },
   "operation_skill": {
-    "digest": "sha256:7b6e191821119bfdd411cf7b30ff6f385bf788bfb6bf71cc23d9681aac05f919",
+    "digest": "sha256:a5a281ae308d1c8bfc8f426b4161dc9dcd44b4ec09c0202ddd4a8224b43dcaf6",
     "name": "aar-operations",
     "version": "0.9.6"
   },

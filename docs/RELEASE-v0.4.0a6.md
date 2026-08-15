@@ -21,19 +21,21 @@ The machine-readable authority for this page and the other public release surfac
   successor.
 - The subprocess Codex configuration adapter reports `NO_ATOMIC_AUTHORITY`. It reads current state
   and returns an ordered manual/provider-authority-required plan before the first forward mutation.
-  It does not perform automatic installation, rollback, or best-effort compensation.
+  It does not perform automatic installation, rollback, or best-effort compensation. A non-empty
+  plan receipt sets `restart_required_after_manual_apply: true`, so a later no-op inspection cannot
+  obscure the required Codex restart.
 - The canonical `aar-operations` skill is `0.9.6` and documents the provider CAS boundary, manual
   setup plan, retained generations, and the required fresh-task restart verification.
 
 ## Verification state
 
-The lifecycle repair matrix contains **62** required rows. The candidate status file currently
+The lifecycle repair matrix contains **63** required rows. The candidate status file currently
 records the local repair result, Windows full suite, supported-Python CI, exact-wheel check, fresh
 restarted host/Luna drill, and independent review as `PENDING`; no count or receipt is fabricated
 here. Exact source commit, tree, and wheel fields remain null until a post-freeze external receipt
 binds them.
 
-The candidate is intended to be evaluated at T1 (the 62-row matrix), T2 (real process, publication,
+The candidate is intended to be evaluated at T1 (the 63-row matrix), T2 (real process, publication,
 provider, stop-wait, and client-attach seams), and T3 (supported hosts, exact wheel, restart/fresh
 task, and the caller-delegated Luna/max drill). Passing a local unit subset alone is not a release
 claim.

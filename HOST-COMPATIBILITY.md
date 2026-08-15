@@ -14,7 +14,7 @@ candidate is **blocked, unreleased, and historical**.
 | Hermes | generated profile and `aar-mcp` | host receipt `PENDING` | Hermes owns MCP Sampling and physical provider calls |
 | ChatGPT/Codex public plugin | remote OAuth profile, 11 curated tools | deployment and review `PENDING` | not official Plugin Directory publication |
 
-The repair candidate contains **62** required lifecycle rows. Windows full-suite, supported-Python
+The repair candidate contains **63** required lifecycle rows. Windows full-suite, supported-Python
 CI, exact-wheel, fresh restarted host/Luna drill, and independent review are all `PENDING` in the
 central status file; this page does not fabricate counts from the blocked historical candidate.
 

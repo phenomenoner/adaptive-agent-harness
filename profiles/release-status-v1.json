@@ -14,7 +14,7 @@
   },
   "verification": {
     "matrix": {
-      "total": 62,
+      "total": 63,
       "local_repair_status": "pending"
     },
     "windows_full_suite": "PENDING",

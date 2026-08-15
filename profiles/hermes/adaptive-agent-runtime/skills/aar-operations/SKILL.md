@@ -95,6 +95,11 @@ not repeat a mutation blindly. If a future provider adapter exposes idempotency,
 key only for a byte-identical request. Automatic forward and rollback may be enabled only after a
 real provider adapter supplies and tests the expected-revision CAS contract.
 
+Preserve the manual receipt across operator-authorized configuration steps. A non-empty plan sets
+`restart_required_after_manual_apply: true`; after those steps pass exact readback, restart Codex
+Desktop even if a later already-configured inspection has `restart_required: false`. This explicit
+receipt handoff avoids inventing a persistent installer ledger.
+
 Supervisor endpoint, credential, and shutdown-request paths use generation-unique names;
 `discovery.json` is a stable pointer carrying the publication ID and advances atomically. Normal
 startup, stale-owner handling, shutdown-request consumption, and terminal cleanup are deliberately
@@ -102,10 +107,11 @@ non-destructive: retained generation-specific control artifacts are forensic sta
 to delete a successor. A future explicit offline garbage collector must validate the exact
 generation and remain outside normal lifecycle operations.
 
-After a setup receipt reports `restart_required: true`, restart Codex Desktop, open a fresh task,
-load the deferred capability tool if needed, and make one native `aar_capabilities` call. A stale
-task catalog, CLI-only probe, or same-task transport error is not evidence that the new generation
-is active.
+After a setup receipt reports `restart_required: true`, or after applying a manual plan whose
+preserved receipt reports `restart_required_after_manual_apply: true`, restart Codex Desktop, open
+a fresh task, load the deferred capability tool if needed, and make one native `aar_capabilities`
+call. A stale task catalog, CLI-only probe, or same-task transport error is not evidence that the
+new generation is active.
 
 Keep these exact public field names explicit:
 

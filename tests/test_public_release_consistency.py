@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SUCCESSOR = "0.4.0a6"
-MATRIX_ROWS = 62
+MATRIX_ROWS = 63
 STATUS_PATH = ROOT / "profiles" / "release-status-v1.json"
 
 

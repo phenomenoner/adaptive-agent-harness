@@ -424,6 +424,7 @@ def configure_codex(
         "plugin_version": expected_version,
         "preflight_launcher": os.fspath(preflight_launcher),
         "provider_mutation_authority": "provider_or_operator_required",
+        "restart_required_after_manual_apply": configuration_required,
         "status": (
             "manual_authority_required" if configuration_required else "already_configured"
         ),
@@ -718,6 +719,9 @@ def main(argv: list[str] | None = None) -> int:
                             "codex": configured,
                             "codex_runtime": None,
                             "restart_required": False,
+                            "restart_required_after_manual_apply": bool(
+                                configured.get("restart_required_after_manual_apply", False)
+                            ),
                         },
                         ensure_ascii=False,
                         indent=2,
@@ -743,6 +747,10 @@ def main(argv: list[str] | None = None) -> int:
             "preflight": preflight,
             "codex": configured,
             "codex_runtime": codex_runtime,
+            "restart_required_after_manual_apply": bool(
+                configured is not None
+                and configured.get("restart_required_after_manual_apply", False)
+            ),
             "restart_required": bool(
                 configured is not None and configured["configuration_changed"]
             ),

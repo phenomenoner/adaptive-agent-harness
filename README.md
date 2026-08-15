@@ -296,7 +296,7 @@ immutable reference is `phenomenoner/adaptive-agent-harness@v0.4.0a6`, and the c
 will resolve only after the pending gates pass and the tag is published. The preceding
 `0.4.0a5` candidate is **blocked, unreleased, and historical**; it is not the current release.
 The single machine-readable status authority is
-[`profiles/release-status-v1.json`](profiles/release-status-v1.json). It records a 62-row repair
+[`profiles/release-status-v1.json`](profiles/release-status-v1.json). It records a 63-row repair
 matrix whose local repair status, Windows full suite, supported-Python CI, exact wheel, fresh
 restarted host/Luna drill, and independent review remain `PENDING` until their receipts are bound.
 
