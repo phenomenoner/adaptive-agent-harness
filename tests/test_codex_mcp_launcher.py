@@ -76,6 +76,8 @@ def _discovery(
 def _write_discovery(runtime_home: Path, discovery: SupervisorDiscoveryRecord) -> Path:
     private = runtime_home / "supervisor"
     private.mkdir(parents=True, exist_ok=True)
+    if os.name != "nt":
+        private.chmod(0o700)
     path = private / "discovery.json"
     path.write_bytes(canonical_json_bytes(discovery))
     return path
@@ -542,6 +544,7 @@ class _FakeCtypesFunction:
         return self._function(*args)
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows exact-handle termination contract")
 @pytest.mark.parametrize(
     ("wait_result", "message"),
     [
