@@ -1,9 +1,9 @@
 # Technical Status
 
-**Release:** `v0.4.0a0` public alpha
-**Package:** `adaptive-agent-runtime==0.4.0a0`
+**Release:** `v0.4.0a4` public alpha
+**Package:** `adaptive-agent-runtime==0.4.0a4`
 **MCP surfaces:** local `aar.mcp-tools.v7` with 30 tools; remote public profile with 11 tools
-**Operation skill:** `aar-operations` `0.9.1`
+**Operation skill:** `aar-operations` `0.9.4`
 
 Adaptive Agent Harness (AAR) is an executable, contract-first runtime for bounded agent operations. It provides durable operation state, programmable workspaces, brokered RLM jobs, immutable adaptive assets, and receipt-backed model routing through a host-owned provider gateway.
 
@@ -99,7 +99,7 @@ See [Host Compatibility](HOST-COMPATIBILITY.md) for reproducible setup and verif
 
 ## Release verification
 
-The `v0.4.0a0` candidate has local verification for:
+The `v0.4.0a4` candidate has local verification for:
 
 - explicit platform skips where a process or filesystem primitive is unavailable;
 - Ruff checks;
@@ -110,19 +110,18 @@ The `v0.4.0a0` candidate has local verification for:
 - exact-wheel ZIP, metadata, RECORD, packaged-asset, and isolated-install readback.
 
 The exact commit must also pass the full Python 3.11–3.14 Linux GitHub Actions matrix before the
-`v0.4.0a0` tag is created.
+`v0.4.0a4` tag is created.
 
-The GitHub release publishes `adaptive_agent_runtime-0.4.0a0-py3-none-any.whl` with a matching
+The GitHub release publishes `adaptive_agent_runtime-0.4.0a4-py3-none-any.whl` with a matching
 `.sha256` sidecar. Verify the downloaded wheel against that sidecar before installation. The same
 release includes the deterministic public plugin packet as submission material; it is not evidence
 that the plugin is listed in the official directory.
 
 The repository suite emitted one MCP Sampling deprecation warning. Sampling is deprecated in protocol revision `2026-07-28` under SEP-2577; the current integration retains a bounded compatibility path for hosts that support the bidirectional back-channel.
 
-On the Windows release workstation, the focused public-plugin/package gate passed 106 tests with
-one platform-gated skip after a transient IPython worker-start failure passed both its isolated case
-and complete MCP-server shard. The full local repository run reported 385 passed, one skipped, and
-six known failures in legacy Sampling/process-owner lifecycle tests. Those failures are outside the
+On the Windows release workstation, the focused Codex launcher/setup/package shard passed 36 tests.
+The full local repository run reported 399 passed, one skipped, and six known failures in legacy
+Sampling/process-owner lifecycle tests. Those failures are outside the
 remote public container path and prevent a full Windows supervisor-suite claim; they do not replace
 the Linux CI release gate or the fresh local Codex public-plugin acceptance.
 

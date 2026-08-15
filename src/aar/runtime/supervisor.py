@@ -52,6 +52,8 @@ DISCOVERY_FILE_NAME = "discovery.json"
 CREDENTIAL_FILE_NAME = "attachment.key"
 LIFECYCLE_FILE_NAME = "lifecycle.jsonl"
 SOCKET_FILE_NAME = "supervisor.sock"
+SHUTDOWN_REQUEST_FILE_NAME = "shutdown.request"
+SHUTDOWN_REQUEST_SCHEMA_VERSION = "aar.supervisor.shutdown-request.v1"
 MAX_FRAME_LINE_BYTES = ((MAX_PRIVATE_PAYLOAD_BYTES + 2) // 3) * 4 + 65_536
 BOOTSTRAP_AUTHORITY_DIGEST = canonical_sha256({"authority": "mcp-transport-bootstrap"})
 
@@ -129,6 +131,7 @@ class SupervisorService:
         self.credential_path = self.private_dir / CREDENTIAL_FILE_NAME
         self.lifecycle_path = self.private_dir / LIFECYCLE_FILE_NAME
         self.socket_path = self.private_dir / SOCKET_FILE_NAME
+        self.shutdown_request_path = self.private_dir / SHUTDOWN_REQUEST_FILE_NAME
         self.programmable_backend = programmable_backend
         self.transport = transport or ("tcp" if os.name == "nt" else "unix")
         self.dispatcher_concurrency = dispatcher_concurrency
@@ -158,6 +161,9 @@ class SupervisorService:
             async with self._listener, anyio.create_task_group() as task_group:
                 task_group.start_soon(self._listener.serve, self._handle_client)
                 while not stop.is_set():
+                    if self._consume_shutdown_request():
+                        self._stop_reason = "host_adapter_request"
+                        break
                     await anyio.sleep(0.05)
                 task_group.cancel_scope.cancel()
         except BaseException:
@@ -494,6 +500,8 @@ class SupervisorService:
         self.discovery_path.unlink()
         with contextlib.suppress(FileNotFoundError):
             self.credential_path.unlink()
+        with contextlib.suppress(FileNotFoundError):
+            self.shutdown_request_path.unlink()
         if prior.endpoint_kind == "unix":
             endpoint = Path(prior.endpoint_ref)
             with contextlib.suppress(FileNotFoundError):
@@ -519,6 +527,35 @@ class SupervisorService:
         elif discovery is None and self.transport == "unix" and self._listener is not None:
             with contextlib.suppress(FileNotFoundError):
                 self.socket_path.unlink()
+        with contextlib.suppress(FileNotFoundError):
+            self.shutdown_request_path.unlink()
+
+    def _consume_shutdown_request(self) -> bool:
+        try:
+            document = json.loads(self.shutdown_request_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return False
+        except (OSError, json.JSONDecodeError):
+            with contextlib.suppress(OSError):
+                self.shutdown_request_path.unlink()
+            return False
+        expected_keys = {"discovery_digest", "process_identity", "schema_version"}
+        if not isinstance(document, dict) or set(document) != expected_keys:
+            with contextlib.suppress(OSError):
+                self.shutdown_request_path.unlink()
+            return False
+        discovery = self.discovery
+        identity = self.process_identity
+        accepted = (
+            discovery is not None
+            and identity is not None
+            and document["schema_version"] == SHUTDOWN_REQUEST_SCHEMA_VERSION
+            and document["discovery_digest"] == discovery.discovery_digest
+            and document["process_identity"] == identity.model_dump(mode="json")
+        )
+        with contextlib.suppress(OSError):
+            self.shutdown_request_path.unlink()
+        return accepted
 
     def _append_lifecycle(self, state: str, *, reason: str | None = None) -> None:
         identity = self.process_identity

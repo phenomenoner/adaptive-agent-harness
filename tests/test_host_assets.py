@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import tomllib
 from pathlib import Path
 
 from aar.compat.assets import (
@@ -36,6 +37,13 @@ def test_bundles_copy_every_canonical_skill_byte() -> None:
         ).read_bytes() == expected
 
 
+def test_operation_skill_distinguishes_deferred_loading_from_native_runtime_proof() -> None:
+    content = (ROOT / "skills/aar-operations/SKILL.md").read_text(encoding="utf-8")
+    assert "`tool_search`" in content
+    assert "`mcp__aar__aar_capabilities`" in content
+    assert "Tool search only loads a deferred native tool; it is not runtime evidence." in content
+
+
 def test_profile_contract_binds_runtime_configs_and_skill() -> None:
     contract = json.loads((ROOT / "profiles/host-profiles-v1.json").read_text(encoding="utf-8"))
     metadata = json.loads(
@@ -43,7 +51,7 @@ def test_profile_contract_binds_runtime_configs_and_skill() -> None:
     )
     assert contract["package"]["python_requires"] == ">=3.11,<3.15"
     assert contract["operation_skill"]["digest"] == metadata["skill_digest"]
-    assert contract["operation_skill"]["version"] == "0.9.1"
+    assert contract["operation_skill"]["version"] == "0.9.4"
     for host in ("codex", "hermes"):
         profile = contract["profiles"][host]
         content = (ROOT / profile["bundle"] / profile["config_file"]).read_bytes()
@@ -62,6 +70,27 @@ def test_codex_plugin_uses_single_development_cachebuster() -> None:
     interface_text = json.dumps(manifest["interface"]).lower()
     assert "tool use or analysis" in interface_text
     assert "software planning, development, testing, and troubleshooting" in interface_text
+
+
+def test_codex_plugin_default_prompts_fit_host_limit() -> None:
+    manifest = json.loads(
+        (
+            ROOT
+            / "profiles/codex/plugins/adaptive-agent-runtime/.codex-plugin/plugin.json"
+        ).read_text(encoding="utf-8")
+    )
+    prompts = manifest["interface"]["defaultPrompt"]
+    assert 1 <= len(prompts) <= 3
+    assert all(isinstance(prompt, str) and len(prompt) <= 128 for prompt in prompts)
+
+
+def test_codex_profile_uses_package_exported_host_launcher() -> None:
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    config = json.loads((ROOT / CODEX_ROOT / ".mcp.json").read_text(encoding="utf-8"))
+    server = config["mcpServers"]["aar"]
+    assert server["command"] == "aar-codex-mcp"
+    assert server["args"] == []
+    assert project["project"]["scripts"][server["command"]] == "aar.compat.codex_mcp:main"
 
 
 def test_hermes_distribution_tracks_current_profile_release() -> None:

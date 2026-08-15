@@ -17,7 +17,7 @@ That implies:
 - provider credentials, external effects, activation, and final delivery stay in the host;
 - missing authority or evidence fails closed instead of being inferred.
 
-## Available in `v0.4.0a0`
+## Available in `v0.4.0a4`
 
 ### Contract and MCP surface
 
@@ -27,6 +27,10 @@ That implies:
 - local-stdio MCP server with 30 public tools;
 - canonical host-neutral `aar-operations` skill with generated host-profile copies;
 - direct SDK and reference-host paths for embedding and conformance testing.
+
+The `v0.4.0a4` maintenance release adds the Codex-specific `aar-codex-mcp` lifecycle adapter,
+exact-manifest preflight, stable setup-owned supervisor, marketplace-root binding, and deferred-tool-
+aware native verification. It does not widen provider, effect, activation, or delivery authority.
 
 ### Durable operations
 

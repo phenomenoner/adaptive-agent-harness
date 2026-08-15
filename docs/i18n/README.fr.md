@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.4.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a0)
+[![Release](https://img.shields.io/badge/release-v0.4.0a4-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a4)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#état-du-projet)
 
@@ -190,7 +190,7 @@ Voir [Pourquoi RLM + IPython](../../docs/WHY-RLM-AND-IPYTHON.md) pour la justifi
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a4"
 ```
 
 ### Configuration de Codex App
@@ -257,11 +257,11 @@ Le frontend MCP est volontairement remplaçable. Il ne possède ni la base de do
 
 ## État du projet
 
-Alpha publique actuelle : **`0.4.0a0`**.
+Alpha publique actuelle : **`0.4.0a4`**.
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.4.0a0` receipt-backed model routing, current verification, and exact release
-> boundaries, read the canonical English [release notes](../RELEASE-v0.4.0a0.md) and
+> context. For `v0.4.0a4` receipt-backed model routing, current verification, and exact release
+> boundaries, read the canonical English [release notes](../RELEASE-v0.4.0a4.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
 

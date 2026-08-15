@@ -18,7 +18,7 @@ from aar.versions import PACKAGE_VERSION
 
 PROFILE_CONTRACT_VERSION = "aar.host-profiles.v1"
 PROFILE_VERSION = "0.4.0"
-CODEX_PROFILE_VERSION = "0.4.0+codex.20260814125137"
+CODEX_PROFILE_VERSION = "0.4.0+codex.20260814183626"
 SKILL_FILES = ("SKILL.md", "agents/openai.yaml", "metadata.json")
 OPTIONAL_SKILL_FILES = ("SKILL.md", "agents/openai.yaml")
 CODEX_ROOT = Path("profiles/codex/plugins/adaptive-agent-runtime")
@@ -40,7 +40,7 @@ def _codex_mcp() -> dict[str, Any]:
         "mcpServers": {
             "aar": {
                 "args": [],
-                "command": "aar-mcp",
+                "command": "aar-codex-mcp",
                 "startup_timeout_sec": 30,
                 "tool_timeout_sec": 60,
             }
@@ -101,6 +101,7 @@ def host_documents(root: Path) -> dict[Path, bytes]:
                 "config_digest": _sha256(codex_mcp),
                 "config_file": ".mcp.json",
                 "format": "codex-plugin",
+                "launcher": "aar-codex-mcp",
             },
             "hermes": {
                 "bundle": HERMES_ROOT.as_posix(),
@@ -120,9 +121,8 @@ def host_documents(root: Path) -> dict[Path, bytes]:
             "capabilities": ["Read", "Write"],
             "category": "Developer Tools",
             "defaultPrompt": [
-                "Use $aar-operations to consider AAR MCP early for tool use or analysis, including "
-                "software planning, development, testing, and troubleshooting, then run only a "
-                "materially useful bounded workflow."
+                "Use $aar-operations for materially useful tool use or analysis; otherwise keep "
+                "the direct host-native path."
             ],
             "developerName": "phenomenoner",
             "displayName": "Adaptive Agent Runtime",
@@ -171,8 +171,8 @@ def host_documents(root: Path) -> dict[Path, bytes]:
         b"# Codex host profile\n\n"
         b"Install the exact `adaptive-agent-runtime` wheel with `uv tool install"
         b" --force <wheel>` so\n"
-        b"`aar-mcp` and its declared IPython, NumPy, and pandas dependencies are available, then"
-        b" run\n"
+        b"`aar-codex-mcp` and its declared IPython, NumPy, and pandas dependencies are available,"
+        b" then run\n"
         b"`aar-codex-setup`. The setup command uses the marketplace bundled in the installed wheel,"
         b" installs\n"
         b"this plugin as the sole AAR MCP transport authority, and runs a minimal real-worker\n"

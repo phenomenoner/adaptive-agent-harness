@@ -10,7 +10,7 @@
     ],
     "category": "Developer Tools",
     "defaultPrompt": [
-      "Use $aar-operations to consider AAR MCP early for tool use or analysis, including software planning, development, testing, and troubleshooting, then run only a materially useful bounded workflow."
+      "Use $aar-operations for materially useful tool use or analysis; otherwise keep the direct host-native path."
     ],
     "developerName": "phenomenoner",
     "displayName": "Adaptive Agent Runtime",
@@ -28,5 +28,5 @@
   "mcpServers": "./.mcp.json",
   "name": "adaptive-agent-runtime",
   "skills": "./skills/",
-  "version": "0.4.0+codex.20260814125137"
+  "version": "0.4.0+codex.20260814183626"
 }

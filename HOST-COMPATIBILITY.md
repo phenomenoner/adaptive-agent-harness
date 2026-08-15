@@ -4,12 +4,12 @@ Adaptive Agent Harness (AAR) exposes a host-neutral Python contract and a local-
 
 ## Supported baseline
 
-| Surface | Public support in `v0.4.0a0` | Verification path | Important boundary |
+| Surface | Public support in `v0.4.0a4` | Verification path | Important boundary |
 |---|---|---|---|
 | Python package | CPython 3.11–3.14 | `uv sync --locked`, repository tests, exact-wheel install | Python execution is not a security sandbox |
 | MCP client | Local stdio, 30-tool `aar.mcp-tools.v7` surface | `aar-mcp`, `aar_capabilities`, generated schema verification | Transport success is not operation success |
 | ChatGPT / Codex public plugin candidate | OAuth-authenticated Streamable HTTP with six tenant-workspace and five caller-delegated RLM tools | deterministic plugin packet, exact-wheel HTTP tests, fresh local Codex lifecycle | GitHub release and local use are not production deployment or Plugin Directory publication |
-| Codex host profile | Bundled plugin, canonical `aar-operations` skill, setup helper | `aar-codex-setup --preflight-only` followed by a fresh client process | The host owns approvals, credentials, and tool policy |
+| Codex host profile | Bundled plugin, canonical `aar-operations` skill, setup-owned durable supervisor | exact declared-command preflight followed by a restarted Desktop and fresh native capability call | The host owns approvals, credentials, and tool policy |
 | Hermes host profile | Bundled profile, canonical `aar-operations` skill, ordinary MCP registration | configure `aar-mcp`, start the durable supervisor, then run `hermes mcp test aar` | The host owns MCP Sampling and any physical provider request |
 | Direct embedding | Pydantic contracts, reference host, supervisor/frontend APIs | import package APIs and run contract tests | Integrators must preserve identity, budget, generation, and receipt semantics |
 
@@ -43,16 +43,21 @@ Use an owner-private runtime directory. Do not place attachment credentials, soc
 
 ## Codex integration
 
-The bundled Codex profile installs the canonical operation skill and points the host at the exact tool-environment executable. See [Codex installation](docs/CODEX-INSTALL.md).
+The bundled Codex profile installs the canonical operation skill and declares the empty-argument
+`aar-codex-mcp` host adapter. Explicit setup preflights that exact declaration and provisions one
+stable supervisor before normal tasks attach. See [Codex installation](docs/CODEX-INSTALL.md).
 
 A minimal verification sequence is:
 
 ```bash
-aar-codex-setup --preflight-only
-codex mcp get aar
+aar-codex-setup
 ```
 
-Restart or open a fresh Codex process after changing the tool installation or plugin. A process that already loaded an older MCP child is not proof that the new package is active.
+Restart Codex after changing the tool installation or plugin, then make a native
+`aar_capabilities` call from a fresh task. Codex may first need to load the exact deferred tool;
+that search step, config text, and catalog visibility are not runtime proof. A passing `v0.4.0a4`
+Desktop readback reports package `0.4.0a4`, operation skill `0.9.4`, 30 tools,
+`attached-supervisor`, and `frontend_ephemeral: true`.
 
 Codex approval settings remain host policy. A successful approval or tool call does not prove external-effect execution or delivery unless the authoritative host records that outcome.
 
@@ -85,7 +90,8 @@ PY
 hermes mcp test aar
 ```
 
-A passing `v0.4.0a0` local-profile readback reports package `0.4.0a0`, operation skill `0.9.1`, and 30 MCP tools.
+A passing Hermes `v0.4.0a4` local-profile readback reports package `0.4.0a4`, operation skill
+`0.9.4`, and 30 MCP tools; this release does not replay the historical installed-Hermes row.
 
 ### Receipt-backed model routing
 
@@ -162,4 +168,7 @@ Do not infer activation from a wheel existing on disk. Do not infer model-route 
 - Package installation does not create an operating-system service, register a host, or configure credentials.
 - Generated host profiles do not change AAR's authority ceiling.
 - Published compatibility covers the public contract and documented setup paths, not every host version or platform configuration.
-- The `v0.4.0a0` Windows workstation passed the focused public-plugin and local Codex gates, but six legacy Sampling/process-owner lifecycle tests remain red in the full Windows suite; full Windows supervisor support is not a release claim.
+- The `v0.4.0a4` Windows workstation passed the 36-test focused Codex launcher/setup/package shard.
+  The full repository run reported 399 passed, one skipped, and six legacy
+  Sampling/process-owner lifecycle tests still red;
+  full Windows supervisor support is not a release claim.

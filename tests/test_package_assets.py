@@ -8,6 +8,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_package_metadata_declares_portable_contract_and_evidence_assets() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert project["project"]["scripts"]["aar-codex-mcp"] == (
+        "aar.compat.codex_mcp:main"
+    )
     assert project["project"]["scripts"]["aar-codex-setup"] == (
         "aar.compat.codex_setup:main"
     )

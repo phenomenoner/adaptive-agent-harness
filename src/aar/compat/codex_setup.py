@@ -20,7 +20,14 @@ from typing import Any
 from mcp import Client, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-SETUP_SCHEMA_VERSION = "aar.codex-setup.v2"
+from aar.compat.codex_mcp import (
+    RUNTIME_HOME_ENV,
+    default_runtime_home,
+    ensure_codex_supervisor,
+    stop_codex_supervisor,
+)
+
+SETUP_SCHEMA_VERSION = "aar.codex-setup.v3"
 MARKETPLACE_NAME = "aar-local"
 PLUGIN_SELECTOR = "adaptive-agent-runtime@aar-local"
 InvokeCodex = Callable[[Sequence[str]], str]
@@ -44,25 +51,34 @@ def _mutation(
     }
 
 
-def resolve_aar_mcp(command: str | None = None) -> Path:
-    """Resolve the exact entrypoint from the active tool environment."""
+def _resolve_entrypoint(name: str, command: str | None = None) -> Path:
     if command is not None:
         candidate = Path(command).expanduser()
     else:
-        name = "aar-mcp.exe" if os.name == "nt" else "aar-mcp"
+        executable_name = f"{name}.exe" if os.name == "nt" else name
         # Keep the active environment path until after selecting its sibling
         # entrypoint.  uv virtualenv Python launchers are commonly symlinks to
         # a shared interpreter; resolving first would search beside that shared
         # interpreter instead of beside this tool environment's console scripts.
-        local = Path(sys.executable).with_name(name)
-        discovered = shutil.which("aar-mcp")
+        local = Path(sys.executable).with_name(executable_name)
+        discovered = shutil.which(name)
         candidate = local if local.is_file() else Path(discovered or "")
     if not candidate.is_file():
         raise RuntimeError(
-            "aar-mcp was not found in the active tool environment; install the exact AAR wheel "
+            f"{name} was not found in the active tool environment; install the exact AAR wheel "
             "first"
         )
     return candidate.resolve(strict=True)
+
+
+def resolve_aar_mcp(command: str | None = None) -> Path:
+    """Resolve the generic attached frontend used by matching legacy config checks."""
+    return _resolve_entrypoint("aar-mcp", command)
+
+
+def resolve_codex_mcp(command: str | None = None) -> Path:
+    """Resolve the Codex-owned supervisor launcher from the active tool environment."""
+    return _resolve_entrypoint("aar-codex-mcp", command)
 
 
 def resolve_codex(command: str | None = None) -> Path:
@@ -96,6 +112,31 @@ def _plugin_version(marketplace: Path) -> str:
         / "plugin.json"
     )
     return str(json.loads(manifest.read_text(encoding="utf-8"))["version"])
+
+
+def _plugin_mcp_spec(marketplace: Path) -> tuple[str, list[str]]:
+    path = marketplace / "plugins" / "adaptive-agent-runtime" / ".mcp.json"
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+        server = document["mcpServers"]["aar"]
+        command = server["command"]
+        args = server.get("args", [])
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+        raise RuntimeError(f"the bundled AAR Codex MCP declaration is invalid: {path}") from error
+    if not isinstance(command, str) or not command:
+        raise RuntimeError("the bundled AAR Codex MCP command is invalid")
+    if not isinstance(args, list) or not all(isinstance(item, str) for item in args):
+        raise RuntimeError("the bundled AAR Codex MCP args are invalid")
+    return command, args
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    try:
+        return os.path.samefile(left, right)
+    except OSError:
+        return os.path.normcase(os.fspath(left.resolve(strict=False))) == os.path.normcase(
+            os.fspath(right.resolve(strict=False))
+        )
 
 
 def _subprocess_argv(codex: Path, arguments: Sequence[str]) -> list[str]:
@@ -152,21 +193,29 @@ def configure_codex(
     aar_mcp: Path,
     marketplace: Path,
     *,
+    plugin_mcp_launcher: Path | None = None,
     invoke: InvokeCodex | None = None,
     codex_config: Path | None = None,
 ) -> dict[str, Any]:
     """Install/update the plugin and keep it as the sole AAR MCP authority."""
     call = invoke or (lambda arguments: _invoke_codex(codex, arguments))
     config = (codex_config or _default_codex_config()).expanduser().resolve(strict=False)
+    marketplace = marketplace.expanduser().resolve(strict=True)
+    plugin_mcp_command, plugin_mcp_args = _plugin_mcp_spec(marketplace)
+    preflight_launcher = plugin_mcp_launcher or aar_mcp
     legacy_mcp = _global_aar_entry(config)
     legacy_global_mcp_removed = legacy_mcp is not None
     if legacy_mcp is not None:
         command = legacy_mcp.get("command")
         args = legacy_mcp.get("args", [])
         unexpected_fields = set(legacy_mcp) - {"args", "command"}
+        allowed_commands = {
+            os.fspath(aar_mcp).casefold(),
+            os.fspath(preflight_launcher).casefold(),
+        }
         if (
             not isinstance(command, str)
-            or command.casefold() != os.fspath(aar_mcp).casefold()
+            or command.casefold() not in allowed_commands
             or args not in (None, [])
             or unexpected_fields
         ):
@@ -180,6 +229,8 @@ def configure_codex(
         (item for item in marketplaces if item.get("name") == MARKETPLACE_NAME), None
     )
     marketplace_added = current is None
+    marketplace_replaced = False
+    previous_marketplace: Path | None = None
     if marketplace_added:
         call(("plugin", "marketplace", "add", os.fspath(marketplace), "--json"))
         active_marketplace = marketplace
@@ -187,7 +238,34 @@ def configure_codex(
         current_root = current.get("root")
         if not current_root:
             raise RuntimeError("the existing aar-local marketplace has no readable root")
-        active_marketplace = Path(str(current_root))
+        active_marketplace = Path(str(current_root)).expanduser().resolve(strict=False)
+        if not _same_path(active_marketplace, marketplace):
+            previous_marketplace = active_marketplace
+            call(("plugin", "marketplace", "remove", MARKETPLACE_NAME))
+            try:
+                call(("plugin", "marketplace", "add", os.fspath(marketplace), "--json"))
+            except Exception as install_error:
+                try:
+                    call(
+                        (
+                            "plugin",
+                            "marketplace",
+                            "add",
+                            os.fspath(previous_marketplace),
+                            "--json",
+                        )
+                    )
+                except Exception as rollback_error:
+                    raise RuntimeError(
+                        "failed to install the bundled aar-local marketplace and failed to "
+                        "restore its prior root"
+                    ) from rollback_error
+                raise RuntimeError(
+                    "failed to install the bundled aar-local marketplace; its prior root was "
+                    "restored"
+                ) from install_error
+            active_marketplace = marketplace
+            marketplace_replaced = True
 
     expected_version = _plugin_version(marketplace)
     plugin_list = json.loads(call(("plugin", "list", "--json")))
@@ -199,16 +277,41 @@ def configure_codex(
         ),
         None,
     )
-    plugin_changed = not (
+    plugin_changed = marketplace_added or marketplace_replaced or not (
         current_plugin is not None
         and current_plugin.get("version") == expected_version
         and current_plugin.get("enabled") is True
     )
-    installed = (
-        json.loads(call(("plugin", "add", PLUGIN_SELECTOR, "--json")))
-        if plugin_changed
-        else current_plugin
-    )
+    if plugin_changed:
+        try:
+            installed = json.loads(call(("plugin", "add", PLUGIN_SELECTOR, "--json")))
+        except Exception as install_error:
+            if marketplace_replaced:
+                assert previous_marketplace is not None
+                try:
+                    call(("plugin", "marketplace", "remove", MARKETPLACE_NAME))
+                    call(
+                        (
+                            "plugin",
+                            "marketplace",
+                            "add",
+                            os.fspath(previous_marketplace),
+                            "--json",
+                        )
+                    )
+                    call(("plugin", "add", PLUGIN_SELECTOR, "--json"))
+                except Exception as rollback_error:
+                    raise RuntimeError(
+                        "failed to install the bundled AAR plugin and failed to restore its prior "
+                        "marketplace binding"
+                    ) from rollback_error
+                raise RuntimeError(
+                    "failed to install the bundled AAR plugin; its prior marketplace binding was "
+                    "restored"
+                ) from install_error
+            raise
+    else:
+        installed = current_plugin
     if installed is None or installed.get("version") != expected_version:
         raise RuntimeError(
             "the configured aar-local marketplace did not install the bundled plugin version; "
@@ -221,25 +324,38 @@ def configure_codex(
             raise RuntimeError("the legacy global AAR MCP server remained after removal")
     return {
         "configuration_changed": (
-            marketplace_added or plugin_changed or legacy_global_mcp_removed
+            marketplace_added
+            or marketplace_replaced
+            or plugin_changed
+            or legacy_global_mcp_removed
         ),
         "legacy_global_mcp_removed": legacy_global_mcp_removed,
         "codex_config": os.fspath(config),
         "marketplace_added": marketplace_added,
+        "marketplace_replaced": marketplace_replaced,
         "marketplace_path": os.fspath(active_marketplace),
         "mcp_authority": "plugin",
-        "plugin_mcp_command": "aar-mcp",
+        "plugin_mcp_args": plugin_mcp_args,
+        "plugin_mcp_command": plugin_mcp_command,
         "plugin_id": installed.get("pluginId", PLUGIN_SELECTOR),
         "plugin_changed": plugin_changed,
         "plugin_version": installed["version"],
-        "preflight_launcher": os.fspath(aar_mcp),
+        "preflight_launcher": os.fspath(preflight_launcher),
     }
 
 
-async def _preflight(aar_mcp: Path, database: Path, scenario_id: str) -> dict[str, Any]:
+async def _preflight(
+    codex_mcp: Path,
+    runtime_home: Path,
+    scenario_id: str,
+    declared_args: Sequence[str],
+) -> dict[str, Any]:
+    environment = dict(os.environ)
+    environment[RUNTIME_HOME_ENV] = os.fspath(runtime_home)
     parameters = StdioServerParameters(
-        command=os.fspath(aar_mcp),
-        args=["--database", os.fspath(database)],
+        command=os.fspath(codex_mcp),
+        args=list(declared_args),
+        env=environment,
     )
     async with Client(stdio_client(parameters), mode="auto") as client:
         capabilities = _structured(await client.call_tool("aar_capabilities"))
@@ -348,10 +464,22 @@ async def _preflight(aar_mcp: Path, database: Path, scenario_id: str) -> dict[st
         if not closed["result"]["closed"]:
             raise RuntimeError("AAR setup preflight workspace did not close")
         return {
+            "declared_args": list(declared_args),
+            "declared_command": os.fspath(codex_mcp),
             "server_name": capabilities["server_name"],
             "package_version": capabilities["package_version"],
             "tool_surface_version": capabilities["tool_surface_version"],
             "tool_count": len(tool_names),
+            "supervisor": {
+                key: capabilities["supervisor"][key]
+                for key in (
+                    "frontend_ephemeral",
+                    "mode",
+                    "process_identity_digest",
+                    "protocol_digest",
+                    "protocol_version",
+                )
+            },
             "dependencies": {
                 key: dependency_result[key] for key in ("ipython", "numpy", "pandas")
             },
@@ -364,14 +492,36 @@ async def _preflight(aar_mcp: Path, database: Path, scenario_id: str) -> dict[st
 
 
 async def run_setup_preflight(
-    aar_mcp: Path, *, database: Path | None = None
+    codex_mcp: Path,
+    *,
+    runtime_home: Path | None = None,
+    declared_args: Sequence[str] = (),
 ) -> dict[str, Any]:
-    """Run the minimal real-MCP dependency lifecycle used by the installer."""
+    """Run the declared Codex launcher in an isolated attached-supervisor lifecycle."""
     scenario_id = f"codex-setup-{uuid.uuid4().hex}"
-    if database is not None:
-        return await _preflight(aar_mcp, database, scenario_id)
-    with tempfile.TemporaryDirectory(prefix="aar-codex-setup-") as directory:
-        return await _preflight(aar_mcp, Path(directory) / "runtime.sqlite3", scenario_id)
+    if runtime_home is None:
+        with tempfile.TemporaryDirectory(prefix="aar-codex-setup-") as directory:
+            return await run_setup_preflight(
+                codex_mcp,
+                runtime_home=Path(directory) / "runtime",
+                declared_args=declared_args,
+            )
+    runtime_home = runtime_home.expanduser().resolve(strict=False)
+    if (runtime_home / "reference.sqlite3").exists() or (
+        runtime_home / "supervisor" / "discovery.json"
+    ).exists():
+        raise RuntimeError("Codex setup preflight requires an unused isolated runtime home")
+    report: dict[str, Any] | None = None
+    try:
+        report = await _preflight(codex_mcp, runtime_home, scenario_id, declared_args)
+    finally:
+        stopped = stop_codex_supervisor(runtime_home)
+    if report is None:
+        raise RuntimeError("Codex setup preflight produced no report")
+    if not stopped:
+        raise RuntimeError("Codex setup preflight did not own a supervisor to stop")
+    report["supervisor_stopped"] = True
+    return report
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -381,7 +531,11 @@ def main(argv: list[str] | None = None) -> int:
             "dependency preflight."
         )
     )
-    parser.add_argument("--aar-mcp", help="Exact aar-mcp executable; defaults to this tool env")
+    parser.add_argument("--aar-mcp", help="Exact generic aar-mcp used for legacy config matching")
+    parser.add_argument(
+        "--aar-codex-mcp",
+        help="Exact aar-codex-mcp launcher; defaults to this tool environment",
+    )
     parser.add_argument("--codex", help="Exact Codex CLI command; defaults to PATH discovery")
     parser.add_argument(
         "--codex-config",
@@ -393,31 +547,95 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--skip-preflight", action="store_true", help="Configure Codex without the runtime check"
     )
+    parser.add_argument(
+        "--stop-runtime",
+        action="store_true",
+        help="Gracefully stop the exact discovered Codex-owned supervisor before an upgrade",
+    )
+    parser.add_argument(
+        "--codex-runtime-home",
+        type=Path,
+        help=(
+            "Codex runtime home for --stop-runtime; defaults to "
+            f"{RUNTIME_HOME_ENV} or ~/.aar/codex"
+        ),
+    )
     args = parser.parse_args(argv)
     if args.preflight_only and args.skip_preflight:
         parser.error("--preflight-only and --skip-preflight cannot be combined")
+    if args.stop_runtime and (args.preflight_only or args.skip_preflight):
+        parser.error("--stop-runtime cannot be combined with setup or preflight modes")
+    if args.codex_runtime_home is not None and not args.stop_runtime:
+        parser.error("--codex-runtime-home requires --stop-runtime")
 
     try:
+        if args.stop_runtime:
+            runtime_home = (
+                args.codex_runtime_home.expanduser().resolve(strict=False)
+                if args.codex_runtime_home is not None
+                else default_runtime_home()
+            )
+            stopped = stop_codex_supervisor(runtime_home)
+            print(
+                json.dumps(
+                    {
+                        "action": "stop-runtime",
+                        "runtime_home": os.fspath(runtime_home),
+                        "schema_version": SETUP_SCHEMA_VERSION,
+                        "status": "passed",
+                        "stopped": stopped,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
         aar_mcp = resolve_aar_mcp(args.aar_mcp)
+        codex_mcp = resolve_codex_mcp(args.aar_codex_mcp)
+        marketplace = bundled_marketplace()
+        plugin_mcp_command, plugin_mcp_args = _plugin_mcp_spec(marketplace)
+        if plugin_mcp_command != "aar-codex-mcp":
+            raise RuntimeError(
+                "the bundled Codex plugin must use the aar-codex-mcp host launcher"
+            )
         preflight = (
-            None if args.skip_preflight else asyncio.run(run_setup_preflight(aar_mcp))
+            None
+            if args.skip_preflight
+            else asyncio.run(
+                run_setup_preflight(codex_mcp, declared_args=plugin_mcp_args)
+            )
         )
         configured = None
+        codex_runtime = None
         if not args.preflight_only:
             configured = configure_codex(
                 resolve_codex(args.codex),
                 aar_mcp,
-                bundled_marketplace(),
+                marketplace,
+                plugin_mcp_launcher=codex_mcp,
                 codex_config=(
                     Path(args.codex_config).expanduser() if args.codex_config else None
                 ),
             )
+            runtime_home = default_runtime_home()
+            discovery = ensure_codex_supervisor(runtime_home)
+            codex_runtime = {
+                "discovery_digest": discovery.discovery_digest,
+                "dispatcher_generation": discovery.dispatcher_generation,
+                "runtime_generation": discovery.runtime_generation,
+                "runtime_home": os.fspath(runtime_home),
+                "status": "ready",
+                "supervisor_version": discovery.supervisor_version,
+            }
         report = {
             "schema_version": SETUP_SCHEMA_VERSION,
             "status": "passed",
             "aar_mcp": os.fspath(aar_mcp),
+            "codex_mcp": os.fspath(codex_mcp),
             "preflight": preflight,
             "codex": configured,
+            "codex_runtime": codex_runtime,
             "restart_required": bool(
                 configured is not None and configured["configuration_changed"]
             ),

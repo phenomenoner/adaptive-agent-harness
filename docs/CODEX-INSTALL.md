@@ -1,14 +1,18 @@
 # Install AAR for Codex App
 
-The normal installation path for the `v0.3.0a2` source prerelease is two commands. It does not run
-the repository test matrix.
-For an upgrade, close any Codex App task already using AAR before replacing the uv tool; Windows
-otherwise keeps the old console entrypoint open until that MCP process exits.
-
-From the pinned Git tag:
+The normal installation path is two commands. It does not run the repository test matrix.
+For an upgrade from `0.4.0a4` or later, stop the exact Codex-owned runtime first, then close any
+Codex App task already using AAR before replacing the uv tool. On Windows, either the frontend or
+its detached supervisor can otherwise keep the old entrypoint open:
 
 ```powershell
-uv tool install --force "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.3.0a2"
+aar-codex-setup --stop-runtime
+```
+
+From the pinned public tag:
+
+```powershell
+uv tool install --force "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a4"
 aar-codex-setup
 ```
 
@@ -16,53 +20,76 @@ If a package-index build is published later, the equivalent first command is
 `uv tool install --force adaptive-agent-runtime`. This prerelease does not promise package-index
 publication.
 
-Maintainers who already have an immutable wheel artifact may instead use:
+Maintainers who already have an immutable wheel may instead use:
 
 ```powershell
-uv tool install --force D:\path\to\adaptive_agent_runtime-0.3.0a2-py3-none-any.whl
+uv tool install --force D:\path\to\adaptive_agent_runtime-0.4.0a4-py3-none-any.whl
 aar-codex-setup
 ```
 
-`aar-codex-setup` performs four bounded actions:
+`aar-codex-setup` performs six bounded actions:
 
-1. runs a temporary real-MCP preflight that imports IPython, NumPy, and pandas in a supervised AAR
-   worker, computes a three-row DataFrame result, inspects it, and closes the workspace;
-2. adds or reuses the bundled `aar-local` marketplace;
-3. installs or updates `adaptive-agent-runtime@aar-local` only when it is missing, disabled, or at
-   another version;
-4. keeps that plugin as the sole AAR MCP transport authority. If a legacy global `aar` server points
-   to the same preflighted launcher, setup removes it; if it points elsewhere, setup stops without
-   deleting the conflicting operator configuration.
+1. reads the bundled plugin's exact MCP command and arguments (`aar-codex-mcp`, empty arguments);
+2. runs that exact declaration in an isolated Codex runtime, verifies an attached supervisor,
+   imports IPython, NumPy, and pandas in a supervised worker, computes and inspects a three-row
+   DataFrame result, closes the workspace, and stops the isolated supervisor;
+3. adds the bundled `aar-local` marketplace or replaces a same-name entry that points to another
+   root. Marketplace name and plugin version equality alone are not accepted as byte identity;
+4. installs or updates `adaptive-agent-runtime@aar-local` when it is missing, disabled, at another
+   version, or sourced from the replaced root;
+5. keeps that plugin as the sole AAR MCP transport authority. If a legacy global `aar` server points
+   to the same package launcher, setup removes it; if it points elsewhere, setup stops without
+   deleting the conflicting operator configuration;
+6. starts or reuses one exact production supervisor under `~/.aar/codex` from the explicit setup
+   process. Normal Codex task startup remains a fast attach path instead of owning the supervisor.
 
 The command prints a JSON receipt. A passing receipt must contain `status: "passed"`, dependency
-versions, `tool_count: 30`, `workspace_closed: true`, the installed plugin version, and the exact
-preflight launcher. `mcp_authority: "plugin"`, `legacy_global_mcp_removed`,
-`configuration_changed`, and `plugin_changed` state what was selected or written. Restart the Codex
-App only when `restart_required` is true, then call `aar_capabilities` in a fresh task. A no-op rerun
-reports `restart_required: false`. Config, catalog, or setup output alone is not fresh-host runtime
-proof.
+versions, `tool_count: 30`, `workspace_closed: true`, `declared_args: []`,
+`supervisor.mode: "attached-supervisor"`, `supervisor.frontend_ephemeral: true`, the installed
+plugin version, the exact `aar-codex-mcp` launcher, and a `codex_runtime` object with
+`status: "ready"`, runtime and dispatcher generations, discovery digest, and supervisor version.
+`mcp_authority: "plugin"`, `marketplace_replaced`, `legacy_global_mcp_removed`,
+`configuration_changed`, and `plugin_changed` state what was selected or written.
+
+Restart Codex App only when `restart_required` is true, then call `aar_capabilities` in a fresh
+task. A no-op rerun reports `restart_required: false`. Config, catalog, an embedded `--database`
+probe, or setup output alone is not fresh-host runtime proof. Codex versions that defer MCP tools
+may require native tool search to load the exact `mcp__aar__aar_capabilities` name. The search
+result is not evidence; invoke the loaded tool and verify its package, tool-surface, skill,
+supervisor-mode, and runtime-generation fields.
 
 Useful bounded variants:
 
 ```powershell
 aar-codex-setup --preflight-only
 aar-codex-setup --skip-preflight
+aar-codex-setup --stop-runtime
 aar-codex-setup --help
 ```
 
 `--skip-preflight` is intended for a repeated configuration-only repair after the same installed
 wheel has already passed. It is not the default.
 
-Setup inspects the user config at `~/.codex/config.toml` by default. Use
-`--codex-config <path>` only when the Codex host intentionally uses another config file. The legacy
-entry is recognized from the actual `[mcp_servers.aar]` table, not from `codex mcp get`, because
-that command can also display the correct plugin-provided server.
+`--stop-runtime` targets only the exact live process identity discovered under the stable Codex
+runtime home (`~/.aar/codex` by default). It does not stop a Hermes, WSL, or operator-managed AAR
+supervisor. Use `--codex-runtime-home <path>` only for an intentionally separate Codex runtime.
+
+The setup-provisioned supervisor normally survives a replaceable frontend because it is not a
+child of that task. If setup was skipped or the owner was lost, `aar-codex-mcp` can self-heal by
+starting a successor. A host may terminate that fallback child with its descendant tree. Treat
+that as hard owner loss: never reuse stale discovery, and require a successor-generation readback
+instead of claiming same-process continuity.
+
+Setup inspects `~/.codex/config.toml` by default. Use `--codex-config <path>` only when the Codex
+host intentionally uses another config file. The legacy entry is recognized from the actual
+`[mcp_servers.aar]` table, not from `codex mcp get`, because that command can also display the
+correct plugin-provided server.
 
 ## Maintainer verification is separate
 
-Release maintainers may additionally run Ruff, focused regressions, the full repository suite,
-Python 3.11-3.14 compatibility, exact-wheel readback, and fresh Codex/Hermes scenarios. General
-users do not need those development and release gates to install AAR.
+Release maintainers additionally run Ruff, focused regressions, the full repository suite, Python
+3.11–3.14 compatibility, exact-wheel readback, and fresh Codex scenarios. General users do not
+need those development and release gates to install AAR.
 
 The setup command does not grant provider credentials, external effects, activation, publication,
 or final delivery. AAR computes and proposes; the host authorizes and delivers.

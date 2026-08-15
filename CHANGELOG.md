@@ -2,6 +2,54 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
+## [0.4.0a4] — 2026-08-15
+
+### Fixed
+
+- add `aar-codex-mcp`, an empty-argument Codex host adapter that starts or reuses one exact durable
+  supervisor before attaching the replaceable stdio frontend;
+- make `aar-codex-setup` preflight the plugin manifest's exact command, arguments, and
+  attached-supervisor mode instead of substituting an embedded `aar-mcp --database` lifecycle;
+- replace a same-name `aar-local` marketplace that points outside the marketplace bundled in the
+  installed wheel, even when its plugin version string matches;
+- provision the stable production supervisor during explicit setup, fence concurrent first
+  launchers, reject a live owner from another package version, and support identity-bound graceful
+  shutdown during upgrades;
+- on Windows, accept the signalled exact process handle as authoritative fallback-termination
+  evidence instead of reporting a false failure while process-table visibility drains;
+- retry a transient discovery-file sharing error only inside the bounded post-spawn readiness loop,
+  while existing-owner and stop paths remain strict;
+- keep the Codex starter prompt within the host's 128-character limit.
+
+### Changed
+
+- update the canonical `aar-operations` workflow to `0.9.4`, retaining the public host-owned
+  model-route guidance while adding exact launch-contract, marketplace-root, deferred-tool,
+  fresh-task, and native-call verification rules;
+- give the merged public plugin bytes a new cachebuster so an equal version can never hide a
+  different bundled skill or MCP declaration.
+
+### Verified
+
+- 36 focused launcher, installer, MCP-asset, package-asset, host-profile, concurrency, and shutdown
+  tests pass with Ruff and generated contract/profile verification;
+- an isolated exact wheel exposes eleven console entrypoints and completes the 30-tool v7
+  `aar-codex-mcp` preflight in attached-supervisor mode, including dependency-backed workspace
+  execution and clean close;
+- after a full Codex Desktop restart, fresh native calls read back package `0.4.0a4`, operation
+  skill `0.9.4`, 30 tools, an ephemeral attached frontend, and the expected durable supervisor
+  generation. Deferred tool search is treated only as loading, never as runtime proof.
+
+The release process withholds the tag until the exact final commit passes the full Python 3.11–3.14
+Linux GitHub Actions repository matrix.
+
+### Boundaries
+
+- the six disclosed Windows Sampling/process-owner suite failures do not exercise this Codex
+  launcher path and still prevent a full Windows supervisor-suite claim;
+- GitHub release and verified local Codex use do not constitute production deployment, ChatGPT
+  execution, OpenAI approval, or official Plugin Directory publication.
+
 ## [0.4.0a0] — 2026-08-14
 
 ### Added
@@ -162,3 +210,4 @@ Linux GitHub Actions repository matrix.
 [0.3.0a1]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a1
 [0.3.0a2]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a2
 [0.4.0a0]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a0
+[0.4.0a4]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a4

@@ -1,6 +1,6 @@
 {
-  "bundle_digest": "sha256:f8cf0943103b407925fcbbbf5296a9c58a0cad85f60f7bae5ee35b8b1d3ccd44",
-  "package_version": "0.4.0a0",
+  "bundle_digest": "sha256:8d54d6099289bf74f9c7ca337a81ecde994fc4f44f7e50bf4e6b0e2a5f1c2c70",
+  "package_version": "0.4.0a4",
   "schema_versions": {
     "adaptive_asset": "aar.adaptive-asset.v1",
     "artifact": "aar.artifact.v1",

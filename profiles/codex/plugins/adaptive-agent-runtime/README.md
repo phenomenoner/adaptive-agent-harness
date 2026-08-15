@@ -1,7 +1,7 @@
 # Codex host profile
 
 Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so
-`aar-mcp` and its declared IPython, NumPy, and pandas dependencies are available, then run
+`aar-codex-mcp` and its declared IPython, NumPy, and pandas dependencies are available, then run
 `aar-codex-setup`. The setup command uses the marketplace bundled in the installed wheel, installs
 this plugin as the sole AAR MCP transport authority, and runs a minimal real-worker
 dependency preflight. A matching legacy global AAR server is removed; a conflicting server

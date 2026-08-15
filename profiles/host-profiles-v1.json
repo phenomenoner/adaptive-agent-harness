@@ -8,27 +8,28 @@
       "2025-03-26",
       "2024-11-05"
     ],
-    "tool_surface_digest": "sha256:9b07c3d43c30104c2d2c16e6e5cff68fb82abc243e9b2fa52a4ae57cbf3f70c0",
+    "tool_surface_digest": "sha256:6a4242f1736b96d004b52d472274aef512c1a2a4025fea5996e9c536189adbdd",
     "tool_surface_version": "aar.mcp-tools.v7",
     "transport": "stdio"
   },
   "operation_skill": {
-    "digest": "sha256:201279800d39aa7e063e04b3f4e85620244f8a8a08f8a496c98d73c90bed434c",
+    "digest": "sha256:7c97d9cf89ec5740da58108a2094484a9096dde24b5284c3b934c152a7b62d6c",
     "name": "aar-operations",
-    "version": "0.9.1"
+    "version": "0.9.4"
   },
   "package": {
     "command": "aar-mcp",
     "name": "adaptive-agent-runtime",
     "python_requires": ">=3.11,<3.15",
-    "version": "0.4.0a0"
+    "version": "0.4.0a4"
   },
   "profiles": {
     "codex": {
       "bundle": "profiles/codex/plugins/adaptive-agent-runtime",
-      "config_digest": "sha256:94d2e67b919c375a8b03ed2f79014451727c3275ad2d051612cee54b4ea6423c",
+      "config_digest": "sha256:3dbff1ddbfcfd0daa4d8bd30d42199ff6f8408f14e694729afdd57df3c872b07",
       "config_file": ".mcp.json",
-      "format": "codex-plugin"
+      "format": "codex-plugin",
+      "launcher": "aar-codex-mcp"
     },
     "hermes": {
       "bundle": "profiles/hermes/adaptive-agent-runtime",

@@ -27,6 +27,12 @@ the procedure. This skill is workflow guidance, not authority.
 
 ## Start with capabilities
 
+On Codex hosts that defer MCP tools, use `tool_search` only to load the exact
+`mcp__aar__aar_capabilities` tool, then call it.
+Tool search only loads a deferred native tool; it is not runtime evidence.
+A search result, config entry, catalog row, or launcher probe never substitutes for the subsequent
+native AAR response.
+
 1. Call `aar_capabilities` before the first mutation and after any server restart.
 2. Read `negotiated_protocol_version`, `protocol_versions`, `ready.runtime_generation`,
    `ready.capabilities.digest`, `supervisor`, tool names, schema and skill digests, limits, and
@@ -53,6 +59,16 @@ does not prove frontend-disconnect continuity. Attachment loss, stdin EOF, or a 
 cancel a durable logical operation; reconnect with its stable operation ID. Starting or installing
 the foreground supervisor is a host/operator responsibility, never an authority inferred from this
 skill or from an MCP request.
+
+For the local Codex plugin, `aar-codex-mcp` is the documented host adapter: it serializes startup,
+starts or reuses one exact-process supervisor under a stable per-user Codex runtime home, and then
+attaches the ephemeral stdio frontend. Treat an installer preflight as meaningful only when it runs
+the plugin's declared command and arguments unchanged and reads back the attached-supervisor fields
+above. A successful embedded `aar-mcp --database ...` probe, an equal plugin version from another
+marketplace root, or catalog visibility cannot prove that the installed Codex path is usable.
+The explicit `aar-codex-setup` path also provisions or reuses the production owner before returning;
+its receipt must include a ready `codex_runtime` binding. A task-started fallback owner may be killed
+by host tree teardown, in which case only a fresh successor-generation readback proves recovery.
 
 Keep these exact public field names explicit:
 

@@ -112,7 +112,7 @@ def test_skill_metadata_binds_exact_skill_and_tool_bytes() -> None:
         f"sha256:{hashlib.sha256(skill_bytes).hexdigest()}"
     )
     assert metadata["tool_surface_digest"] == tool_manifest["tool_surface_digest"]
-    assert metadata["skill_version"] == "0.9.1"
+    assert metadata["skill_version"] == "0.9.4"
     skill_text = skill_bytes.decode("utf-8").lower()
     assert "tool use or analysis" in skill_text
     assert "software planning, development, testing, and troubleshooting" in skill_text

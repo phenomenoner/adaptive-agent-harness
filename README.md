@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.4.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a0)
+[![Release](https://img.shields.io/badge/release-v0.4.0a4-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a4)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#project-status)
 
@@ -215,7 +215,7 @@ See [Why RLM + IPython](docs/WHY-RLM-AND-IPYTHON.md) for the deeper design ratio
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a4"
 ```
 
 ### Codex App setup
@@ -224,7 +224,9 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-Restart Codex App if the setup receipt says configuration changed, then call `aar_capabilities` in a fresh task.
+Restart Codex App if the setup receipt says configuration changed. In a fresh task, load the exact
+deferred capability tool if necessary and then call `aar_capabilities`; search or catalog visibility
+alone is not runtime proof.
 
 ### Develop from source
 
@@ -286,7 +288,7 @@ The MCP frontend is intentionally replaceable. It does not own the continuity da
 
 ## Project status
 
-Current public alpha: **`0.4.0a0`**.
+Current public alpha: **`0.4.0a4`**.
 
 This release retains the durable production-model boundary from `v0.3.0a2` and adds the separate
 eleven-tool public plugin profile. For a public RLM job, the main agent fixes one callable model and
@@ -294,6 +296,10 @@ optional effort at start, the host performs each actual model call, and AAR enfo
 claim tickets, idempotent bounded commits, restart recovery, and honest caller-reported or
 host-receipt-bound provenance. The service does not receive provider credentials or silently choose
 a provider route.
+
+`v0.4.0a4` also repairs the local Codex lifecycle: the plugin now declares a dedicated
+`aar-codex-mcp` adapter, setup exercises that exact empty-argument path, and one setup-provisioned
+supervisor survives replaceable frontend tasks. This changes no public RLM authority boundary.
 
 Release evidence for this public candidate includes:
 
