@@ -2,7 +2,7 @@
 
 from typing import Final
 
-PACKAGE_VERSION: Final = "0.4.0a5"
+PACKAGE_VERSION: Final = "0.4.0a6"
 ENVELOPE_SCHEMA_VERSION: Final = "aar.envelope.v1"
 RUNTIME_SCHEMA_VERSION: Final = "aar.runtime.v1"
 WORKSPACE_SCHEMA_VERSION: Final = "aar.workspace.v1"

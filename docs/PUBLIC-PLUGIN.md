@@ -1,8 +1,10 @@
 # Adaptive Agent Runtime public plugin
 
-**Repository status:** this source release includes the remote MCP server, public skill source,
+**Repository status:** the `0.4.0a6` source candidate includes the remote MCP server, public skill source,
 deterministic plugin builder, container recipe, and local verification scenarios. It does not claim
 a production endpoint, reviewer account, OpenAI review approval, or Plugin Directory publication.
+The candidate is unreleased; see [`profiles/release-status-v1.json`](../profiles/release-status-v1.json)
+for the central status authority and pending verification receipts.
 
 Adaptive Agent Runtime is AAR's curated public-directory product for ChatGPT and Codex. It combines
 tenant-private structured workspaces with bounded caller-delegated RLM coordination. The host that
@@ -160,7 +162,7 @@ verified adapter.
 Build from the repository root:
 
 ```bash
-docker build -f deploy/public/Dockerfile -t adaptive-agent-runtime:0.4.0a5 .
+  docker build -f deploy/public/Dockerfile -t adaptive-agent-runtime:0.4.0a6 .
 ```
 
 The default image runs as UID/GID `10001`, owns `/var/lib/aar` with mode `0700`, exposes port
@@ -186,7 +188,7 @@ well-known and health routes. Keep the service data volume private and persisten
 Before starting, read back non-secret configuration:
 
 ```bash
-docker run --rm --env-file deploy.env adaptive-agent-runtime:0.4.0a5 --check-config
+  docker run --rm --env-file deploy.env adaptive-agent-runtime:0.4.0a6 --check-config
 ```
 
 The readback reports only whether a domain-challenge token is configured; it never prints the token.

@@ -1,4 +1,4 @@
-"""Install the bundled Codex plugin as the sole AAR MCP transport authority."""
+"""Inspect the bundled Codex plugin and plan a safe AAR MCP authority transition."""
 
 from __future__ import annotations
 
@@ -189,7 +189,10 @@ def _global_aar_entry(config: Path) -> dict[str, Any] | None:
 
 
 class CodexConfigurationTransactionError(RuntimeError):
-    """A failed setup transition whose pre-state could not be restored safely."""
+    """Compatibility error for transactional adapters with a failed contained transition.
+
+    The current subprocess CLI adapter is non-mutating and does not raise this error.
+    """
 
     def __init__(self, message: str, *, details: dict[str, Any]) -> None:
         super().__init__(message)
@@ -275,10 +278,6 @@ def _codex_state(call: InvokeCodex, config: Path) -> dict[str, Any]:
     }
 
 
-def _state_with(state: dict[str, Any], **changes: Any) -> dict[str, Any]:
-    return {**state, **changes}
-
-
 def configure_codex(
     codex: Path,
     aar_mcp: Path,
@@ -288,7 +287,14 @@ def configure_codex(
     invoke: InvokeCodex | None = None,
     codex_config: Path | None = None,
 ) -> dict[str, Any]:
-    """Install/update the plugin as one compare-fenced, sole-authority transaction."""
+    """Inspect Codex state and return a non-mutating installation plan.
+
+    The subprocess Codex CLI exposes values but no opaque provider revision, compare-and-swap,
+    transaction receipt, or equivalent atomic mutation authority.  Consequently a read followed
+    by a CLI mutation cannot distinguish value-equal ABA from the object that was observed.  This
+    adapter therefore performs only read-only inventory and conflict checks.  When a transition is
+    required it returns ``manual_authority_required`` before invoking any mutating Codex command.
+    """
     call = invoke or (lambda arguments: _invoke_codex(codex, arguments))
     config = (codex_config or _default_codex_config()).expanduser().resolve(strict=False)
     marketplace = marketplace.expanduser().resolve(strict=True)
@@ -304,7 +310,6 @@ def configure_codex(
 
     pre_state = _codex_state(call, config)
     legacy_mcp = pre_state["global_mcp"]
-    legacy_global_mcp_removed = legacy_mcp is not None
     if legacy_mcp is not None:
         allowed_commands = {
             os.fspath(aar_mcp).casefold(),
@@ -320,340 +325,108 @@ def configure_codex(
                 "explicitly before installing the AAR plugin"
             )
 
-    current_state = pre_state
-    owned_states = [pre_state]
-    completed_mutations: list[dict[str, Any]] = []
-    observation_failed = False
-    failure_stage = "initial-state"
-
-    def attempt(
-        stage: str,
-        arguments: tuple[str, ...],
-        predicted: dict[str, Any],
-        *,
-        accept,
-    ) -> str:
-        nonlocal current_state, failure_stage, observation_failed
-        failure_stage = stage
-        completed_mutations.append({"command": list(arguments), "stage": stage})
-        output = call(arguments)
-        try:
-            observed = _codex_state(call, config)
-        except Exception:
-            observation_failed = True
-            raise
-        if not accept(current_state, observed):
-            raise RuntimeError(f"Codex state drifted during {stage}")
-        owned_states.append(observed)
-        current_state = observed
-        return output
-
-    def containment(
-        original: BaseException,
-        *,
-        rollback_status: str,
-        observed: dict[str, Any],
-    ) -> CodexConfigurationTransactionError:
-        details = {
-            "completed_mutations": completed_mutations,
-            "current_state": observed,
-            "original_error": f"{type(original).__name__}: {original}",
-            "rollback_status": rollback_status,
-        }
-        return CodexConfigurationTransactionError(
-            "Codex configuration transaction failed and was safely contained",
-            details=details,
-        )
-
-    def rollback(original: BaseException) -> None:
-        nonlocal current_state
-        if observation_failed:
-            raise containment(
-                original,
-                rollback_status="contained",
-                observed={"error": "current Codex state is unreadable", "status": "unreadable"},
-            ) from original
-        try:
-            observed = _codex_state(call, config)
-        except Exception as read_error:
-            raise containment(
-                original,
-                rollback_status="contained",
-                observed={
-                    "error": f"{type(read_error).__name__}: {read_error}",
-                    "status": "unreadable",
-                },
-            ) from original
-        if observed not in owned_states:
-            raise containment(
-                original,
-                rollback_status="contained",
-                observed=observed,
-            ) from original
-        current_state = observed
-        prior_plugin = pre_state["plugin"]
-        if (
-            current_state["plugin"] != prior_plugin
-            and prior_plugin is not None
-            and pre_state["marketplace_root"] == target_root
-            and prior_plugin["version"] != expected_version
-        ):
-            raise containment(
-                original,
-                rollback_status="contained",
-                observed=current_state,
-            ) from original
-
-        def undo(
-            stage: str,
-            arguments: tuple[str, ...],
-            expected: dict[str, Any],
-        ) -> None:
-            nonlocal current_state
-            try:
-                fresh = _codex_state(call, config)
-            except Exception as read_error:
-                raise containment(
-                    original,
-                    rollback_status="contained",
-                    observed={
-                        "error": f"{type(read_error).__name__}: {read_error}",
-                        "stage": stage,
-                        "status": "unreadable",
-                    },
-                ) from original
-            if fresh != current_state:
-                raise containment(
-                    original,
-                    rollback_status="contained",
-                    observed=fresh,
-                ) from original
-            completed_mutations.append(
-                {"command": list(arguments), "stage": f"rollback:{stage}"}
-            )
-            try:
-                call(arguments)
-                after = _codex_state(call, config)
-            except Exception as rollback_error:
-                raise containment(
-                    original,
-                    rollback_status="rollback_failed",
-                    observed={
-                        "error": f"{type(rollback_error).__name__}: {rollback_error}",
-                        "stage": stage,
-                        "status": "unreadable_or_unrestored",
-                    },
-                ) from original
-            if after != expected:
-                raise containment(
-                    original,
-                    rollback_status="rollback_failed",
-                    observed=after,
-                ) from original
-            current_state = after
-
-        if current_state["global_mcp"] != pre_state["global_mcp"]:
-            if pre_state["global_mcp"] is None:
-                raise containment(
-                    original,
-                    rollback_status="contained",
-                    observed=current_state,
-                ) from original
-            prior_global = pre_state["global_mcp"]
-            undo(
-                "restore-global-mcp",
-                (
-                    "mcp",
-                    "add",
-                    "aar",
-                    "--",
-                    prior_global["command"],
-                    *prior_global["args"],
-                ),
-                _state_with(current_state, global_mcp=prior_global),
-            )
-
-        if current_state["plugin"] != pre_state["plugin"] and current_state["plugin"]:
-            undo(
-                "remove-transaction-plugin",
-                ("plugin", "remove", PLUGIN_SELECTOR),
-                _state_with(current_state, plugin=None),
-            )
-        if current_state["marketplace_root"] != pre_state["marketplace_root"]:
-            if current_state["marketplace_root"] is not None:
-                undo(
-                    "remove-transaction-marketplace",
-                    ("plugin", "marketplace", "remove", MARKETPLACE_NAME),
-                    _state_with(current_state, marketplace_root=None),
-                )
-            if pre_state["marketplace_root"] is not None:
-                undo(
-                    "restore-prior-marketplace",
-                    (
-                        "plugin",
-                        "marketplace",
-                        "add",
-                        pre_state["marketplace_root"],
-                        "--json",
-                    ),
-                    _state_with(
-                        current_state,
-                        marketplace_root=pre_state["marketplace_root"],
-                    ),
-                )
-        if current_state["plugin"] != pre_state["plugin"]:
-            prior_plugin = pre_state["plugin"]
-            if prior_plugin is None:
-                raise containment(
-                    original,
-                    rollback_status="rollback_failed",
-                    observed=current_state,
-                ) from original
-            expected_enabled = _state_with(
-                current_state,
-                plugin={**prior_plugin, "enabled": True},
-            )
-            undo(
-                "restore-prior-plugin",
-                ("plugin", "add", PLUGIN_SELECTOR, "--json"),
-                expected_enabled,
-            )
-            if prior_plugin["enabled"] is False:
-                undo(
-                    "restore-prior-plugin-disabled-state",
-                    ("plugin", "disable", PLUGIN_SELECTOR),
-                    _state_with(current_state, plugin=prior_plugin),
-                )
-        try:
-            final = _codex_state(call, config)
-        except Exception as read_error:
-            raise containment(
-                original,
-                rollback_status="rollback_failed",
-                observed={
-                    "error": f"{type(read_error).__name__}: {read_error}",
-                    "status": "unreadable",
-                },
-            ) from original
-        if final != pre_state:
-            raise containment(
-                original,
-                rollback_status="rollback_failed",
-                observed=final,
-            ) from original
-        if failure_stage.startswith("marketplace"):
-            message = f"{original}; its prior root was restored"
-        elif failure_stage.startswith("plugin"):
-            message = f"{original}; its prior marketplace binding was restored"
-        else:
-            message = f"{original}; prior Codex configuration was restored"
-        raise RuntimeError(message) from original
-
-    marketplace_added = pre_state["marketplace_root"] is None
-    marketplace_replaced = (
+    marketplace_add_required = pre_state["marketplace_root"] is None
+    marketplace_replace_required = (
         pre_state["marketplace_root"] is not None
         and pre_state["marketplace_root"] != target_root
     )
-    plugin_changed = pre_state["plugin"] != target_plugin or marketplace_replaced
+    plugin_change_required = (
+        pre_state["plugin"] != target_plugin or marketplace_replace_required
+    )
+    legacy_global_mcp_present = legacy_mcp is not None
+    current_mcp_authority = (
+        "multiple"
+        if legacy_global_mcp_present and pre_state["plugin"] is not None
+        else "global"
+        if legacy_global_mcp_present
+        else "plugin"
+        if pre_state["plugin"] is not None
+        else "unconfigured"
+    )
 
-    try:
-        if marketplace_added:
-            predicted = _state_with(current_state, marketplace_root=target_root)
-            attempt(
-                "marketplace-add",
-                ("plugin", "marketplace", "add", os.fspath(marketplace), "--json"),
-                predicted,
-                accept=lambda before, after: after == predicted,
-            )
-        elif marketplace_replaced:
-            predicted = _state_with(current_state, marketplace_root=None)
-            attempt(
-                "marketplace-remove-prior",
-                ("plugin", "marketplace", "remove", MARKETPLACE_NAME),
-                predicted,
-                accept=lambda before, after: after == predicted,
-            )
-            predicted = _state_with(current_state, marketplace_root=target_root)
-            attempt(
-                "marketplace-add-target",
-                ("plugin", "marketplace", "add", os.fspath(marketplace), "--json"),
-                predicted,
-                accept=lambda before, after: after == predicted,
-            )
+    manual_plan: list[dict[str, Any]] = []
+    if marketplace_add_required:
+        manual_plan.append(
+            {
+                "command": [
+                    "plugin",
+                    "marketplace",
+                    "add",
+                    os.fspath(marketplace),
+                    "--json",
+                ],
+                "stage": "marketplace-add",
+            }
+        )
+    elif marketplace_replace_required:
+        manual_plan.extend(
+            [
+                {
+                    "command": ["plugin", "marketplace", "remove", MARKETPLACE_NAME],
+                    "stage": "marketplace-remove-prior",
+                },
+                {
+                    "command": [
+                        "plugin",
+                        "marketplace",
+                        "add",
+                        os.fspath(marketplace),
+                        "--json",
+                    ],
+                    "stage": "marketplace-add-target",
+                },
+            ]
+        )
+    if plugin_change_required:
+        manual_plan.append(
+            {
+                "command": ["plugin", "add", PLUGIN_SELECTOR, "--json"],
+                "stage": "plugin-add",
+            }
+        )
+    if legacy_global_mcp_present:
+        manual_plan.append(
+            {
+                "command": ["mcp", "remove", "aar"],
+                "stage": "global-mcp-remove",
+            }
+        )
 
-        if plugin_changed:
-            predicted = _state_with(current_state, plugin=target_plugin)
+    configuration_required = bool(manual_plan)
 
-            def plugin_transition(_before: dict[str, Any], after: dict[str, Any]) -> bool:
-                return after == predicted
-
-            attempt(
-                "plugin-add",
-                ("plugin", "add", PLUGIN_SELECTOR, "--json"),
-                predicted,
-                accept=plugin_transition,
-            )
-            if current_state["plugin"] != target_plugin:
-                raise RuntimeError(
-                    "the configured aar-local marketplace did not install an enabled bundled "
-                    "plugin version"
-                )
-
-        if legacy_global_mcp_removed:
-            predicted = _state_with(current_state, global_mcp=None)
-
-            def global_remove_transition(
-                before: dict[str, Any], after: dict[str, Any]
-            ) -> bool:
-                return (
-                    after["marketplace_root"] == before["marketplace_root"]
-                    and after["plugin"] == before["plugin"]
-                    and after["global_mcp"] in (before["global_mcp"], None)
-                )
-
-            attempt(
-                "global-mcp-remove",
-                ("mcp", "remove", "aar"),
-                predicted,
-                accept=global_remove_transition,
-            )
-            if current_state["global_mcp"] is not None:
-                raise RuntimeError("the legacy global AAR MCP server remained after removal")
-
-        failure_stage = "final-sole-authority-readback"
-        final_state = _codex_state(call, config)
-        desired_state = {
+    return {
+        "authority_disposition": "NO_ATOMIC_AUTHORITY",
+        "completed_mutations": [],
+        "configuration_changed": False,
+        "configuration_required": configuration_required,
+        "codex_config": os.fspath(config),
+        "current_state": pre_state,
+        "desired_state": {
             "global_mcp": None,
             "marketplace_root": target_root,
             "plugin": target_plugin,
-        }
-        if final_state != desired_state:
-            raise RuntimeError("final Codex sole-authority readback does not match the target")
-        current_state = final_state
-        owned_states.append(final_state)
-    except Exception as original:
-        rollback(original)
-        raise AssertionError("rollback must raise") from original  # pragma: no cover
-
-    return {
-        "configuration_changed": (
-            marketplace_added
-            or marketplace_replaced
-            or plugin_changed
-            or legacy_global_mcp_removed
-        ),
-        "legacy_global_mcp_removed": legacy_global_mcp_removed,
-        "codex_config": os.fspath(config),
-        "marketplace_added": marketplace_added,
-        "marketplace_replaced": marketplace_replaced,
+        },
+        "desired_mcp_authority": "plugin",
+        "legacy_global_mcp_present": legacy_global_mcp_present,
+        "legacy_global_mcp_removed": False,
+        "manual_plan": manual_plan,
+        "marketplace_add_required": marketplace_add_required,
+        "marketplace_added": False,
+        "marketplace_replace_required": marketplace_replace_required,
+        "marketplace_replaced": False,
         "marketplace_path": os.fspath(marketplace),
-        "mcp_authority": "plugin",
+        "mcp_authority": current_mcp_authority,
         "plugin_mcp_args": plugin_mcp_args,
         "plugin_mcp_command": plugin_mcp_command,
         "plugin_id": PLUGIN_SELECTOR,
-        "plugin_changed": plugin_changed,
+        "plugin_change_required": plugin_change_required,
+        "plugin_changed": False,
         "plugin_version": expected_version,
         "preflight_launcher": os.fspath(preflight_launcher),
+        "provider_mutation_authority": "provider_or_operator_required",
+        "status": (
+            "manual_authority_required" if configuration_required else "already_configured"
+        ),
     }
 
 
@@ -840,8 +613,8 @@ async def run_setup_preflight(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Install the bundled AAR Codex plugin as the sole MCP authority and run a minimal "
-            "dependency preflight."
+            "Inspect the bundled AAR Codex plugin, return a manual authority plan when needed, "
+            "and run a minimal dependency preflight."
         )
     )
     parser.add_argument("--aar-mcp", help="Exact generic aar-mcp used for legacy config matching")
@@ -858,7 +631,9 @@ def main(argv: list[str] | None = None) -> int:
         "--preflight-only", action="store_true", help="Verify AAR without changing Codex config"
     )
     parser.add_argument(
-        "--skip-preflight", action="store_true", help="Configure Codex without the runtime check"
+        "--skip-preflight",
+        action="store_true",
+        help="Plan the Codex transition without the runtime check",
     )
     parser.add_argument(
         "--stop-runtime",
@@ -931,6 +706,25 @@ def main(argv: list[str] | None = None) -> int:
                     Path(args.codex_config).expanduser() if args.codex_config else None
                 ),
             )
+            if configured.get("status") == "manual_authority_required":
+                print(
+                    json.dumps(
+                        {
+                            "schema_version": SETUP_SCHEMA_VERSION,
+                            "status": "manual_authority_required",
+                            "aar_mcp": os.fspath(aar_mcp),
+                            "codex_mcp": os.fspath(codex_mcp),
+                            "preflight": preflight,
+                            "codex": configured,
+                            "codex_runtime": None,
+                            "restart_required": False,
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                        sort_keys=True,
+                    )
+                )
+                return 1
             runtime_home = default_runtime_home()
             discovery = ensure_codex_supervisor(runtime_home)
             codex_runtime = {

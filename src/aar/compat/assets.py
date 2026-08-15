@@ -18,7 +18,7 @@ from aar.versions import PACKAGE_VERSION
 
 PROFILE_CONTRACT_VERSION = "aar.host-profiles.v1"
 PROFILE_VERSION = "0.4.0"
-CODEX_PROFILE_VERSION = "0.4.0+codex.20260815075547"
+CODEX_PROFILE_VERSION = "0.4.0+codex.20260815100000"
 SKILL_FILES = ("SKILL.md", "agents/openai.yaml", "metadata.json")
 OPTIONAL_SKILL_FILES = ("SKILL.md", "agents/openai.yaml")
 CODEX_ROOT = Path("profiles/codex/plugins/adaptive-agent-runtime")
@@ -167,53 +167,54 @@ def host_documents(root: Path) -> dict[Path, bytes]:
         "  - skills\n"
         "  - distribution.yaml\n"
     ).encode()
-    codex_readme = (
-        b"# Codex host profile\n\n"
-        b"Install the exact `adaptive-agent-runtime` wheel with `uv tool install"
-        b" --force <wheel>` so\n"
-        b"`aar-codex-mcp` and its declared IPython, NumPy, and pandas dependencies are available,"
-        b" then run\n"
-        b"`aar-codex-setup`. The setup command uses the marketplace bundled in the installed wheel,"
-        b" installs\n"
-        b"this plugin as the sole AAR MCP transport authority, and runs a minimal real-worker\n"
-        b"dependency preflight. A matching legacy global AAR server is removed; a conflicting"
-        b" server\n"
-        b"fails closed for operator review. Configuration mutations use current-state readback and"
-        b" compare-fenced rollback; an ambiguous or foreign state is contained without destructive"
-        b" cleanup. A `configuration_committed_runtime_unready` receipt keeps the desired"
-        b" plugin-only configuration but is not setup success; rerun setup to recover the"
-        b" production owner.\n"
-        b"If native process identity is temporarily unavailable, do not delete control files or"
-        b" start a second owner. Retry after observation recovers. Current plugin state is left"
-        b" untouched on"
-        b" a repeated setup; only restart Codex Desktop when the receipt reports"
-        b" `restart_required: true`. Then start a fresh task and\n"
-        b"invoke\n"
-        b"`$aar-operations`. Use `$aar-ipython-codegraph` only for explicitly selected,\n"
-        b"digest-verified source artifacts and an already available external CodeGraph.\n"
-        b"The operation skill also covers bounded RLM jobs and immutable asset bundles; asset\n"
-        b"import never activates or mutates host serving state.\n"
-    )
-    hermes_readme = (
-        b"# Hermes host profile\n\n"
-        b"Install the exact `adaptive-agent-runtime` wheel with `uv tool install"
-        b" --force <wheel>` so\n"
-        b"`aar-mcp` and its declared IPython, NumPy, and pandas dependencies are on the Hermes"
-        b" host PATH,\n"
-        b"then install this directory with `hermes profile install <directory> --name <profile>`."
-        b" The runtime\n"
-        b"reads `config.yaml.mcp_servers`; `mcp.json` is the equivalent reviewable server map.\n"
-        b"Use a fresh isolated profile and invoke the bundled `aar-operations` skill.\n"
-        b"The same surface supports bounded RLM jobs and immutable asset bundles without serving\n"
-        b"activation authority.\n\n"
-        b"Provider-backed RLM calls require a separately configured owner route catalog and\n"
-        b"model broker. A Hermes client with MCP Sampling support can own the physical provider\n"
-        b"call and return an `aar.model-receipt.v1` receipt. The bundled profile contains no\n"
-        b"credentials, does not select a provider account, and does not authorize billable\n"
-        b"inference by itself. See\n"
-        b"`docs/MODEL-ROUTING-AND-EVALUATION.md` in the repository for route and evaluation\n"
-        b"constraints.\n"
-    )
+    codex_readme = f"""# Codex host profile
+
+Candidate package: `{PACKAGE_VERSION}`; bundled operation skill: `{OPERATION_SKILL_VERSION}`. The
+source repository's machine-readable authority is `profiles/release-status-v1.json`; official
+Plugin Directory publication is not completed.
+Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so
+`aar-codex-mcp` and its declared IPython, NumPy, and pandas dependencies are available, then run
+`aar-codex-setup`. The setup command uses the marketplace bundled in the installed wheel and
+preflights the declared plugin command and attached-supervisor mode.
+
+The subprocess Codex route reports `NO_ATOMIC_AUTHORITY`: it reads current state and returns an
+ordered manual/provider-authority-required plan before the first forward mutation. The host/operator
+must apply that plan through the authoritative Codex configuration owner and rerun setup. There is
+no automatic install, rollback, or best-effort compensation. A provider adapter may enable those
+operations only after it supplies an opaque revision and expected-revision CAS contract.
+
+Supervisor endpoint, credential, and shutdown-request paths are generation-unique. `discovery.json`
+is a stable pointer that carries the publication ID and is advanced atomically. Normal lifecycle
+cleanup is deliberately non-destructive and retains generation-specific control artifacts; do not
+delete a successor by pathname or visible bytes. If native process identity is temporarily
+unavailable, do not delete control files or start a second owner.
+
+When setup reports `restart_required: true`, restart Codex Desktop, start a fresh task, load the
+deferred capability tool when needed, and make one native `aar_capabilities` call. The old task's
+catalog or a same-task transport error cannot prove that the candidate was picked up. Invoke
+`$aar-operations` for public MCP workflows. Use `$aar-ipython-codegraph` only for explicitly
+selected, digest-verified source artifacts and an already available external CodeGraph.
+""".encode()
+    hermes_readme = f"""# Hermes host profile
+
+Candidate package: `{PACKAGE_VERSION}`; bundled operation skill: `{OPERATION_SKILL_VERSION}`.
+Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so `aar-mcp`
+and its declared IPython, NumPy, and pandas dependencies are on the Hermes host PATH, then install
+this directory with `hermes profile install <directory> --name <profile>`. The runtime reads
+`config.yaml.mcp_servers`; `mcp.json` is the equivalent reviewable server map.
+
+The profile provides ordinary MCP operations and host-owned RLM model calls. It contains no provider
+credentials and does not authorize billable inference. A Hermes client may own the physical call and
+return an `aar.model-receipt.v1` receipt.
+
+Supervisor endpoint, credential, and shutdown-request paths are generation-unique; the stable
+discovery pointer is advanced atomically. Normal lifecycle cleanup is deliberately non-destructive,
+so generation-specific control artifacts remain forensic state. The subprocess Codex setup route is
+not Hermes authority and reports `NO_ATOMIC_AUTHORITY`
+when no provider revision/CAS contract exists; follow the ordered manual plan through the host's
+configuration owner. After an upgrade, restart Hermes if required and create a fresh task/session
+before relying on capability discovery. See `$aar-operations` for the full operation workflow.
+""".encode()
 
     documents = {
         Path("profiles/host-profiles-v1.json"): pretty_json_bytes(contract),

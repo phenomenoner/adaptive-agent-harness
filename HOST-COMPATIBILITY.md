@@ -1,180 +1,78 @@
 # Host Compatibility
 
-Adaptive Agent Harness (AAR) exposes a host-neutral Python contract and a local-stdio MCP server. Host integration is packaging and lifecycle glue around that public surface; it does not grant provider credentials, external-effect authority, or final-delivery authority to AAR.
+This page describes the **unreleased `v0.4.0a6` candidate**. Its machine-readable authority is
+[`profiles/release-status-v1.json`](profiles/release-status-v1.json). The preceding `v0.4.0a5`
+candidate is **blocked, unreleased, and historical**.
 
-## Supported baseline
+## Compatibility matrix
 
-| Surface | Public support in `v0.4.0a5` | Verification path | Important boundary |
+| Host | Candidate surface | Evidence status | Boundary |
 |---|---|---|---|
-| Python package | CPython 3.11–3.14 | `uv sync --locked`, repository tests, exact-wheel install | Python execution is not a security sandbox |
-| MCP client | Local stdio, 30-tool `aar.mcp-tools.v7` surface | `aar-mcp`, `aar_capabilities`, generated schema verification | Transport success is not operation success |
-| ChatGPT / Codex public plugin candidate | OAuth-authenticated Streamable HTTP with six tenant-workspace and five caller-delegated RLM tools | deterministic plugin packet, exact-wheel HTTP tests, fresh local Codex lifecycle | GitHub release and local use are not production deployment or Plugin Directory publication |
-| Codex host profile | Bundled plugin, canonical `aar-operations` skill, setup-owned durable supervisor | exact declared-command preflight followed by a restarted Desktop and fresh native capability call | The host owns approvals, credentials, and tool policy |
-| Hermes host profile | Bundled profile, canonical `aar-operations` skill, ordinary MCP registration | configure `aar-mcp`, start the durable supervisor, then run `hermes mcp test aar` | The host owns MCP Sampling and any physical provider request |
-| Direct embedding | Pydantic contracts, reference host, supervisor/frontend APIs | import package APIs and run contract tests | Integrators must preserve identity, budget, generation, and receipt semantics |
+| Python 3.11–3.14 | package and local APIs | supported-Python CI `PENDING` | package metadata is not host proof |
+| Generic MCP | local stdio, `aar.mcp-tools.v7`, 30 tools | local matrix `PENDING` | catalog visibility is not callable-runtime proof |
+| Codex Desktop | generated plugin, `aar-codex-mcp`, `aar-codex-setup`, `aar-operations` 0.9.6 | fresh restarted host/Luna drill `PENDING` | Codex owns approvals, credentials, and tool policy |
+| Hermes | generated profile and `aar-mcp` | host receipt `PENDING` | Hermes owns MCP Sampling and physical provider calls |
+| ChatGPT/Codex public plugin | remote OAuth profile, 11 curated tools | deployment and review `PENDING` | not official Plugin Directory publication |
 
-The canonical operation skill is host-neutral. Generated Codex and Hermes copies must be byte-identical to `skills/aar-operations/SKILL.md`; host profiles may describe installation, but may not fork operation semantics.
+The repair candidate contains **62** required lifecycle rows. Windows full-suite, supported-Python
+CI, exact-wheel, fresh restarted host/Luna drill, and independent review are all `PENDING` in the
+central status file; this page does not fabricate counts from the blocked historical candidate.
 
-## General MCP installation
+## Local Codex setup contract
 
-Install an immutable wheel or a reviewed source checkout:
+The Codex plugin uses `aar-codex-mcp` as the declared stdio adapter and a durable supervisor with an
+ephemeral frontend. A fresh task must call native `aar_capabilities` after restart. A configured
+server, CLI probe, catalog row, or same-task transport response is not runtime evidence.
 
-```bash
-uv tool install adaptive-agent-runtime
-```
+`aar-codex-setup` currently has **`NO_ATOMIC_AUTHORITY`** for the subprocess Codex route. It reads
+state and returns an ordered manual/provider-authority-required plan before any forward mutation.
+The host/operator must apply that plan through the authoritative Codex configuration owner and then
+rerun setup. There is no automatic install, rollback, or best-effort compensation. A real provider
+adapter may restore automatic mutation only when it supplies an opaque revision and an atomic
+expected-revision **CAS** contract, with conflict and indeterminate-path tests.
 
-Start the local stdio frontend:
+Supervisor endpoint, credential, and shutdown-request paths use generation-unique names;
+`discovery.json` is a stable pointer carrying the publication ID and advances atomically. Normal
+lifecycle cleanup and shutdown-request consumption are **non-destructive** and retain
+generation-specific control artifacts as forensic state. The existing database-scoped process lock
+admits the sole active runtime owner before host construction and is released automatically on process exit. Do
+not delete a successor based on a pathname, visible
+bytes, or a stale owner classification. An explicit offline garbage collector is outside this
+candidate.
 
-```bash
-aar-mcp --runtime-home "$HOME/.local/state/adaptive-agent-harness"
-```
+## Installation and fresh-task verification
 
-For a durable deployment, run one supervisor separately and let replaceable MCP frontends attach to its signed discovery record:
+Install the exact wheel or pinned candidate source, then run:
 
-```bash
-aar-supervisor \
-  --runtime-home "$HOME/.local/state/adaptive-agent-harness" \
-  --programmable-backend ipython \
-  --transport unix \
-  --dispatcher-concurrency 1
-```
-
-Use an owner-private runtime directory. Do not place attachment credentials, sockets, databases, or discovery records in a group- or world-writable directory.
-
-## Codex integration
-
-The bundled Codex profile installs the canonical operation skill and declares the empty-argument
-`aar-codex-mcp` host adapter. Explicit setup preflights that exact declaration and provisions one
-stable supervisor before normal tasks attach. See [Codex installation](docs/CODEX-INSTALL.md).
-
-A minimal verification sequence is:
-
-```bash
+```powershell
 aar-codex-setup
 ```
 
-Restart Codex after changing the tool installation or plugin, then make a native
-`aar_capabilities` call from a fresh task. Codex may first need to load the exact deferred tool;
-that search step, config text, and catalog visibility are not runtime proof. The `v0.4.0a5`
-release gate requires package `0.4.0a5`, operation skill `0.9.5`, 30 tools,
-`attached-supervisor`, `frontend_ephemeral: true`, and the expected successor generation in that
-native response.
+If the receipt reports `restart_required: true`, restart Codex Desktop, open a new task, load the
+deferred capability tool if needed, and make one native `aar_capabilities` call. Require an attached
+supervisor, the expected package/profile/skill versions, the current runtime generation, and the
+candidate capability digest. A same-task catalog does not prove that the new plugin was picked up.
 
-Setup mutations are compare-fenced against authoritative marketplace, plugin, and global-MCP
-readback. `configuration_committed_runtime_unready` retains the verified desired configuration but
-does not pass setup; rerun setup. An unavailable process identity permits neither stale cleanup nor
-a second supervisor, so retry observation instead of deleting runtime-home files.
+For a developer-only local check, the generated host assets can be verified from the repository root:
 
-Codex approval settings remain host policy. A successful approval or tool call does not prove external-effect execution or delivery unless the authoritative host records that outcome.
-
-## Hermes integration
-
-Register the stable AAR tool entrypoint in the Hermes MCP configuration:
-
-```yaml
-mcp_servers:
-  aar:
-    command: /absolute/path/to/aar-mcp
-    args:
-      - --runtime-home
-      - /absolute/path/to/private/runtime-home
-    connect_timeout: 60.0
+```powershell
+uv run aar-mcp-assets verify --root .
+uv run aar-host-assets verify --root .
 ```
 
-Run the supervisor as a user service or another owner-controlled process. After installation or upgrade, verify both layers:
+These checks prove generated-byte consistency only. They do not prove a fresh host, provider
+authority, deployment, or official Plugin Directory publication.
 
-```bash
-# Read back package and skill identity.
-python - <<'PY'
-from importlib.metadata import version
-from aar.mcp.server import OPERATION_SKILL_VERSION
-print(version("adaptive-agent-runtime"))
-print(OPERATION_SKILL_VERSION)
-PY
+## RLM model authority
 
-# Verify that Hermes starts a fresh frontend and discovers the public surface.
-hermes mcp test aar
-```
+The caller selects one model and optional reasoning effort per caller-delegated RLM job. The host
+executes the physical provider call; AAR stores the ticket, bounded result, and receipt without
+credentials. The developer broker and the public caller-delegated profile are distinct surfaces.
+The fixed Hermes MCP Sampling route is compatibility-only and does not become public authority.
 
-The generated Hermes `v0.4.0a5` profile declares package `0.4.0a5`, operation skill `0.9.5`, and
-30 MCP tools; this release does not replay the historical installed-Hermes row.
+## External publication boundary
 
-### Receipt-backed model routing
-
-AAR can expose the explicit owner-controlled route profile:
-
-```bash
-aar-mcp \
-  --database /path/to/run.sqlite3 \
-  --programmable-backend plain \
-  --hermes-mcp-sampling-luna-max
-```
-
-This embedded reference-host mode binds `openai-codex / gpt-5.6-luna / max`. The Hermes MCP client must own the physical provider call and return the `aar.model-receipt.v1` extension. AAR rejects missing, malformed, drifted, retried, or fallback receipts under the strict profile.
-
-This option is deprecated compatibility behavior and is not a general provider configuration API.
-New integrations should use a host-owned broker or the public caller-delegated RLM lifecycle below.
-See [Receipt-backed model routing and fair evaluation](docs/MODEL-ROUTING-AND-EVALUATION.md).
-
-## Public ChatGPT and Codex plugin candidate
-
-`aar-mcp-public` is a separate remote product adapter. It validates an asymmetric OAuth access
-token, derives an opaque issuer/subject tenant key, and leases one persisted tenant runtime. Its
-eleven-tool surface excludes arbitrary Python, provider credentials and endpoints, service-managed
-provider calls, external effects, activation, and delivery.
-
-For one RLM job, the main agent selects one model and optional reasoning effort. AAR persists the
-fixed route and exact prompts, issues pre-spend claim tickets, and accepts only ticket-bound bounded
-commits; the host executes every actual model call. Restart and replay preserve the same route and
-idempotency boundaries. A different task route requires a different job.
-
-The caller-delegated public-profile implementation previously passed exact-wheel
-HTTP/authentication/isolation/restart tests, deterministic plugin and scoped-skill generation, and
-a local marketplace-derived lifecycle with an actual `gpt-5.6-sol` / `max` host call. The resulting
-provenance is intentionally `caller_reported`, not provider-signed. Those receipts establish the
-product boundary but do not substitute for the `v0.4.0a5` exact-commit release review.
-
-This row does not claim a production HTTPS deployment, public OAuth flow, reviewer execution,
-ChatGPT execution, OpenAI approval, or Plugin Directory publication. Those require a deployed
-endpoint, public policies and controls, reviewer credentials, portal scan, review, approval, and a
-separate publisher action. See [Public plugin and submission boundary](docs/PUBLIC-PLUGIN.md).
-
-## Direct embedding
-
-Direct consumers should preserve these invariants:
-
-- validate exact schema versions and deny unknown fields;
-- bind principal, session, runtime generation, capability digest, deadline, budget, grant, request identity, and idempotency identity;
-- commit operation intent before dispatch;
-- retain authoritative broker receipts and provider usage;
-- classify post-send uncertainty as `indeterminate` unless an authoritative receipt resolves it;
-- reconcile before replaying state-changing or provider-backed work;
-- keep activation, external effects, and final delivery in the host.
-
-The reference host is an executable conformance implementation, not a multi-tenant security boundary.
-
-## Upgrade verification
-
-An upgrade is active only when all applicable identities agree:
-
-1. the installed distribution reports the expected package version;
-2. the executable resolves inside that installed environment;
-3. a newly started supervisor reports the expected version and a new runtime generation;
-4. a fresh MCP frontend connects and lists the expected tools;
-5. generated schemas, profiles, and skill metadata verify;
-6. any provider-backed qualification reads back the exact effective route, provider usage, retry/fallback state, and durable outcome.
-
-Do not infer activation from a wheel existing on disk. Do not infer model-route eligibility from a CLI flag alone.
-
-## Known limitations
-
-- AAR is not a security sandbox. The public structured-state adapter separates authenticated tenant databases, but the local programmable-execution surface is not a hostile multi-tenant isolation boundary.
-- MCP Sampling is deprecated in protocol revision `2026-07-28` (SEP-2577). `v0.4.0a0` retains a bounded compatibility path for existing hosts; new public RLM integrations use caller-delegated model execution.
-- There is no portable provider lookup API for recovering a response after transport loss. Unresolved post-send outcomes remain indeterminate or quarantined.
-- Package installation does not create an operating-system service, register a host, or configure credentials.
-- Generated host profiles do not change AAR's authority ceiling.
-- Published compatibility covers the public contract and documented setup paths, not every host version or platform configuration.
-- The stable `v0.4.0a5` source candidate passed 445 Windows repository tests covering exact-process
-  identity and signalling, launcher cleanup, managed-worker handoff, installer containment, and
-  lock sharing. One directory-symlink capability test was skipped and the deprecated Sampling path
-  emitted its expected warning. Exact-wheel and fresh-task evidence remain separate gates.
+Official Plugin Directory deployment, reviewer access, OpenAI review/approval/publication, and
+provider-signed attestation are **not completed**. GitHub release and local Codex installation are
+separate later gates. No compatibility row on this page should be read as production deployment or
+directory availability.

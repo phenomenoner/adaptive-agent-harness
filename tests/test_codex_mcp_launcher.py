@@ -17,7 +17,6 @@ import pytest
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.compat import codex_mcp
 from aar.compat.codex_mcp import (
-    SHUTDOWN_REQUEST_FILE_NAME,
     SHUTDOWN_REQUEST_SCHEMA_VERSION,
     stop_codex_supervisor,
 )
@@ -59,9 +58,13 @@ def _discovery(
     endpoint_ref: Path | None = None,
     credential_digest: str = DIGEST,
 ) -> SupervisorDiscoveryRecord:
+    publication_id = f"{identity.pid:032x}"
     return SupervisorDiscoveryRecord.issue(
+        publication_id=publication_id,
         endpoint_kind="unix",
         endpoint_ref=os.fspath(endpoint_ref or (runtime_home / "supervisor.sock")),
+        credential_file=f"attachment-{publication_id}.key",
+        shutdown_request_file=f"shutdown-{publication_id}.request",
         process_identity=identity,
         runtime_generation=1,
         dispatcher_generation=1,
@@ -84,10 +87,21 @@ def _write_discovery(runtime_home: Path, discovery: SupervisorDiscoveryRecord) -
 
 
 class _FakeChild:
-    def __init__(self, events: list[str], *, pid: int = 901) -> None:
+    def __init__(
+        self,
+        events: list[str],
+        *,
+        pid: int = 901,
+        identity: ProcessStartIdentity | None = None,
+    ) -> None:
         self.events = events
         self.pid = pid
+        self.identity = identity or _identity(pid)
         self.returncode: int | None = None
+        self.exact_signal_count = 0
+        self.exact_wait_count = 0
+        self.terminal_receipt_count = 0
+        self._terminal_receipt: object | None = None
 
     def poll(self) -> int | None:
         return self.returncode
@@ -107,26 +121,32 @@ class _FakeChild:
             self.returncode = -15
         return self.returncode
 
+    def terminalize(self, timeout_sec: float) -> object:
+        assert timeout_sec > 0
+        if self._terminal_receipt is not None:
+            return self._terminal_receipt
+        if self.returncode is None:
+            self.events.append("exact-signal")
+            self.exact_signal_count += 1
+            self.returncode = -15
+        self.events.append("exact-wait")
+        self.exact_wait_count += 1
+        self.terminal_receipt_count += 1
+        self._terminal_receipt = object()
+        return self._terminal_receipt
 
-def test_reap_spawned_process_treats_lookup_race_as_exit_and_reaps() -> None:
+
+def test_reap_spawned_process_joins_one_exact_terminal_result() -> None:
     events: list[str] = []
-
-    class ExitedDuringTerminate(_FakeChild):
-        def terminate(self) -> None:
-            self.events.append("terminate-missing")
-            raise ProcessLookupError("child exited before terminate")
-
-        def wait(self, timeout: float | None = None) -> int:
-            self.events.append("wait")
-            self.returncode = 0
-            return self.returncode
-
-    child = ExitedDuringTerminate(events)
+    child = _FakeChild(events)
 
     codex_mcp._reap_spawned_process(child, 1)
 
-    assert events == ["terminate-missing", "wait"]
-    assert child.returncode == 0
+    assert events == ["exact-signal", "exact-wait"]
+    assert child.returncode == -15
+    assert child.exact_signal_count == 1
+    assert child.exact_wait_count == 1
+    assert child.terminal_receipt_count == 1
 
 
 def _messages(client_name: str) -> str:
@@ -194,7 +214,8 @@ def _stop_test_supervisor(runtime_home: Path) -> None:
     discovery = SupervisorDiscoveryRecord.model_validate_json(path.read_bytes(), strict=True)
     assert stop_codex_supervisor(runtime_home)
     assert not process_identity_matches(discovery.process_identity)
-    assert not path.exists()
+    retained = SupervisorDiscoveryRecord.model_validate_json(path.read_bytes(), strict=True)
+    assert retained == discovery
 
 
 def _assert_capabilities(rows: list[dict[str, Any]], discovery: SupervisorDiscoveryRecord) -> None:
@@ -306,7 +327,7 @@ def test_supervisor_ignores_shutdown_request_for_another_identity(tmp_path: Path
     try:
         _run_frontend(runtime_home, "codex-shutdown-fence")
         discovery = _read_discovery(runtime_home)
-        request_path = runtime_home / "supervisor" / SHUTDOWN_REQUEST_FILE_NAME
+        request_path = runtime_home / "supervisor" / discovery.shutdown_request_file
         request_path.write_text(
             json.dumps(
                 {
@@ -318,10 +339,8 @@ def test_supervisor_ignores_shutdown_request_for_another_identity(tmp_path: Path
             ),
             encoding="utf-8",
         )
-        deadline = time.monotonic() + 5
-        while request_path.exists() and time.monotonic() < deadline:
-            time.sleep(0.025)
-        assert not request_path.exists()
+        time.sleep(0.15)
+        assert request_path.exists()
         assert process_identity_matches(discovery.process_identity)
     finally:
         _stop_test_supervisor(runtime_home)
@@ -334,9 +353,9 @@ def test_launcher_identity_unavailable_before_spawn_does_not_spawn_or_remove_fil
     discovery = _discovery(runtime_home, _identity(901))
     discovery_path = _write_discovery(runtime_home, discovery)
     private = runtime_home / "supervisor"
-    credential_path = private / "attachment.key"
+    credential_path = private / discovery.credential_file
     endpoint_path = Path(discovery.endpoint_ref)
-    request_path = private / SHUTDOWN_REQUEST_FILE_NAME
+    request_path = private / discovery.shutdown_request_file
     credential_path.write_bytes(b"credential")
     endpoint_path.write_bytes(b"endpoint")
     request_path.write_bytes(b"request")
@@ -424,9 +443,9 @@ def test_launcher_timeout_reaps_exact_spawned_child_before_startup_lock_exit(
     with pytest.raises(codex_mcp.CodexMcpLauncherError, match="before timeout"):
         codex_mcp.ensure_codex_supervisor(runtime_home, startup_timeout_sec=0.001)
 
-    assert "terminate" in events or "kill" in events
-    assert "wait" in events
-    assert events.index("wait") < events.index("lock-exit")
+    assert "exact-signal" in events
+    assert "exact-wait" in events
+    assert events.index("exact-wait") < events.index("lock-exit")
 
 
 def test_launcher_post_spawn_exception_reaps_exact_child_before_startup_lock_exit(
@@ -464,9 +483,9 @@ def test_launcher_post_spawn_exception_reaps_exact_child_before_startup_lock_exi
         codex_mcp.ensure_codex_supervisor(runtime_home, startup_timeout_sec=1)
 
     assert load_count >= 3
-    assert "terminate" in events or "kill" in events
-    assert "wait" in events
-    assert events.index("wait") < events.index("lock-exit")
+    assert "exact-signal" in events
+    assert "exact-wait" in events
+    assert events.index("exact-wait") < events.index("lock-exit")
 
 
 def test_launcher_accepts_late_ready_record_for_exact_child(
@@ -529,9 +548,40 @@ def test_launcher_returns_foreign_ready_only_after_exact_child_is_terminal(
     result = codex_mcp.ensure_codex_supervisor(runtime_home, startup_timeout_sec=1)
 
     assert result == foreign
-    assert "terminate" in events or "kill" in events
-    assert "wait" in events
-    assert events.index("wait") < events.index("lock-exit")
+    assert "exact-signal" in events
+    assert "exact-wait" in events
+    assert events.index("exact-wait") < events.index("lock-exit")
+
+
+def test_launcher_reaps_same_pid_foreign_identity_before_accepting_ready(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runtime_home = tmp_path / "runtime"
+    events: list[str] = []
+    child = _FakeChild(events, pid=906, identity=_identity(906, start_time=11))
+    replacement = _discovery(runtime_home, _identity(906, start_time=12))
+    loads: list[SupervisorDiscoveryRecord | None] = [None, None, replacement]
+
+    @contextlib.contextmanager
+    def lock(_path: Path, _timeout_sec: float):
+        events.append("lock-enter")
+        try:
+            yield
+        finally:
+            events.append("lock-exit")
+
+    monkeypatch.setattr(codex_mcp, "_startup_lock", lock)
+    monkeypatch.setattr(
+        codex_mcp,
+        "_load_discovery",
+        lambda *_args, **_kwargs: loads.pop(0),
+    )
+    monkeypatch.setattr(codex_mcp, "_spawn_supervisor", lambda *_args, **_kwargs: child)
+
+    assert codex_mcp.ensure_codex_supervisor(runtime_home, startup_timeout_sec=1) == replacement
+    assert "exact-signal" in events
+    assert "exact-wait" in events
+    assert events.index("exact-wait") < events.index("lock-exit")
 
 
 class _FakeCtypesFunction:
@@ -616,3 +666,166 @@ def test_windows_terminate_false_wait_branches_use_exact_handle(
     assert calls[3][0] == "wait"
     assert calls[-1] == ("close", 0xABC)
     assert calls[3][1][0] == 0xABC
+
+
+def test_stop_wait_match_to_unavailable_refuses_cleanup_and_fallback_signal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runtime_home = tmp_path / "runtime"
+    discovery = _discovery(runtime_home, _identity(980))
+    _write_discovery(runtime_home, discovery)
+    observations = iter(
+        (
+            ProcessIdentityObservation(state=ProcessIdentityState.MATCH),
+            ProcessIdentityObservation(
+                state=ProcessIdentityState.UNAVAILABLE,
+                error=ProcessIdentityUnavailable("injected wait observation gap"),
+            ),
+        )
+    )
+    effects: list[str] = []
+    monkeypatch.setattr(
+        codex_mcp,
+        "observe_process_identity",
+        lambda _identity: next(observations),
+    )
+    monkeypatch.setattr(
+        codex_mcp,
+        "_remove_stale_private_files",
+        lambda *_args: effects.append("cleanup"),
+    )
+    monkeypatch.setattr(
+        codex_mcp,
+        "open_exact_process",
+        lambda *_args, **_kwargs: effects.append("open") or None,
+    )
+    monkeypatch.setattr(
+        codex_mcp,
+        "_terminate_windows_process",
+        lambda *_args, **_kwargs: effects.append("signal"),
+    )
+
+    with pytest.raises(codex_mcp.CodexMcpLauncherError, match="unavailable while stopping"):
+        stop_codex_supervisor(runtime_home, timeout_sec=0.1)
+
+    request_path = runtime_home / "supervisor" / discovery.shutdown_request_file
+    assert request_path.read_bytes() == canonical_json_bytes(
+        {
+            "discovery_digest": discovery.discovery_digest,
+            "process_identity": discovery.process_identity.model_dump(mode="json"),
+            "schema_version": SHUTDOWN_REQUEST_SCHEMA_VERSION,
+        }
+    )
+    assert effects == []
+
+
+class _PidReuseSpawnedChild(_FakeChild):
+    """A reaped child whose numeric PID now resolves to a foreign replacement."""
+
+    def __init__(self, events: list[str], *, pid: int) -> None:
+        super().__init__(events, pid=pid)
+        self.replacement_signal_count = 0
+        self.numeric_pid_reopen_count = 0
+
+    def terminate(self) -> None:
+        self.events.append("unsafe-popen-terminate")
+        self.replacement_signal_count += 1
+        self.returncode = -15
+
+    def kill(self) -> None:
+        self.events.append("unsafe-popen-kill")
+        self.replacement_signal_count += 1
+        self.returncode = -9
+
+    def wait(self, timeout: float | None = None) -> int:
+        del timeout
+        self.events.append("popen-wait")
+        if self.returncode is None:
+            self.returncode = -15
+        return self.returncode
+
+
+def _assert_spawned_child_not_signalled_by_pid(
+    child: _PidReuseSpawnedChild, seam: str
+) -> None:
+    assert child.replacement_signal_count == 0, (
+        f"{seam} signalled the PID-reuse replacement through Popen instead of a retained "
+        "exact child handle"
+    )
+    assert child.numeric_pid_reopen_count == 0
+    assert child.exact_signal_count == 1, f"{seam} did not signal the retained handle"
+    assert child.exact_wait_count == 1, f"{seam} did not wait through the retained handle"
+    assert child.terminal_receipt_count == 1, f"{seam} did not publish one terminal result"
+
+
+def test_startup_timeout_reap_uses_exact_child_handle_across_pid_reuse(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runtime_home = tmp_path / "runtime"
+    child = _PidReuseSpawnedChild([], pid=1_020)
+
+    @contextlib.contextmanager
+    def lock(_path: Path, _timeout: float):
+        yield
+
+    monkeypatch.setattr(codex_mcp, "_startup_lock", lock)
+    monkeypatch.setattr(codex_mcp, "_load_discovery", lambda *_a, **_k: None)
+    monkeypatch.setattr(codex_mcp, "_spawn_supervisor", lambda *_a, **_k: child)
+    monkeypatch.setattr(codex_mcp.time, "sleep", lambda _seconds: None)
+
+    with pytest.raises(codex_mcp.CodexMcpLauncherError, match="before timeout"):
+        codex_mcp.ensure_codex_supervisor(runtime_home, startup_timeout_sec=0.001)
+
+    _assert_spawned_child_not_signalled_by_pid(child, "startup timeout")
+
+
+def test_post_spawn_exception_reap_uses_exact_child_handle_across_pid_reuse(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runtime_home = tmp_path / "runtime"
+    child = _PidReuseSpawnedChild([], pid=1_021)
+    reads = 0
+
+    @contextlib.contextmanager
+    def lock(_path: Path, _timeout: float):
+        yield
+
+    def load(*_args, **_kwargs):
+        nonlocal reads
+        reads += 1
+        if reads >= 3:
+            raise RuntimeError("injected post-spawn observation failure")
+        return None
+
+    monkeypatch.setattr(codex_mcp, "_startup_lock", lock)
+    monkeypatch.setattr(codex_mcp, "_load_discovery", load)
+    monkeypatch.setattr(codex_mcp, "_spawn_supervisor", lambda *_a, **_k: child)
+
+    with pytest.raises(RuntimeError, match="post-spawn observation failure"):
+        codex_mcp.ensure_codex_supervisor(runtime_home, startup_timeout_sec=1)
+
+    _assert_spawned_child_not_signalled_by_pid(child, "post-spawn exception")
+
+
+def test_foreign_ready_reap_uses_exact_contender_handle_across_pid_reuse(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runtime_home = tmp_path / "runtime"
+    child = _PidReuseSpawnedChild([], pid=1_022)
+    foreign = _discovery(runtime_home, _identity(1_023, start_time=20, boot_id="boot-z"))
+    observations: list[SupervisorDiscoveryRecord | None] = [None, None, foreign]
+
+    @contextlib.contextmanager
+    def lock(_path: Path, _timeout: float):
+        yield
+
+    monkeypatch.setattr(codex_mcp, "_startup_lock", lock)
+    monkeypatch.setattr(
+        codex_mcp,
+        "_load_discovery",
+        lambda *_a, **_k: observations.pop(0),
+    )
+    monkeypatch.setattr(codex_mcp, "_spawn_supervisor", lambda *_a, **_k: child)
+
+    assert codex_mcp.ensure_codex_supervisor(runtime_home, startup_timeout_sec=1) == foreign
+    _assert_spawned_child_not_signalled_by_pid(child, "foreign Ready contender reap")

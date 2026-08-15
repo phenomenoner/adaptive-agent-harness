@@ -2,7 +2,22 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
-## [0.4.0a5] — 2026-08-15
+## [0.4.0a6](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6) — candidate, unreleased
+
+The current source candidate is governed by [`profiles/release-status-v1.json`](profiles/release-status-v1.json).
+The 62-row lifecycle repair, Windows full suite, supported-Python CI, exact wheel, fresh restarted
+host/Luna drill, and independent review are pending receipts. The candidate uses exact native child
+terminalization, the existing database-scoped process lock for single-runtime ownership,
+generation-unique endpoint/credential/request paths with an atomically advanced stable discovery
+pointer and **non-destructive** retention, and a subprocess Codex
+setup route with `NO_ATOMIC_AUTHORITY` that returns an ordered manual plan before any mutation.
+Official Plugin Directory deployment/review/approval/publication and provider-signed attestation are
+not completed.
+
+## [0.4.0a5] — blocked, unreleased, historical
+
+> `v0.4.0a5` is retained as historical input only. It was blocked by lifecycle and provider-authority
+> findings and must not be treated as the current release.
 
 ### Fixed
 
@@ -262,3 +277,4 @@ Linux GitHub Actions repository matrix.
 [0.4.0a0]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a0
 [0.4.0a4]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a4
 [0.4.0a5]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a5
+[0.4.0a6]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6

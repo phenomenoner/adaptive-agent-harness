@@ -12,6 +12,12 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Literal, TextIO
 
+from aar.runtime.process_identity import (
+    ExactChild,
+    ProcessIdentityMismatch,
+    ProcessIdentityUnavailable,
+    bind_exact_child,
+)
 from aar.runtime.programming import (
     ArtifactSink,
     WorkspaceCheckpointRejected,
@@ -65,6 +71,7 @@ class _WorkerState:
     session: SessionRef
     generation: int
     process: subprocess.Popen[str]
+    exact_child: ExactChild
     managed: ManagedWorker | None = None
     managed_finished: bool = False
     managed_event_sequence: int = 0
@@ -244,7 +251,7 @@ class SupervisedIPythonWorkspaceBackend:
             )
         state.cancel_requested.set()
         self._managed_mark_terminating(state)
-        state.process.terminate()
+        self._terminate(state)
         return WorkspaceInterruptResult(
             operation=operation,
             accepted=True,
@@ -318,7 +325,7 @@ class SupervisedIPythonWorkspaceBackend:
                     timeout_s=5.0,
                 )
             except BaseException:
-                self._terminate(state.process)
+                self._terminate(state)
                 self._managed_finish(
                     state,
                     disposition="terminated",
@@ -336,36 +343,35 @@ class SupervisedIPythonWorkspaceBackend:
         ) -> None:
             deferred = self._worker_manager is not None and state.managed is None
             with self._lock:
-                if self._states.get(spec.workspace.value) is not current_state:
-                    self._terminate(state.process)
-                    self._managed_finish(
-                        state,
-                        disposition="terminated",
-                        reason="checkpoint_restore_conflict",
-                    )
-                    raise WorkspaceOperationConflict("workspace changed during restore")
-                if not deferred:
-                    self._states[spec.workspace.value] = state
+                binding_unchanged = self._states.get(spec.workspace.value) is current_state
+            if not binding_unchanged:
+                self._terminate(state)
+                self._managed_finish(
+                    state,
+                    disposition="terminated",
+                    reason="checkpoint_restore_conflict",
+                )
+                raise WorkspaceOperationConflict("workspace changed during restore")
             try:
                 if disposition == "terminated":
                     self._managed_mark_terminating(current_state)
-                self._terminate(current_state.process)
+                self._terminate(current_state)
+                current_state.closed = True
                 self._managed_finish(
                     current_state,
                     disposition=disposition,
                     reason=reason,
                 )
-                current_state.closed = True
                 if deferred:
                     self._register_managed(spec.workspace, state)
-                    with self._lock:
-                        if self._states.get(spec.workspace.value) is not current_state:
-                            raise WorkspaceOperationConflict(
-                                "workspace changed during managed restore handoff"
-                            )
-                        self._states[spec.workspace.value] = state
+                with self._lock:
+                    if self._states.get(spec.workspace.value) is not current_state:
+                        raise WorkspaceOperationConflict(
+                            "workspace changed during restore handoff"
+                        )
+                    self._states[spec.workspace.value] = state
             except BaseException:
-                self._terminate(state.process)
+                self._terminate(state)
                 self._managed_finish(
                     state,
                     disposition="terminated",
@@ -383,7 +389,7 @@ class SupervisedIPythonWorkspaceBackend:
             )
             with self._lock:
                 if self._states.get(spec.workspace.value) is not None:
-                    self._terminate(state.process)
+                    self._terminate(state)
                     self._managed_finish(
                         state,
                         disposition="terminated",
@@ -566,7 +572,7 @@ class SupervisedIPythonWorkspaceBackend:
                 with contextlib.suppress(WorkspaceClosed, _WorkerTimeout):
                     self._request(state, {"command": "close"}, timeout_s=2.0)
             self._managed_mark_terminating(state)
-            self._terminate(state.process)
+            self._terminate(state)
             self._managed_finish(
                 state,
                 disposition="terminated",
@@ -582,7 +588,7 @@ class SupervisedIPythonWorkspaceBackend:
             if state.running_operation is not None:
                 state.cancel_requested.set()
             self._managed_mark_terminating(state)
-            self._terminate(state.process)
+            self._terminate(state)
             self._managed_finish(
                 state,
                 disposition="terminated",
@@ -610,7 +616,25 @@ class SupervisedIPythonWorkspaceBackend:
             encoding="utf-8",
             bufsize=1,
         )
-        state = _WorkerState(session=session, generation=generation, process=process)
+        try:
+            exact_child = bind_exact_child(
+                process,
+                owner_kind="ipython-worker",
+                owner_generation=f"{workspace.value}:{generation}",
+            )
+        except (ProcessIdentityMismatch, ProcessIdentityUnavailable) as error:
+            if process.poll() is not None:
+                process.wait()
+            raise WorkspaceWorkerLost(
+                "IPython worker child could not be bound to an exact native handle; "
+                "numeric-PID cleanup was refused"
+            ) from error
+        state = _WorkerState(
+            session=session,
+            generation=generation,
+            process=process,
+            exact_child=exact_child,
+        )
         try:
             ready = self._read_response(state, timeout_s=self._startup_timeout_s)
             if not ready.get("ok") or not ready.get("ready"):
@@ -618,7 +642,7 @@ class SupervisedIPythonWorkspaceBackend:
             if register_managed:
                 self._register_managed(workspace, state)
         except BaseException:
-            self._terminate(process)
+            self._terminate(state)
             raise
         return state
 
@@ -630,6 +654,7 @@ class SupervisedIPythonWorkspaceBackend:
             workspace_id=workspace.value,
             workspace_generation=state.generation,
             pid=state.process.pid,
+            bound_identity=state.exact_child.identity,
             capability_digest=self.descriptor.capability_digest,
             environment_digest=self._environment.digest,
         )
@@ -835,7 +860,7 @@ class SupervisedIPythonWorkspaceBackend:
             raise WorkspaceWorkerLost(state.lost_reason or "workspace worker is lost")
 
     def _mark_lost(self, state: _WorkerState, reason: str) -> None:
-        self._terminate(state.process)
+        self._terminate(state)
         state.lost = True
         state.lost_reason = reason
         cancelled = state.cancel_requested.is_set()
@@ -910,13 +935,10 @@ class SupervisedIPythonWorkspaceBackend:
             return "worker stderr read failed"
 
     @staticmethod
-    def _terminate(process: subprocess.Popen[str]) -> None:
-        if process.poll() is not None:
-            return
-        with contextlib.suppress(ProcessLookupError):
-            process.terminate()
+    def _terminate(state: _WorkerState) -> None:
         try:
-            process.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=2)
+            state.exact_child.terminalize(2)
+        except ProcessIdentityUnavailable as error:
+            raise WorkspaceWorkerLost(
+                "IPython worker exact child could not reach a verified terminal state"
+            ) from error

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import hashlib
-import hmac
 import os
 import signal
 import stat
@@ -20,16 +18,17 @@ from typing import BinaryIO
 
 from aar.canonical import canonical_json_bytes
 from aar.runtime.process_identity import (
+    ExactChild,
     ProcessIdentityMismatch,
     ProcessIdentityState,
     ProcessIdentityUnavailable,
     SupervisorDiscoveryRecord,
+    bind_exact_child,
     observe_process_identity,
     open_exact_process,
 )
 from aar.runtime.python_child import exact_module_command
 from aar.runtime.supervisor_client import (
-    CREDENTIAL_FILE_NAME,
     DISCOVERY_FILE_NAME,
     PRIVATE_DIR_NAME,
     SupervisorClient,
@@ -42,7 +41,7 @@ DEFAULT_STARTUP_TIMEOUT_SEC = 30.0
 MAX_STARTUP_TIMEOUT_SEC = 120.0
 STARTUP_LOCK_FILE_NAME = "codex-launch.lock"
 LAUNCH_LOG_FILE_NAME = "codex-supervisor.log"
-SHUTDOWN_REQUEST_FILE_NAME = "shutdown.request"
+SHUTDOWN_REQUEST_FILE_NAME = "shutdown-{publication_id}.request"
 SHUTDOWN_REQUEST_SCHEMA_VERSION = "aar.supervisor.shutdown-request.v1"
 MAX_LAUNCH_LOG_BYTES = 262_144
 EXPECTED_SUPERVISOR_VERSION = f"aar-supervisor/{PACKAGE_VERSION}"
@@ -72,15 +71,29 @@ def _private_dir(runtime_home: Path) -> Path:
     private = runtime_home / PRIVATE_DIR_NAME
     runtime_home.mkdir(parents=True, exist_ok=True)
     private.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if _is_reparse_or_symlink(private):
+        raise CodexMcpLauncherError("Codex supervisor private directory is a reparse link")
     if os.name != "nt" and stat.S_IMODE(private.stat().st_mode) & 0o077:
         raise CodexMcpLauncherError("Codex supervisor private directory is not owner-only")
     return private
+
+
+def _is_reparse_or_symlink(path: Path) -> bool:
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return False
+    attributes = int(getattr(metadata, "st_file_attributes", 0))
+    reparse_flag = int(getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
+    return stat.S_ISLNK(metadata.st_mode) or bool(attributes & reparse_flag)
 
 
 def _read_discovery(
     runtime_home: Path, *, tolerate_transient_unreadable: bool = False
 ) -> SupervisorDiscoveryRecord | None:
     path = runtime_home / PRIVATE_DIR_NAME / DISCOVERY_FILE_NAME
+    if _is_reparse_or_symlink(path):
+        raise CodexMcpLauncherError("Codex supervisor discovery is a reparse link")
     try:
         content = path.read_bytes()
     except FileNotFoundError:
@@ -180,7 +193,7 @@ def _spawn_supervisor(
     *,
     programmable_backend: str,
     log_path: Path,
-) -> subprocess.Popen[bytes]:
+) -> ExactChild:
     command = exact_module_command(
         "aar.runtime.supervisor",
         [
@@ -213,34 +226,42 @@ def _spawn_supervisor(
     else:
         options["start_new_session"] = True
     try:
-        return subprocess.Popen(command, **options)  # type: ignore[arg-type]
+        process = subprocess.Popen(command, **options)  # type: ignore[arg-type]
+        try:
+            return bind_exact_child(
+                process,
+                owner_kind="codex-supervisor",
+                owner_generation=os.fspath(runtime_home),
+            )
+        except (ProcessIdentityMismatch, ProcessIdentityUnavailable) as error:
+            if process.poll() is not None:
+                process.wait()
+            raise CodexMcpLauncherError(
+                "Codex supervisor child could not be bound to an exact native handle; "
+                "the launcher refused numeric-PID cleanup"
+            ) from error
     finally:
         log.close()
 
 
-def _reap_spawned_process(process: subprocess.Popen[bytes], timeout_sec: float) -> None:
-    """Make the exact Popen child terminal and reaped before startup ownership is released."""
+def _reap_spawned_process(process: ExactChild, timeout_sec: float) -> None:
+    """Join the spawn-bound handle's at-most-once signal, wait, and reap result."""
 
-    if process.poll() is not None:
-        process.wait()
-        return
-    with contextlib.suppress(ProcessLookupError):
-        process.terminate()
     try:
-        process.wait(timeout=timeout_sec)
-        return
-    except subprocess.TimeoutExpired:
-        process.kill()
-    process.wait(timeout=timeout_sec)
+        process.terminalize(timeout_sec)
+    except ProcessIdentityUnavailable as error:
+        raise CodexMcpLauncherError(
+            "Codex supervisor exact child could not reach a verified terminal state"
+        ) from error
 
 
 def _accept_discovery_after_spawn(
     discovery: SupervisorDiscoveryRecord,
-    process: subprocess.Popen[bytes],
+    process: ExactChild,
     *,
     cleanup_timeout_sec: float,
 ) -> SupervisorDiscoveryRecord:
-    if discovery.pid == process.pid:
+    if discovery.process_identity == process.identity:
         return discovery
     _reap_spawned_process(process, cleanup_timeout_sec)
     return discovery
@@ -339,67 +360,23 @@ def _shutdown_request_bytes(discovery: SupervisorDiscoveryRecord) -> bytes:
     )
 
 
-def _discovery_bytes_match(path: Path, discovery: SupervisorDiscoveryRecord) -> bool:
-    try:
-        observed = SupervisorDiscoveryRecord.model_validate_json(path.read_bytes(), strict=True)
-    except (OSError, ValueError):
-        return False
-    return observed.discovery_digest == discovery.discovery_digest
-
-
-def _unlink_if_bytes_match(path: Path, expected: bytes) -> bool:
-    try:
-        first = path.read_bytes()
-        if not hmac.compare_digest(first, expected):
-            return False
-        second = path.read_bytes()
-        if not hmac.compare_digest(second, expected):
-            return False
-        path.unlink()
-        return True
-    except FileNotFoundError:
-        return False
-    except OSError:
-        return False
-
-
 def _remove_stale_private_files(
     runtime_home: Path, discovery: SupervisorDiscoveryRecord
 ) -> None:
-    private = runtime_home / PRIVATE_DIR_NAME
-    discovery_path = private / DISCOVERY_FILE_NAME
-    credential_path = private / CREDENTIAL_FILE_NAME
-    request_path = private / SHUTDOWN_REQUEST_FILE_NAME
-    if not _discovery_bytes_match(discovery_path, discovery):
-        return
-    if discovery.endpoint_kind == "unix" and _discovery_bytes_match(
-        discovery_path, discovery
-    ):
-        with contextlib.suppress(FileNotFoundError):
-            Path(discovery.endpoint_ref).unlink()
-    if _discovery_bytes_match(discovery_path, discovery):
-        _unlink_if_bytes_match(request_path, _shutdown_request_bytes(discovery))
-    if _discovery_bytes_match(discovery_path, discovery):
-        try:
-            credential = credential_path.read_bytes()
-        except OSError:
-            credential = None
-        if (
-            credential is not None
-            and f"sha256:{hashlib.sha256(credential).hexdigest()}"
-            == discovery.attachment_credential_digest
-        ):
-            _unlink_if_bytes_match(credential_path, credential)
-    if _discovery_bytes_match(discovery_path, discovery):
-        _unlink_if_bytes_match(discovery_path, canonical_json_bytes(discovery))
+    del runtime_home, discovery
+    # Generation artifacts are retained during normal lifecycle operation.  The stable
+    # discovery pointer may be advanced atomically by a successor, but no predecessor deletes
+    # a pathname that could have been republished after its last observation.
 
 
 def _write_shutdown_request(
     runtime_home: Path, discovery: SupervisorDiscoveryRecord
 ) -> None:
     private = _private_dir(runtime_home)
-    target = private / SHUTDOWN_REQUEST_FILE_NAME
-    temporary = private / f".{SHUTDOWN_REQUEST_FILE_NAME}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
+    target = private / discovery.shutdown_request_file
+    if _is_reparse_or_symlink(target):
+        raise CodexMcpLauncherError("Codex supervisor shutdown request is a reparse link")
+    temporary = private / f".{target.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
     payload = _shutdown_request_bytes(discovery)
     descriptor = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     try:

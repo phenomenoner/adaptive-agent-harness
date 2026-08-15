@@ -144,7 +144,9 @@ def _lifecycle_receipts(runtime_home: Path) -> list[SupervisorLifecycleReceipt]:
     ]
 
 
-def test_frontends_reconnect_without_owning_runtime_and_cleanup_is_exact(tmp_path: Path) -> None:
+def test_frontends_reconnect_and_restart_with_non_destructive_generation_retirement(
+    tmp_path: Path,
+) -> None:
     runtime_home = tmp_path / "runtime"
     process, discovery = _start_supervisor(runtime_home)
     private = runtime_home / "supervisor"
@@ -152,7 +154,7 @@ def test_frontends_reconnect_without_owning_runtime_and_cleanup_is_exact(tmp_pat
         assert process_identity_matches(discovery.process_identity)
         if os.name != "nt":
             assert stat.S_IMODE(private.stat().st_mode) == 0o700
-            assert stat.S_IMODE((private / "attachment.key").stat().st_mode) == 0o600
+            assert stat.S_IMODE((private / discovery.credential_file).stat().st_mode) == 0o600
             assert stat.S_IMODE(Path(discovery.endpoint_ref).stat().st_mode) == 0o600
 
         rows = _frontend_exchange(
@@ -236,10 +238,15 @@ def test_frontends_reconnect_without_owning_runtime_and_cleanup_is_exact(tmp_pat
     finally:
         _stop_supervisor(process, runtime_home)
 
-    assert not (private / "discovery.json").exists()
-    assert not (private / "attachment.key").exists()
+    retained = SupervisorDiscoveryRecord.model_validate_json(
+        (private / "discovery.json").read_bytes(), strict=True
+    )
+    assert retained == discovery
+    assert not process_identity_matches(discovery.process_identity)
+    assert (private / discovery.credential_file).exists()
+    assert (private / discovery.shutdown_request_file).exists()
     if discovery.endpoint_kind == "unix":
-        assert not Path(discovery.endpoint_ref).exists()
+        assert Path(discovery.endpoint_ref).exists()
     receipts = [
         item
         for item in _lifecycle_receipts(runtime_home)
@@ -260,6 +267,25 @@ def test_frontends_reconnect_without_owning_runtime_and_cleanup_is_exact(tmp_pat
         assert registry.supervisor_runs()[-1].state == "stopped"
     finally:
         registry.close()
+
+    successor, successor_discovery = _start_supervisor(runtime_home)
+    try:
+        assert successor_discovery.runtime_generation == discovery.runtime_generation + 1
+        assert successor_discovery.publication_id != discovery.publication_id
+        assert successor_discovery.process_identity != discovery.process_identity
+        assert (private / discovery.credential_file).exists()
+        assert (private / successor_discovery.credential_file).exists()
+        assert SupervisorDiscoveryRecord.model_validate_json(
+            (private / "discovery.json").read_bytes(), strict=True
+        ) == successor_discovery
+    finally:
+        _stop_supervisor(successor, runtime_home)
+
+    assert SupervisorDiscoveryRecord.model_validate_json(
+        (private / "discovery.json").read_bytes(), strict=True
+    ) == successor_discovery
+    assert (private / discovery.credential_file).exists()
+    assert (private / successor_discovery.credential_file).exists()
 
 
 def test_hard_owner_loss_reconciles_predecessor_and_worker_binding(tmp_path: Path) -> None:

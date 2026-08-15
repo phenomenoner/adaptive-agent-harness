@@ -9,6 +9,7 @@ import hmac
 import ipaddress
 import json
 import os
+import stat
 import sys
 import time
 from pathlib import Path
@@ -35,12 +36,22 @@ from aar.versions import PACKAGE_VERSION
 
 PRIVATE_DIR_NAME = "supervisor"
 DISCOVERY_FILE_NAME = "discovery.json"
-CREDENTIAL_FILE_NAME = "attachment.key"
+CREDENTIAL_FILE_NAME = "attachment-{publication_id}.key"
 MAX_FRAME_LINE_BYTES = ((MAX_PRIVATE_PAYLOAD_BYTES + 2) // 3) * 4 + 65_536
 
 
 class SupervisorClientError(RuntimeError):
     pass
+
+
+def _is_reparse_or_symlink(path: Path) -> bool:
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return False
+    attributes = int(getattr(metadata, "st_file_attributes", 0))
+    reparse_flag = int(getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
+    return stat.S_ISLNK(metadata.st_mode) or bool(attributes & reparse_flag)
 
 
 class _SocketLines:
@@ -88,7 +99,7 @@ class SupervisorClient:
         self.runtime_home = runtime_home.resolve()
         self.private_dir = self.runtime_home / PRIVATE_DIR_NAME
         self.discovery_path = self.private_dir / DISCOVERY_FILE_NAME
-        self.credential_path = self.private_dir / CREDENTIAL_FILE_NAME
+        self.credential_path: Path | None = None
         self.discovery: SupervisorDiscoveryRecord | None = None
         self._credential: bytes | None = None
         self._authority_digest: str | None = None
@@ -231,6 +242,10 @@ class SupervisorClient:
             raise SupervisorClientError("supervisor response deadline expired")
 
     def _load_discovery(self) -> SupervisorDiscoveryRecord:
+        if _is_reparse_or_symlink(self.private_dir) or _is_reparse_or_symlink(
+            self.discovery_path
+        ):
+            raise SupervisorClientError("supervisor discovery path is a reparse link")
         try:
             discovery = SupervisorDiscoveryRecord.model_validate_json(
                 self.discovery_path.read_bytes(), strict=True
@@ -248,10 +263,13 @@ class SupervisorClient:
         return discovery
 
     def _load_credential(self, discovery: SupervisorDiscoveryRecord) -> bytes:
+        credential_path = self.private_dir / discovery.credential_file
+        if _is_reparse_or_symlink(credential_path):
+            raise SupervisorClientError("attachment credential is a reparse link")
         try:
-            if os.name != "nt" and self.credential_path.stat().st_mode & 0o077:
+            if os.name != "nt" and credential_path.stat().st_mode & 0o077:
                 raise SupervisorClientError("attachment credential is not owner-only")
-            credential = self.credential_path.read_bytes()
+            credential = credential_path.read_bytes()
         except OSError as error:
             raise SupervisorClientError("attachment credential is unavailable") from error
         if not hmac.compare_digest(
@@ -260,6 +278,7 @@ class SupervisorClient:
             raise SupervisorClientError("attachment credential digest does not match discovery")
         if len(credential) != 32:
             raise SupervisorClientError("attachment credential length is invalid")
+        self.credential_path = credential_path
         self._credential = credential
         return credential
 
@@ -267,6 +286,8 @@ class SupervisorClient:
     async def _connect(discovery: SupervisorDiscoveryRecord) -> SocketStream:
         try:
             if discovery.endpoint_kind == "unix":
+                if _is_reparse_or_symlink(Path(discovery.endpoint_ref)):
+                    raise SupervisorClientError("supervisor endpoint is a reparse link")
                 return await anyio.connect_unix(discovery.endpoint_ref)
             host, raw_port = discovery.endpoint_ref.rsplit(":", 1)
             if not ipaddress.ip_address(host).is_loopback:

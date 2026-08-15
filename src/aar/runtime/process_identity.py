@@ -10,11 +10,14 @@ import ctypes
 import os
 import select
 import signal
+import subprocess
 import sys
+import threading
+import uuid
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import StringConstraints, model_validator
 
@@ -22,7 +25,7 @@ from aar.canonical import canonical_sha256
 from aar.schemas import Digest, PositiveCounter, StrictModel
 
 PROCESS_IDENTITY_SCHEMA_VERSION = "aar.process-identity.v1"
-DISCOVERY_SCHEMA_VERSION = "aar.supervisor.discovery.v1"
+DISCOVERY_SCHEMA_VERSION = "aar.supervisor.discovery.v2"
 DEFAULT_SUPERVISOR_VERSION = "aar-supervisor-unknown"
 DEFAULT_PROTOCOL_VERSION = "aar.supervisor.protocol.v1"
 
@@ -40,6 +43,14 @@ VersionText = Annotated[
 ]
 EndpointKind = Literal["unix", "tcp"]
 IdentityPlatform = Literal["linux", "windows"]
+PublicationId = Annotated[
+    str,
+    StringConstraints(pattern=r"^[0-9a-f]{32}$", strict=True),
+]
+ControlFileName = Annotated[
+    str,
+    StringConstraints(min_length=1, max_length=128, pattern=r"^[a-z0-9.-]+$", strict=True),
+]
 
 
 class ProcessIdentityUnavailable(RuntimeError):
@@ -124,9 +135,12 @@ class ProcessStartIdentity(StrictModel):
 class SupervisorDiscoveryRecord(StrictModel):
     """Digest-bound, credential-free supervisor discovery information."""
 
-    schema_version: Literal["aar.supervisor.discovery.v1"] = DISCOVERY_SCHEMA_VERSION
+    schema_version: Literal["aar.supervisor.discovery.v2"] = DISCOVERY_SCHEMA_VERSION
+    publication_id: PublicationId
     endpoint_kind: EndpointKind
     endpoint_ref: EndpointRef
+    credential_file: ControlFileName
+    shutdown_request_file: ControlFileName
     pid: PositiveCounter
     process_identity: ProcessStartIdentity
     runtime_generation: PositiveCounter
@@ -143,8 +157,11 @@ class SupervisorDiscoveryRecord(StrictModel):
     def issue(
         cls,
         *,
+        publication_id: str,
         endpoint_kind: EndpointKind,
         endpoint_ref: str,
+        credential_file: str,
+        shutdown_request_file: str,
         process_identity: ProcessStartIdentity,
         runtime_generation: int,
         dispatcher_generation: int,
@@ -159,8 +176,11 @@ class SupervisorDiscoveryRecord(StrictModel):
         resolved_pid = process_identity.pid if pid is None else pid
         payload = {
             "schema_version": DISCOVERY_SCHEMA_VERSION,
+            "publication_id": publication_id,
             "endpoint_kind": endpoint_kind,
             "endpoint_ref": endpoint_ref,
+            "credential_file": credential_file,
+            "shutdown_request_file": shutdown_request_file,
             "pid": resolved_pid,
             "process_identity": process_identity.model_dump(mode="json"),
             "runtime_generation": runtime_generation,
@@ -178,6 +198,10 @@ class SupervisorDiscoveryRecord(StrictModel):
     def record_is_bound_and_self_digest_valid(self) -> Self:
         if self.pid != self.process_identity.pid:
             raise ValueError("discovery pid must match process identity pid")
+        if self.credential_file != f"attachment-{self.publication_id}.key":
+            raise ValueError("discovery credential file must match its publication id")
+        if self.shutdown_request_file != f"shutdown-{self.publication_id}.request":
+            raise ValueError("discovery shutdown request file must match its publication id")
         payload = self.model_dump(mode="json", exclude={"discovery_digest"})
         if self.discovery_digest != canonical_sha256(payload):
             raise ValueError("discovery digest does not match canonical discovery bytes")
@@ -499,6 +523,260 @@ class ExactProcessHandle:
         self._kernel32.CloseHandle(self.handle)  # type: ignore[attr-defined]
 
 
+class ExactChildState(StrEnum):
+    """In-memory terminalization state for one spawn-bound native child object."""
+
+    ACTIVE = "ACTIVE"
+    TERMINATING = "TERMINATING"
+    TERMINAL = "TERMINAL"
+    UNRESOLVED = "UNRESOLVED"
+
+
+@dataclass(frozen=True)
+class ExactChildTerminalReceipt:
+    """At-most-once terminal result bound to one retained native child handle."""
+
+    identity: ProcessStartIdentity
+    spawn_nonce: str
+    owner_kind: str
+    owner_generation: str
+    signal_count: int
+    exact_wait_count: int
+    returncode: int
+
+
+class ExactChild:
+    """Own one Popen child and the native handle bound at spawn admission.
+
+    The Popen object remains useful for standard I/O and child reaping, but it is never used
+    to signal the process.  Every terminalizer joins this object's state machine and the first
+    terminalizer keeps the same pidfd/Windows process handle through signal and terminal
+    readback.
+    """
+
+    def __init__(
+        self,
+        process: subprocess.Popen[Any],
+        identity: ProcessStartIdentity,
+        target: ExactProcessHandle,
+        *,
+        owner_kind: str,
+        owner_generation: str,
+        spawn_nonce: str | None = None,
+    ) -> None:
+        if process.pid != identity.pid or target.identity != identity:
+            raise ProcessIdentityMismatch("spawned child identity does not match its native handle")
+        if not owner_kind or not owner_generation:
+            raise ValueError("exact child owner kind and generation must be non-empty")
+        self.process = process
+        self.identity = identity
+        self.target = target
+        self.owner_kind = owner_kind
+        self.owner_generation = owner_generation
+        self.spawn_nonce = spawn_nonce or uuid.uuid4().hex
+        self._condition = threading.Condition()
+        self._state = ExactChildState.ACTIVE
+        self._receipt: ExactChildTerminalReceipt | None = None
+        self._error: BaseException | None = None
+
+    @property
+    def pid(self) -> int:
+        return self.identity.pid
+
+    @property
+    def state(self) -> ExactChildState:
+        with self._condition:
+            return self._state
+
+    @property
+    def terminal_receipt(self) -> ExactChildTerminalReceipt | None:
+        with self._condition:
+            return self._receipt
+
+    def poll(self) -> int | None:
+        return self.process.poll()
+
+    def terminalize(self, timeout_sec: float) -> ExactChildTerminalReceipt:
+        """Signal, wait, and reap exactly once through the retained native handle."""
+
+        if timeout_sec <= 0:
+            raise ValueError("exact child timeout must be positive")
+        with self._condition:
+            while self._state is ExactChildState.TERMINATING:
+                self._condition.wait()
+            if self._state is ExactChildState.TERMINAL:
+                assert self._receipt is not None
+                return self._receipt
+            if self._state is ExactChildState.UNRESOLVED:
+                raise ProcessIdentityUnavailable(
+                    "exact child terminal state is unresolved"
+                ) from self._error
+            self._state = ExactChildState.TERMINATING
+
+        try:
+            receipt = self._terminalize_owned(timeout_sec)
+        except BaseException as error:
+            with self._condition:
+                self._error = error
+                self._state = ExactChildState.UNRESOLVED
+                self._condition.notify_all()
+            raise
+
+        with self._condition:
+            self._receipt = receipt
+            self._state = ExactChildState.TERMINAL
+            self.target.close()
+            self._condition.notify_all()
+            return receipt
+
+    def _terminalize_owned(self, timeout_sec: float) -> ExactChildTerminalReceipt:
+        signal_count = 0
+        exact_wait_count = 1
+        terminal = self.target.wait(0)
+        if not terminal:
+            signal_count += 1
+            sent = self.target.send_signal(signal.SIGTERM)
+            if not sent:
+                exact_wait_count += 1
+                terminal = self.target.wait(timeout_sec)
+                if not terminal:
+                    raise ProcessIdentityUnavailable(
+                        "exact child signal was not accepted and terminal state is unavailable"
+                    )
+            else:
+                exact_wait_count += 1
+                terminal = self.target.wait(timeout_sec)
+
+        if not terminal and self.target.kind == "linux-pidfd":
+            signal_count += 1
+            sent = self.target.send_signal(signal.SIGKILL)
+            if not sent:
+                exact_wait_count += 1
+                terminal = self.target.wait(timeout_sec)
+            else:
+                exact_wait_count += 1
+                terminal = self.target.wait(timeout_sec)
+
+        if not terminal:
+            raise ProcessIdentityUnavailable(
+                "exact child remained live after same-handle termination"
+            )
+        try:
+            returncode = self.process.wait(timeout=timeout_sec)
+        except (subprocess.TimeoutExpired, OSError) as error:
+            raise ProcessIdentityUnavailable(
+                "exact child became terminal but could not be reaped"
+            ) from error
+        return ExactChildTerminalReceipt(
+            identity=self.identity,
+            spawn_nonce=self.spawn_nonce,
+            owner_kind=self.owner_kind,
+            owner_generation=self.owner_generation,
+            signal_count=signal_count,
+            exact_wait_count=exact_wait_count,
+            returncode=returncode,
+        )
+
+
+def _bind_spawned_windows_process(
+    process: subprocess.Popen[Any],
+) -> tuple[ProcessStartIdentity, ExactProcessHandle]:
+    """Duplicate the handle returned by CreateProcess; never reopen the child by PID."""
+
+    source = getattr(process, "_handle", None)
+    if source is None:
+        raise ProcessIdentityUnavailable("spawned Windows child exposes no native process handle")
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetCurrentProcess.argtypes = []
+    kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+    kernel32.DuplicateHandle.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_uint32,
+        ctypes.c_int,
+        ctypes.c_uint32,
+    ]
+    kernel32.DuplicateHandle.restype = ctypes.c_int
+    kernel32.GetProcessTimes.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(_FILETIME),
+        ctypes.POINTER(_FILETIME),
+        ctypes.POINTER(_FILETIME),
+        ctypes.POINTER(_FILETIME),
+    ]
+    kernel32.GetProcessTimes.restype = ctypes.c_int
+    kernel32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+    kernel32.TerminateProcess.restype = ctypes.c_int
+    kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    kernel32.WaitForSingleObject.restype = ctypes.c_uint32
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    kernel32.CloseHandle.restype = ctypes.c_int
+    current = kernel32.GetCurrentProcess()
+    duplicate = ctypes.c_void_p()
+    duplicate_same_access = 0x00000002
+    if not kernel32.DuplicateHandle(
+        current,
+        ctypes.c_void_p(int(source)),
+        current,
+        ctypes.byref(duplicate),
+        0,
+        0,
+        duplicate_same_access,
+    ):
+        error_code = ctypes.get_last_error()
+        raise ProcessIdentityUnavailable(
+            f"could not duplicate spawned Windows process handle (winerror={error_code})"
+        )
+    handle = int(duplicate.value or 0)
+    try:
+        start_time = _windows_start_time_from_handle(kernel32, handle, process.pid)
+        identity = ProcessStartIdentity(
+            pid=process.pid,
+            platform="windows",
+            start_time=start_time,
+        )
+        return identity, ExactProcessHandle(
+            identity,
+            kind="windows-handle",
+            handle=handle,
+            kernel32=kernel32,
+        )
+    except BaseException:
+        kernel32.CloseHandle(handle)
+        raise
+
+
+def bind_exact_child(
+    process: subprocess.Popen[Any],
+    *,
+    owner_kind: str,
+    owner_generation: str,
+) -> ExactChild:
+    """Bind a stable native handle before a spawned child is admitted to its owner."""
+
+    if process.poll() is not None:
+        process.wait()
+        raise ProcessIdentityMismatch("spawned child terminated before exact-handle admission")
+    if os.name == "nt":
+        identity, target = _bind_spawned_windows_process(process)
+    else:
+        identity = process_identity(process.pid)
+        target = open_exact_process(identity, terminate=True)
+    if process.poll() is not None:
+        target.close()
+        process.wait()
+        raise ProcessIdentityMismatch("spawned child terminated during exact-handle admission")
+    return ExactChild(
+        process,
+        identity,
+        target,
+        owner_kind=owner_kind,
+        owner_generation=owner_generation,
+    )
+
+
 def open_exact_process(
     identity: ProcessStartIdentity,
     *,
@@ -607,9 +885,13 @@ __all__ = [
     "DEFAULT_PROTOCOL_VERSION",
     "DEFAULT_SUPERVISOR_VERSION",
     "DISCOVERY_SCHEMA_VERSION",
+    "ControlFileName",
     "DiscoveryRecord",
     "EndpointKind",
     "EndpointRef",
+    "ExactChild",
+    "ExactChildState",
+    "ExactChildTerminalReceipt",
     "ExactProcessHandle",
     "IdentityPlatform",
     "NativeProcessIdentity",
@@ -620,8 +902,10 @@ __all__ = [
     "ProcessIdentityState",
     "ProcessIdentityUnavailable",
     "ProcessStartIdentity",
+    "PublicationId",
     "SupervisorDiscovery",
     "SupervisorDiscoveryRecord",
+    "bind_exact_child",
     "current_process_identity",
     "get_current_process_identity",
     "get_native_process_identity",

@@ -78,7 +78,34 @@ owner. If process identity is temporarily unavailable, do not delete control fil
 second owner—retry after native observation recovers. When setup reports `restart_required: true`,
 restart Codex Desktop, start a fresh task, load the deferred capability tool when needed, and make
 one native `aar_capabilities` call. The old task's catalog or a same-task transport error cannot
-prove that the updated plugin was picked up.
+  prove that the updated plugin was picked up.
+
+### Setup authority and retained control generations
+
+The local Codex setup adapter is a planner unless the host exposes a provider transaction with an
+opaque revision and compare-and-set (CAS) mutation. The current subprocess Codex route reports
+`NO_ATOMIC_AUTHORITY`: it reads the observed state, returns an ordered manual plan, and must return
+before the first forward mutation. Do not describe a readback, equal visible value, or successful
+CLI command as provider authority. The host/operator must apply the plan through the authoritative
+Codex configuration owner, then rerun setup and verify the exact installed command.
+
+There is no automatic install, rollback, or best-effort compensation on this route. A provider
+conflict or uncertain outcome is a stop-and-reconcile condition; preserve the current state and do
+not repeat a mutation blindly. If a future provider adapter exposes idempotency, reuse the original
+key only for a byte-identical request. Automatic forward and rollback may be enabled only after a
+real provider adapter supplies and tests the expected-revision CAS contract.
+
+Supervisor endpoint, credential, and shutdown-request paths use generation-unique names;
+`discovery.json` is a stable pointer carrying the publication ID and advances atomically. Normal
+startup, stale-owner handling, shutdown-request consumption, and terminal cleanup are deliberately
+non-destructive: retained generation-specific control artifacts are forensic state, not permission
+to delete a successor. A future explicit offline garbage collector must validate the exact
+generation and remain outside normal lifecycle operations.
+
+After a setup receipt reports `restart_required: true`, restart Codex Desktop, open a fresh task,
+load the deferred capability tool if needed, and make one native `aar_capabilities` call. A stale
+task catalog, CLI-only probe, or same-task transport error is not evidence that the new generation
+is active.
 
 Keep these exact public field names explicit:
 

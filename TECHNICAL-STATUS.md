@@ -1,17 +1,44 @@
 # Technical Status
 
-**Release:** `v0.4.0a5` public-alpha candidate
-**Package:** `adaptive-agent-runtime==0.4.0a5`
+**Candidate:** `v0.4.0a6` (candidate, unreleased)
+**Package:** `adaptive-agent-runtime==0.4.0a6`
 **MCP surfaces:** local `aar.mcp-tools.v7` with 30 tools; remote public profile with 11 tools
-**Operation skill:** `aar-operations` `0.9.5`
+**Operation skill:** `aar-operations` `0.9.6`
 
-Adaptive Agent Harness (AAR) is an executable, contract-first runtime for bounded agent operations. It provides durable operation state, programmable workspaces, brokered RLM jobs, immutable adaptive assets, and receipt-backed model routing through a host-owned provider gateway.
+The machine-readable authority for this page and the other five public release surfaces is
+[`profiles/release-status-v1.json`](profiles/release-status-v1.json). It records the candidate as
+`candidate_unreleased`, the 62-row repair matrix, and the pending external receipts. The preceding
+`v0.4.0a5` candidate is **blocked, unreleased, and historical**; it is not the current release.
 
-The governing boundary is:
+Adaptive Agent Harness (AAR) is an executable, contract-first runtime for bounded agent operations.
+It provides durable operation state, programmable workspaces, brokered RLM jobs, immutable adaptive
+assets, and receipt-backed model routing through a host-owned provider gateway.
 
 > AAR computes and proposes. The host authorizes and delivers.
 
-AAR does not own provider credentials, external-effect authorization, activation, deployment, or final delivery.
+AAR does not own provider credentials, external-effect authorization, activation, deployment, or
+final delivery.
+
+## Candidate behavior
+
+The `0.4.0a6` candidate closes the reviewed lifecycle seams with these contracts:
+
+- spawned supervisor and IPython children are admitted with one exact native process object and
+  terminalized through that object, including same-handle wait and at-most-once receipts;
+- each continuity database admits one active runtime through the existing process lock acquired
+  before host construction and released automatically on process exit;
+- supervisor endpoint, credential, and shutdown-request paths are generation-unique while
+  `discovery.json` is an atomically advanced stable pointer carrying the publication ID; normal
+  lifecycle retirement is **non-destructive** and retains generation-specific control artifacts as
+  forensic state rather than deleting a possible successor;
+- the subprocess Codex configuration adapter reports `NO_ATOMIC_AUTHORITY` and returns an ordered
+  manual/provider-authority-required plan before the first forward mutation;
+- automatic Codex installation, rollback, and best-effort compensation are not claimed;
+- the canonical operation skill and generated Codex/Hermes copies are `0.9.6`.
+
+The provider-backed RLM boundary remains host-owned. A main agent chooses one model and optional
+reasoning effort per job; the host performs each physical call; AAR persists bounded tickets,
+receipts, and continuation state without provider credentials.
 
 ## Current capabilities
 
@@ -19,10 +46,10 @@ AAR does not own provider credentials, external-effect authorization, activation
 
 - strict Pydantic contracts with generated JSON Schemas;
 - deterministic canonical JSON and content digests;
-- valid and invalid conformance fixtures;
 - direct Python APIs and a local-stdio MCP server;
-- structured tool results with explicit identities, generations, revisions, deadlines, grants, budgets, and idempotency keys;
-- a canonical host-neutral operation skill copied byte-for-byte into generated host profiles.
+- structured tool results with identities, generations, revisions, deadlines, grants, budgets, and
+  idempotency keys;
+- a canonical host-neutral operation skill copied into generated host profiles.
 
 ### Durable operation lifecycle
 
@@ -30,144 +57,75 @@ AAR does not own provider credentials, external-effect authorization, activation
 - attempts, leases, events, cancellations, receipts, and recovery decisions survive frontend loss;
 - stale generations and late writers fail closed;
 - uncertain state-changing outcomes remain `indeterminate` until reconciled;
-- one durable supervisor owns the runtime while replaceable MCP frontends attach through an owner-private authenticated transport;
-- process identity checks defend against stale discovery and PID reuse.
+- one durable supervisor owns the runtime while replaceable MCP frontends attach through an
+  owner-private authenticated transport.
 
-### Programmable workspaces
+### Programmable workspaces and RLM
 
-- plain-Python and supervised IPython backends;
-- create, attach, execute, inspect, interrupt, checkpoint, restore, health, reconcile, and close;
-- portable JSON-subset checkpoint manifests with explicit exclusions;
-- new-generation restore instead of pretending to resurrect arbitrary process memory;
-- packaged IPython, NumPy, and pandas support in the default analysis environment.
-
-AAR is not a Python security sandbox. Hostile or multi-tenant execution requires a separate isolation boundary.
-
-### Brokered RLM and adaptive assets
-
-- bounded persisted RLM jobs with step traces and cumulative budgets;
-- typed model, subagent, effect, artifact, and evidence broker contracts;
-- retained child handles and explicit result retrieval;
-- authoritative receipt reuse after recovery;
+- plain-Python and supervised IPython backends with generation and revision checks;
+- JSON-subset checkpoint manifests with explicit exclusions;
+- bounded persisted RLM jobs, typed broker contracts, retained child handles, and explicit result
+  retrieval;
 - immutable content-addressed assets and dependency-closed import/export;
-- explicit selection, disclosure, use, outcome, and attribution events;
 - proposal-only external effects and host-owned materialization.
-
-### Receipt-backed model routing
-
-`v0.3.0a2` adds an owner-controlled production-model boundary:
-
-- credential-free, digest-bound route catalogs and profiles;
-- immutable admission bindings;
-- durable model execution state;
-- route and provider-usage receipts;
-- explicit retry, fallback, timeout, cancellation, and uncertainty semantics;
-- a bounded MCP Sampling gateway in which the MCP client owns the physical provider call;
-- an explicit strict profile for `openai-codex / gpt-5.6-luna / max`;
-- rejection of missing, malformed, drifted, retried, or fallback receipts under that profile;
-- benchmark manifest and usage-ledger fragments for paired evaluation contracts.
-
-See [Receipt-backed model routing and fair evaluation](docs/MODEL-ROUTING-AND-EVALUATION.md).
 
 ### Public plugin and caller-delegated RLM
 
-`v0.4.0a0` adds a separate OAuth-authenticated Streamable HTTP profile for ChatGPT and Codex:
-
-- six tenant-private structured-workspace tools and five caller-delegated RLM tools;
-- one host-selected executor, model, and optional reasoning effort per job;
-- exact pre-spend claim tickets and compare-and-set bounded result commits;
-- durable idempotency, cancellation, restart, LRU reopen, and terminal-key conflict behavior;
-- digest-only bounded command markers and explicit workspace, request, artifact, job, and value quotas;
-- a deterministic plugin tree, scoped skill ZIP, reviewer cases, brand assets, and container profile.
-
-AAR does not receive provider credentials or execute the public model call. The authenticated main
-agent or host performs it and reports only observed route, usage, output, and optional receipt data.
-See [Public plugin and submission boundary](docs/PUBLIC-PLUGIN.md) and
-[Caller-delegated RLM design](docs/PUBLIC-RLM-PRODUCT-BOUNDARY.md).
+The separate OAuth-authenticated Streamable HTTP profile exposes six tenant-private structured
+workspace tools and five caller-delegated RLM tools. Each job has one host-selected executor, model,
+and optional reasoning effort, exact pre-spend claim tickets, compare-and-set result commits, and
+durable idempotency/restart/cancellation semantics. AAR does not receive provider credentials or
+execute the public model call.
 
 ## Host support
 
-| Host surface | Current public support | Boundary |
+| Host surface | Candidate support | Boundary |
 |---|---|---|
-| Direct Python | contract models, reference host, supervisor/frontend APIs | embedding host must preserve AAR identity and receipt semantics |
-| Generic MCP | local stdio, 30 public tools | MCP transport is not an authority proof |
-| ChatGPT / Codex public plugin candidate | remote OAuth profile, 11 curated tools, scoped skill | local lifecycle evidence is not production deployment, OpenAI approval, or publication |
+| Direct Python | contract models, reference host, supervisor/frontend APIs | embedding host preserves identity and receipt semantics |
+| Generic MCP | local stdio, 30 public tools | transport is not authority proof |
+| ChatGPT / Codex public plugin candidate | remote OAuth profile, 11 curated tools, scoped skill | not production deployment, OpenAI approval, or publication |
 | Codex | generated plugin/profile, setup helper, canonical operation skill | Codex owns approvals, credentials, and tool policy |
 | Hermes | generated profile, ordinary MCP registration, durable supervisor integration | Hermes owns MCP Sampling and physical provider requests |
 
-See [Host Compatibility](HOST-COMPATIBILITY.md) for reproducible setup and verification commands.
+See [Host Compatibility](HOST-COMPATIBILITY.md) for commands and evidence boundaries.
 
-## Release verification
+## Verification state
 
-The `v0.4.0a5` candidate is verified through:
+The candidate has **62** required lifecycle repair rows. The status authority records all of the
+following as `PENDING` until exact receipts are bound:
 
-- explicit platform skips where a process or filesystem primitive is unavailable;
-- Ruff checks;
-- locked dependency resolution;
-- generated contract, MCP asset, and host-profile verification;
-- canonical skill parity across the source, Codex, and Hermes copies;
-- public-release checks for credentials, private keys, machine-local paths, runtime databases, local receipts, internal work logs, binaries, broken links, broken anchors, translation identity, and release identity;
-- exact-wheel ZIP, metadata, RECORD, packaged-asset, and isolated-install readback.
+The planned evidence altitudes are T1 (the matrix), T2 (real component seams), and T3 (fresh-host
+and release scenarios).
 
-The exact commit must also pass the full Python 3.11–3.14 Linux GitHub Actions matrix, exact-wheel
-setup and lifecycle probes, restarted Desktop native verification, and a fresh independent release
-review before the `v0.4.0a5` tag is created.
+- local repair matrix completion;
+- Windows full repository suite;
+- supported-Python CI;
+- exact wheel and isolated-install readback;
+- fresh restarted host and caller-delegated Luna/max drill;
+- independent release review.
 
-The GitHub release publishes `adaptive_agent_runtime-0.4.0a5-py3-none-any.whl` with a matching
-`.sha256` sidecar. Verify the downloaded wheel against that sidecar before installation. The same
-release includes the deterministic public plugin packet as submission material; it is not evidence
-that the plugin is listed in the official directory.
+Exact candidate commit, tree, and wheel fields remain null under the explicit
+`post-freeze-external-receipt` binding mode. A local unit result, generated profile, or package scan
+does not by itself establish a release claim. The previous `v0.4.0a5` counts and reports are
+historical blocked evidence only.
 
-The repository suite emitted one MCP Sampling deprecation warning. Sampling is deprecated in protocol revision `2026-07-28` under SEP-2577; the current integration retains a bounded compatibility path for hosts that support the bidirectional back-channel.
+## Publication and authority limits
 
-The stable `v0.4.0a5` source candidate passed 445 Windows repository tests. They cover the exact
-native process-handle, virtual-environment child PID, supervisor replacement, managed-worker
-handoff, configuration containment, and ownership-lock seams that lower-altitude Linux-only checks
-cannot represent. One directory-symlink capability test was skipped and the deprecated Sampling
-path emitted its expected warning. This does not replace the supported-Python Linux CI gate or
-fresh local Codex acceptance.
-
-## Security and authority boundaries
-
-AAR owns:
-
-- programmable workspace execution;
-- bounded RLM jobs and traces;
-- durable operation and reconciliation semantics;
-- immutable adaptive assets;
-- transport-neutral broker, artifact, and evidence contracts;
-- evaluation and proposal logic.
-
-The host owns:
-
-- principal and session identity;
-- admission, grants, budgets, and policy;
-- provider credentials and physical provider calls;
-- authoritative external effects;
-- activation, promotion, rollback authorization, and final delivery.
-
-A successful MCP call, model response, prepared materialization, or generated profile does not imply deployment, activation, or delivery.
+Official Plugin Directory deployment, reviewer access, OpenAI review/approval/publication, and
+provider-signed attestation are **not completed**. GitHub publication and local Codex installation
+are independent later gates. The local setup route cannot authorize them and reports
+`NO_ATOMIC_AUTHORITY` when the host provider lacks an opaque revision/CAS contract.
 
 ## Known limitations
 
 - public alpha interfaces may change before a stable release;
-- no security sandbox is provided; the public structured-state adapter separates tenant databases, while arbitrary programmable execution still requires a host isolation boundary;
+- no security sandbox is provided for arbitrary programmable execution;
 - package installation does not create an operating-system service or configure a host;
-- MCP Sampling is deprecated and requires a future replacement transport;
-- provider response lookup is not portable; unresolved post-send outcomes may remain indeterminate;
-- exactly-once provider execution is claimed only when the provider or owner receipt can prove it;
-- no managed AHC adapter is included in this release;
-- no formal cross-harness benchmark result or universal performance claim is published;
+- MCP Sampling remains a deprecated compatibility path for hosts that support it;
+- unresolved post-send provider outcomes may remain `indeterminate`;
+- exactly-once provider execution is claimed only when a provider or owner receipt proves it;
+- no managed AHC adapter is included;
 - generated host profiles preserve the public contract but do not grant authority.
 
-## Next work
-
-- deploy and qualify the public profile with real OAuth, reviewer access, operational controls, and both Codex and ChatGPT execution before requesting directory review;
-- retire the fixed MCP Sampling route after supported Hermes users migrate to caller-delegated or another host-owned broker transport with equivalent receipt semantics;
-- expand provider-neutral attempt receipts and reconciliation adapters;
-- improve portable workspace restoration;
-- add conformance kits for additional hosts and non-Python consumers;
-- strengthen paired evaluation tooling with complete call-census and wasted-token accounting;
-- stabilize extension interfaces only after multiple independent hosts prove them.
-
-See [Development Roadmap](DEVELOPMENT-PLAN.md), [Architecture](ARCHITECTURE.md), [Testing](docs/TESTING.md), and the [Changelog](CHANGELOG.md).
+See [Development Roadmap](DEVELOPMENT-PLAN.md), [Architecture](ARCHITECTURE.md), [Testing](docs/TESTING.md),
+and the [Changelog](CHANGELOG.md).

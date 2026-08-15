@@ -51,7 +51,7 @@ def test_profile_contract_binds_runtime_configs_and_skill() -> None:
     )
     assert contract["package"]["python_requires"] == ">=3.11,<3.15"
     assert contract["operation_skill"]["digest"] == metadata["skill_digest"]
-    assert contract["operation_skill"]["version"] == "0.9.5"
+    assert contract["operation_skill"]["version"] == "0.9.6"
     for host in ("codex", "hermes"):
         profile = contract["profiles"][host]
         content = (ROOT / profile["bundle"] / profile["config_file"]).read_bytes()

@@ -1,17 +1,26 @@
 from __future__ import annotations
 
+import contextlib
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from io import StringIO
 from pathlib import Path
 
 import pytest
 
+from aar.runtime import ipython_backend as ipython_backend_module
 from aar.runtime.brokers import FakeArtifactBroker
 from aar.runtime.ipython_backend import (
     SupervisedIPythonWorkspaceBackend,
     WorkspaceWorkerLost,
 )
-from aar.runtime.programming import PlainPythonWorkspaceBackend, WorkspaceBackend
+from aar.runtime.process_identity import ProcessStartIdentity
+from aar.runtime.programming import (
+    PlainPythonWorkspaceBackend,
+    WorkspaceBackend,
+    WorkspaceOperationConflict,
+)
 from aar.runtime.registry import OperationRegistry
 from aar.runtime.worker_manager import WorkerManager
 from aar.runtime.workspace import StaleWorkspaceGeneration
@@ -40,32 +49,20 @@ def current(result) -> ProgrammableWorkspaceHandle:
 
 
 def test_worker_terminate_treats_lookup_race_as_exit_and_reaps() -> None:
-    events: list[str] = []
+    process = _PidReuseWorker(999, terminal=True)
+    state = ipython_backend_module._WorkerState(
+        session=refs("already-terminal")[1],
+        generation=1,
+        process=process,  # type: ignore[arg-type]
+        exact_child=_FakeExactChild(process),  # type: ignore[arg-type]
+    )
 
-    class ExitedDuringTerminate:
-        returncode: int | None = None
+    SupervisedIPythonWorkspaceBackend._terminate(state)
 
-        def poll(self) -> int | None:
-            return self.returncode
-
-        def terminate(self) -> None:
-            events.append("terminate-missing")
-            raise ProcessLookupError("worker exited before terminate")
-
-        def kill(self) -> None:
-            events.append("kill")
-
-        def wait(self, timeout: float | None = None) -> int:
-            events.append("wait")
-            self.returncode = 0
-            return self.returncode
-
-    process = ExitedDuringTerminate()
-
-    SupervisedIPythonWorkspaceBackend._terminate(process)  # type: ignore[arg-type]
-
-    assert events == ["terminate-missing", "wait"]
-    assert process.returncode == 0
+    assert process.exact_signal_count == 0
+    assert process.exact_wait_count == 1
+    assert process.terminal_receipt_count == 1
+    assert process.wait_count == 1
 
 
 def test_supervised_ipython_executes_real_cells_and_persists_namespace() -> None:
@@ -382,3 +379,378 @@ def test_ipython_output_and_result_payloads_are_bounded_in_the_worker() -> None:
         assert result.result_excluded_reason == "portable result exceeds 65536 bytes"
     finally:
         backend.close(current(result), reason="test complete")
+
+
+class _PidReuseWorker:
+    """A reaped child whose numeric PID now designates a foreign replacement."""
+
+    def __init__(self, pid: int, *, terminal: bool = False) -> None:
+        self.pid = pid
+        self.returncode: int | None = 0 if terminal else None
+        self.stdin = StringIO()
+        self.stdout = StringIO()
+        self.stderr = StringIO()
+        self.replacement_signal_count = 0
+        self.numeric_pid_reopen_count = 0
+        self.wait_count = 0
+        self.exact_signal_count = 0
+        self.exact_wait_count = 0
+        self.terminal_receipt_count = 0
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def terminate(self) -> None:
+        self.replacement_signal_count += 1
+        self.returncode = -15
+
+    def kill(self) -> None:
+        self.replacement_signal_count += 1
+        self.returncode = -9
+
+    def wait(self, timeout: float | None = None) -> int:
+        del timeout
+        self.wait_count += 1
+        if self.returncode is None:
+            self.returncode = -15
+        return self.returncode
+
+
+class _FakeExactChild:
+    def __init__(self, process: _PidReuseWorker) -> None:
+        self.process = process
+        self.identity = ProcessStartIdentity(
+            pid=process.pid,
+            platform="linux",
+            start_time=max(1, process.pid),
+            boot_id="test-boot",
+        )
+        self._lock = threading.Lock()
+        self._receipt: object | None = None
+
+    def terminalize(self, timeout_sec: float) -> object:
+        assert timeout_sec > 0
+        with self._lock:
+            if self._receipt is not None:
+                return self._receipt
+            self.process.exact_wait_count += 1
+            if self.process.returncode is None:
+                self.process.exact_signal_count += 1
+                self.process.returncode = -15
+            self.process.wait(timeout=timeout_sec)
+            self.process.terminal_receipt_count += 1
+            self._receipt = object()
+            return self._receipt
+
+def _install_worker_state(
+    backend: SupervisedIPythonWorkspaceBackend,
+    workspace: WorkspaceRef,
+    session: SessionRef,
+    process: _PidReuseWorker,
+    *,
+    generation: int = 1,
+):
+    state = ipython_backend_module._WorkerState(
+        session=session,
+        generation=generation,
+        process=process,
+        exact_child=_FakeExactChild(process),  # type: ignore[arg-type]
+    )
+    backend._states[workspace.value] = state
+    return state, backend._handle(workspace, state)
+
+
+def _assert_no_numeric_replacement_signal(process: _PidReuseWorker, seam: str) -> None:
+    assert process.replacement_signal_count == 0, (
+        f"{seam} signalled the PID-reuse replacement through Popen instead of the retained "
+        "exact child handle"
+    )
+    assert process.numeric_pid_reopen_count == 0
+    assert process.exact_signal_count == 1, f"{seam} did not signal the retained handle"
+    assert process.exact_wait_count == 1, f"{seam} did not wait through the retained handle"
+    assert process.terminal_receipt_count == 1, f"{seam} did not publish one terminal result"
+
+
+def _portable_manifest(session: SessionRef):
+    plain = PlainPythonWorkspaceBackend()
+    source = WorkspaceRef(value=f"manifest-source-{session.value}")
+    handle = plain.create(source, session)
+    executed = plain.execute(
+        OperationRef(value=f"manifest-execute-{session.value}"),
+        handle,
+        WorkspaceProgramSpec(code="portable = {'answer': 42}\nportable"),
+    )
+    return plain.checkpoint(
+        OperationRef(value=f"manifest-checkpoint-{session.value}"),
+        current(executed),
+        WorkspaceCheckpointPolicy(),
+        f"trace-{session.value}",
+    )
+
+
+def test_interrupt_uses_exact_worker_handle_across_pid_reuse() -> None:
+    backend = SupervisedIPythonWorkspaceBackend()
+    workspace, session = refs("red-interrupt")
+    process = _PidReuseWorker(1_001)
+    state, handle = _install_worker_state(backend, workspace, session, process)
+    operation = OperationRef(value="operation-red-interrupt")
+    state.running_operation = operation
+
+    backend.interrupt(handle, operation)
+
+    _assert_no_numeric_replacement_signal(process, "interrupt")
+
+
+def test_operation_timeout_uses_exact_worker_handle_across_pid_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = SupervisedIPythonWorkspaceBackend()
+    workspace, session = refs("red-timeout")
+    process = _PidReuseWorker(1_002)
+    _state, handle = _install_worker_state(backend, workspace, session, process)
+
+    def timeout(*_args, **_kwargs):
+        raise ipython_backend_module._WorkerTimeout("injected worker deadline")
+
+    monkeypatch.setattr(backend, "_read_response", timeout)
+    backend.execute(
+        OperationRef(value="operation-red-timeout"),
+        handle,
+        WorkspaceProgramSpec(code="pass", wall_time_ms=1),
+    )
+
+    _assert_no_numeric_replacement_signal(process, "operation timeout")
+
+
+def test_worker_loss_uses_exact_worker_handle_across_pid_reuse() -> None:
+    backend = SupervisedIPythonWorkspaceBackend()
+    workspace, session = refs("red-loss")
+    process = _PidReuseWorker(1_003)
+    state, _handle = _install_worker_state(backend, workspace, session, process)
+
+    backend._mark_lost(state, "injected protocol loss")
+
+    _assert_no_numeric_replacement_signal(process, "worker loss")
+
+
+def test_close_uses_exact_worker_handle_across_pid_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = SupervisedIPythonWorkspaceBackend()
+    workspace, session = refs("red-close")
+    process = _PidReuseWorker(1_004)
+    _state, handle = _install_worker_state(backend, workspace, session, process)
+    monkeypatch.setattr(backend, "_request", lambda *_args, **_kwargs: {"ok": True})
+
+    backend.close(handle, reason="red exact-child close")
+
+    _assert_no_numeric_replacement_signal(process, "workspace close")
+
+
+def test_shutdown_serializes_exact_worker_terminalizers_across_pid_reuse() -> None:
+    backend = SupervisedIPythonWorkspaceBackend()
+    workspace, session = refs("red-shutdown")
+    process = _PidReuseWorker(1_005)
+    _state, _handle = _install_worker_state(backend, workspace, session, process)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = [pool.submit(backend.shutdown) for _ in range(2)]
+        for result in results:
+            result.result(timeout=3)
+
+    _assert_no_numeric_replacement_signal(process, "concurrent shutdown")
+
+
+def test_spawn_failure_uses_exact_child_handle_across_pid_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = SupervisedIPythonWorkspaceBackend()
+    workspace, session = refs("red-spawn")
+    process = _PidReuseWorker(1_006)
+    monkeypatch.setattr(ipython_backend_module.subprocess, "Popen", lambda *_a, **_k: process)
+    monkeypatch.setattr(
+        ipython_backend_module,
+        "bind_exact_child",
+        lambda *_a, **_k: _FakeExactChild(process),
+    )
+    monkeypatch.setattr(
+        backend,
+        "_read_response",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            WorkspaceWorkerLost("injected spawn readiness failure")
+        ),
+    )
+
+    with pytest.raises(WorkspaceWorkerLost, match="readiness failure"):
+        backend.create(workspace, session)
+
+    _assert_no_numeric_replacement_signal(process, "spawn failure")
+
+
+def _restore_cleanup_case(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    phase: str,
+) -> _PidReuseWorker:
+    backend = SupervisedIPythonWorkspaceBackend()
+    workspace, session = refs(f"red-{phase}")
+    manifest = _portable_manifest(session)
+    predecessor = _PidReuseWorker(1_010, terminal=phase in {"registration", "post-registration"})
+    staged = _PidReuseWorker(1_011)
+    expected_handle = None
+    if phase != "none-insert":
+        _current_state, expected_handle = _install_worker_state(
+            backend, workspace, session, predecessor
+        )
+
+    def spawn(*_args, **_kwargs):
+        return ipython_backend_module._WorkerState(
+            session=session,
+            generation=(expected_handle.generation + 1 if expected_handle else 1),
+            process=staged,
+            exact_child=_FakeExactChild(staged),  # type: ignore[arg-type]
+        )
+
+    monkeypatch.setattr(backend, "_spawn", spawn)
+
+    def request(state, payload, **_kwargs):
+        if phase == "hydration":
+            raise RuntimeError("injected hydration failure")
+        if phase == "existing-binding":
+            competitor_process = _PidReuseWorker(1_012, terminal=True)
+            competitor = ipython_backend_module._WorkerState(
+                session=session,
+                generation=99,
+                process=competitor_process,
+                exact_child=_FakeExactChild(competitor_process),  # type: ignore[arg-type]
+            )
+            backend._states[workspace.value] = competitor
+        if phase == "none-insert":
+            competitor_process = _PidReuseWorker(1_013, terminal=True)
+            competitor = ipython_backend_module._WorkerState(
+                session=session,
+                generation=99,
+                process=competitor_process,
+                exact_child=_FakeExactChild(competitor_process),  # type: ignore[arg-type]
+            )
+            backend._states[workspace.value] = competitor
+        return {"ok": True}
+
+    monkeypatch.setattr(backend, "_request", request)
+    if phase in {"registration", "post-registration"}:
+        class _Manager:
+            def finish(self, *_args, **_kwargs) -> None:
+                return None
+
+        backend._worker_manager = _Manager()  # type: ignore[assignment]
+
+        def register(_workspace, state) -> None:
+            if phase == "registration":
+                raise RuntimeError("injected managed registration failure")
+            competitor_process = _PidReuseWorker(1_014, terminal=True)
+            competitor = ipython_backend_module._WorkerState(
+                session=session,
+                generation=99,
+                process=competitor_process,
+                exact_child=_FakeExactChild(competitor_process),  # type: ignore[arg-type]
+            )
+            backend._states[workspace.value] = competitor
+            state.managed = object()  # type: ignore[assignment]
+
+        monkeypatch.setattr(backend, "_register_managed", register)
+
+    spec = WorkspaceRestoreSpec(
+        workspace=workspace,
+        session=session,
+        expected_handle=expected_handle,
+    )
+    with contextlib.suppress(RuntimeError, WorkspaceOperationConflict):
+        backend.restore(manifest, spec)
+    return predecessor if phase == "predecessor" else staged
+
+
+def test_restore_predecessor_handoff_uses_exact_handle_across_pid_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = _restore_cleanup_case(monkeypatch, phase="predecessor")
+    _assert_no_numeric_replacement_signal(process, "restore predecessor handoff")
+
+
+def test_restore_publishes_successor_only_after_predecessor_exact_terminal_readback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = SupervisedIPythonWorkspaceBackend()
+    workspace, session = refs("restore-publication-order")
+    manifest = _portable_manifest(session)
+    predecessor_process = _PidReuseWorker(1_020)
+    predecessor, expected_handle = _install_worker_state(
+        backend, workspace, session, predecessor_process
+    )
+    successor_process = _PidReuseWorker(1_021)
+    successor = ipython_backend_module._WorkerState(
+        session=session,
+        generation=expected_handle.generation + 1,
+        process=successor_process,
+        exact_child=_FakeExactChild(successor_process),  # type: ignore[arg-type]
+    )
+    monkeypatch.setattr(backend, "_spawn", lambda *_args, **_kwargs: successor)
+    monkeypatch.setattr(backend, "_request", lambda *_args, **_kwargs: {"ok": True})
+
+    original_terminalize = predecessor.exact_child.terminalize
+
+    def terminalize(timeout_sec: float) -> object:
+        assert backend._states[workspace.value] is predecessor, (
+            "the successor became discoverable before exact predecessor terminal readback"
+        )
+        return original_terminalize(timeout_sec)
+
+    monkeypatch.setattr(predecessor.exact_child, "terminalize", terminalize)
+
+    restored = backend.restore(
+        manifest,
+        WorkspaceRestoreSpec(
+            workspace=workspace,
+            session=session,
+            expected_handle=expected_handle,
+        ),
+    )
+
+    assert restored.generation == successor.generation
+    assert backend._states[workspace.value] is successor
+    _assert_no_numeric_replacement_signal(
+        predecessor_process, "restore predecessor publication order"
+    )
+
+
+def test_restore_hydration_failure_uses_exact_staged_handle_across_pid_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = _restore_cleanup_case(monkeypatch, phase="hydration")
+    _assert_no_numeric_replacement_signal(process, "restore hydration failure")
+
+
+def test_restore_existing_binding_conflict_uses_exact_staged_handle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = _restore_cleanup_case(monkeypatch, phase="existing-binding")
+    _assert_no_numeric_replacement_signal(process, "restore existing-binding conflict")
+
+
+def test_restore_none_insert_conflict_uses_exact_staged_handle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = _restore_cleanup_case(monkeypatch, phase="none-insert")
+    _assert_no_numeric_replacement_signal(process, "restore none-insert conflict")
+
+
+def test_restore_registration_failure_uses_exact_staged_handle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = _restore_cleanup_case(monkeypatch, phase="registration")
+    _assert_no_numeric_replacement_signal(process, "restore registration failure")
+
+
+def test_restore_post_registration_conflict_uses_exact_successor_handle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = _restore_cleanup_case(monkeypatch, phase="post-registration")
+    _assert_no_numeric_replacement_signal(process, "restore post-registration conflict")

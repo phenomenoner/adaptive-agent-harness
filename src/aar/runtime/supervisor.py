@@ -50,10 +50,10 @@ from aar.versions import PACKAGE_VERSION
 SUPERVISOR_VERSION = f"aar-supervisor/{PACKAGE_VERSION}"
 PRIVATE_DIR_NAME = "supervisor"
 DISCOVERY_FILE_NAME = "discovery.json"
-CREDENTIAL_FILE_NAME = "attachment.key"
+CREDENTIAL_FILE_NAME = "attachment-{publication_id}.key"
 LIFECYCLE_FILE_NAME = "lifecycle.jsonl"
-SOCKET_FILE_NAME = "supervisor.sock"
-SHUTDOWN_REQUEST_FILE_NAME = "shutdown.request"
+SOCKET_FILE_NAME = "supervisor-{publication_id}.sock"
+SHUTDOWN_REQUEST_FILE_NAME = "shutdown-{publication_id}.request"
 SHUTDOWN_REQUEST_SCHEMA_VERSION = "aar.supervisor.shutdown-request.v1"
 MAX_FRAME_LINE_BYTES = ((MAX_PRIVATE_PAYLOAD_BYTES + 2) // 3) * 4 + 65_536
 BOOTSTRAP_AUTHORITY_DIGEST = canonical_sha256({"authority": "mcp-transport-bootstrap"})
@@ -65,6 +65,16 @@ class SupervisorError(RuntimeError):
 
 class SupervisorAttachRejected(SupervisorError):
     pass
+
+
+def _is_reparse_or_symlink(path: Path) -> bool:
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return False
+    attributes = int(getattr(metadata, "st_file_attributes", 0))
+    reparse_flag = int(getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
+    return stat.S_ISLNK(metadata.st_mode) or bool(attributes & reparse_flag)
 
 
 class _SocketLines:
@@ -128,11 +138,18 @@ class SupervisorService:
             else database_path.resolve()
         )
         self.private_dir = self.runtime_home / PRIVATE_DIR_NAME
+        self.publication_id = secrets.token_hex(16)
         self.discovery_path = self.private_dir / DISCOVERY_FILE_NAME
-        self.credential_path = self.private_dir / CREDENTIAL_FILE_NAME
+        self.credential_path = self.private_dir / CREDENTIAL_FILE_NAME.format(
+            publication_id=self.publication_id
+        )
         self.lifecycle_path = self.private_dir / LIFECYCLE_FILE_NAME
-        self.socket_path = self.private_dir / SOCKET_FILE_NAME
-        self.shutdown_request_path = self.private_dir / SHUTDOWN_REQUEST_FILE_NAME
+        self.socket_path = self.private_dir / SOCKET_FILE_NAME.format(
+            publication_id=self.publication_id
+        )
+        self.shutdown_request_path = self.private_dir / SHUTDOWN_REQUEST_FILE_NAME.format(
+            publication_id=self.publication_id
+        )
         self.programmable_backend = programmable_backend
         self.transport = transport or ("tcp" if os.name == "nt" else "unix")
         self.dispatcher_concurrency = dispatcher_concurrency
@@ -201,8 +218,11 @@ class SupervisorService:
         self._listener, endpoint_kind, endpoint_ref = await self._create_listener()
         attachment_digest = _bytes_digest(self._credential)
         discovery = SupervisorDiscoveryRecord.issue(
+            publication_id=self.publication_id,
             endpoint_kind=endpoint_kind,
             endpoint_ref=endpoint_ref,
+            credential_file=self.credential_path.name,
+            shutdown_request_file=self.shutdown_request_path.name,
             process_identity=self.process_identity,
             runtime_generation=host.runtime_generation,
             dispatcher_generation=host.runtime_generation,
@@ -274,13 +294,15 @@ class SupervisorService:
             if os.name == "nt":
                 raise SupervisorError("Unix-domain supervisor transport is unavailable on Windows")
             assert self.process_identity is not None
-            identity_suffix = (
-                f"{self.process_identity.pid}-{self.process_identity.start_time}"
-            )
-            path = self.private_dir / f"supervisor-{identity_suffix}.sock"
+            identity_suffix = f"{self.process_identity.pid}-{self.process_identity.start_time}"
+            path = self.socket_path
             if len(os.fsencode(path)) >= 104:
                 digest = self._runtime_home_digest.removeprefix("sha256:")[:24]
-                path = Path("/tmp") / f"aar-{digest}-{identity_suffix}.sock"
+                path = Path("/tmp") / (
+                    f"aar-{digest}-{identity_suffix}-{self.publication_id}.sock"
+                )
+            if _is_reparse_or_symlink(path):
+                raise SupervisorError("supervisor endpoint is a reparse link")
             self.socket_path = path
             listener = await anyio.create_unix_listener(path, mode=stat.S_IRUSR | stat.S_IWUSR)
             os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
@@ -488,12 +510,16 @@ class SupervisorService:
     def _prepare_private_dir(self) -> None:
         self.runtime_home.mkdir(parents=True, exist_ok=True)
         self.private_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if _is_reparse_or_symlink(self.private_dir):
+            raise SupervisorError("supervisor private directory is a reparse link")
         if os.name != "nt":
             mode = stat.S_IMODE(self.private_dir.stat().st_mode)
             if mode & 0o077:
                 raise SupervisorError("supervisor private directory is not owner-only")
 
     def _cleanup_stale_discovery(self) -> None:
+        if _is_reparse_or_symlink(self.discovery_path):
+            raise SupervisorError("existing supervisor discovery is a reparse link")
         if not self.discovery_path.exists():
             return
         try:
@@ -509,74 +535,28 @@ class SupervisorService:
             ) from observation.error
         if observation.state is ProcessIdentityState.MATCH:
             raise SupervisorError("existing discovery record still names a live exact process")
-        if not self._discovery_is(prior):
-            return
-        if prior.endpoint_kind == "unix" and self._discovery_is(prior):
-            with contextlib.suppress(FileNotFoundError):
-                Path(prior.endpoint_ref).unlink()
-        if self._discovery_is(prior):
-            self._unlink_if_bytes_match(
-                self.shutdown_request_path,
-                self._shutdown_request_bytes(prior),
-            )
-        if self._discovery_is(prior):
-            try:
-                credential = self.credential_path.read_bytes()
-            except OSError:
-                credential = None
-            if (
-                credential is not None
-                and _bytes_digest(credential) == prior.attachment_credential_digest
-            ):
-                self._unlink_if_bytes_match(self.credential_path, credential)
-        if self._discovery_is(prior):
-            self._unlink_if_bytes_match(
-                self.discovery_path,
-                canonical_json_bytes(prior),
-            )
+        # Normal lifecycle retirement is intentionally non-destructive.  The successor
+        # publishes generation-unique endpoint, request, and credential names and atomically
+        # advances only the stable discovery pointer.  Offline garbage collection is separate.
 
     def _remove_owned_private_files(self) -> None:
-        discovery = self.discovery
-        if discovery is None:
-            if self.transport == "unix" and self._listener is not None:
-                with contextlib.suppress(FileNotFoundError):
-                    self.socket_path.unlink()
-            if self._credential is not None:
-                self._unlink_if_bytes_match(self.credential_path, self._credential)
-            return
-        if not self._discovery_is(discovery):
-            return
-        if discovery.endpoint_kind == "unix" and self._discovery_is(discovery):
-            with contextlib.suppress(FileNotFoundError):
-                Path(discovery.endpoint_ref).unlink()
-        if self._discovery_is(discovery):
-            self._unlink_if_bytes_match(
-                self.shutdown_request_path,
-                self._shutdown_request_bytes(discovery),
-            )
-        if self._credential is not None and self._discovery_is(discovery):
-            self._unlink_if_bytes_match(self.credential_path, self._credential)
-        if self._discovery_is(discovery):
-            self._unlink_if_bytes_match(
-                self.discovery_path,
-                canonical_json_bytes(discovery),
-            )
+        # Keep the exact generation as generation-specific forensic state.  No normal-lifecycle
+        # pathname deletion can race a concurrently published successor.  A future offline
+        # collector may remove generations only while no supervisor is live.
+        return
 
     def _consume_shutdown_request(self) -> bool:
         try:
             raw_text = self.shutdown_request_path.read_text(encoding="utf-8")
-            raw_bytes = raw_text.encode("utf-8")
             document = json.loads(raw_text)
         except FileNotFoundError:
             return False
         except OSError:
             return False
         except json.JSONDecodeError:
-            self._unlink_if_bytes_match(self.shutdown_request_path, raw_bytes)
             return False
         expected_keys = {"discovery_digest", "process_identity", "schema_version"}
         if not isinstance(document, dict) or set(document) != expected_keys:
-            self._unlink_if_bytes_match(self.shutdown_request_path, raw_bytes)
             return False
         discovery = self.discovery
         identity = self.process_identity
@@ -587,17 +567,7 @@ class SupervisorService:
             and document["discovery_digest"] == discovery.discovery_digest
             and document["process_identity"] == identity.model_dump(mode="json")
         )
-        self._unlink_if_bytes_match(self.shutdown_request_path, raw_bytes)
         return accepted
-
-    def _discovery_is(self, expected: SupervisorDiscoveryRecord) -> bool:
-        try:
-            observed = SupervisorDiscoveryRecord.model_validate_json(
-                self.discovery_path.read_bytes(), strict=True
-            )
-        except (OSError, ValueError):
-            return False
-        return observed.discovery_digest == expected.discovery_digest
 
     @staticmethod
     def _shutdown_request_bytes(discovery: SupervisorDiscoveryRecord) -> bytes:
@@ -608,22 +578,6 @@ class SupervisorService:
                 "schema_version": SHUTDOWN_REQUEST_SCHEMA_VERSION,
             }
         )
-
-    @staticmethod
-    def _unlink_if_bytes_match(path: Path, expected: bytes) -> bool:
-        try:
-            first = path.read_bytes()
-            if not hmac.compare_digest(first, expected):
-                return False
-            second = path.read_bytes()
-            if not hmac.compare_digest(second, expected):
-                return False
-            path.unlink()
-            return True
-        except FileNotFoundError:
-            return False
-        except OSError:
-            return False
 
     def _append_lifecycle(self, state: str, *, reason: str | None = None) -> None:
         identity = self.process_identity
@@ -653,6 +607,8 @@ class SupervisorService:
 
     @staticmethod
     def _write_private_file(path: Path, content: bytes) -> None:
+        if _is_reparse_or_symlink(path):
+            raise SupervisorError("supervisor control target is a reparse link")
         temporary = path.with_name(f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp")
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
         descriptor = os.open(temporary, flags, 0o600)

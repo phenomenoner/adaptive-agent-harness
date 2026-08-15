@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.4.0a5-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a5)
+[![Candidate](https://img.shields.io/badge/candidate-v0.4.0a6-orange)](docs/RELEASE-v0.4.0a6.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#project-status)
 
@@ -209,13 +209,15 @@ See [Why RLM + IPython](docs/WHY-RLM-AND-IPYTHON.md) for the deeper design ratio
 
 ## Quick start
 
-> **Public alpha:** use a pinned tag, inspect the capabilities returned by your host, and start with disposable workspaces. This project executes model-authored Python and is **not a security sandbox**.
+> **Candidate:** `0.4.0a6` is unreleased. When its tag is published, use a pinned source, inspect
+> the capabilities returned by your host, and start with disposable workspaces. This project
+> executes model-authored Python and is **not a security sandbox**.
 
-### Install from the latest public tag
+### Install the candidate tag after publication
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a5"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a6"
 ```
 
 ### Codex App setup
@@ -288,53 +290,31 @@ The MCP frontend is intentionally replaceable. It does not own the continuity da
 
 ## Project status
 
-Current public alpha: **`0.4.0a5`**.
+The current source is the **`0.4.0a6`** candidate, state `candidate_unreleased`. Its prepared
+immutable reference is `phenomenoner/adaptive-agent-harness@v0.4.0a6`, and the corresponding
+[GitHub release page](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6)
+will resolve only after the pending gates pass and the tag is published. The preceding
+`0.4.0a5` candidate is **blocked, unreleased, and historical**; it is not the current release.
+The single machine-readable status authority is
+[`profiles/release-status-v1.json`](profiles/release-status-v1.json). It records a 62-row repair
+matrix whose local repair status, Windows full suite, supported-Python CI, exact wheel, fresh
+restarted host/Luna drill, and independent review remain `PENDING` until their receipts are bound.
 
-This release retains the durable production-model boundary from `v0.3.0a2` and adds the separate
-eleven-tool public plugin profile. For a public RLM job, the main agent fixes one callable model and
-optional effort at start, the host performs each actual model call, and AAR enforces pre-spend
-claim tickets, idempotent bounded commits, restart recovery, and honest caller-reported or
-host-receipt-bound provenance. The service does not receive provider credentials or silently choose
-a provider route.
+The candidate preserves the host-owned RLM boundary: the main agent fixes one callable model and
+optional effort per job, the host performs each actual model call, and AAR stores bounded tickets,
+receipts, and continuation state without provider credentials. The lifecycle repair uses an exact
+native child handle for terminalization, generation-unique endpoint/credential/request paths, and an
+atomically advanced stable discovery pointer with **non-destructive** normal retention. The existing
+database-scoped process lock admits the sole
+active runtime owner and is released automatically when that process exits. The subprocess
+Codex setup route reports
+`NO_ATOMIC_AUTHORITY`, returns an ordered manual plan before any mutation, and does not claim
+automatic installation or rollback.
 
-`v0.4.0a5` hardens the local Codex lifecycle around three-state process identity, exact-instance
-signalling, startup cleanup, staged worker replacement, generation-specific supervisor endpoints,
-and compare-fenced installer rollback. Windows virtual-environment children now bind lifecycle
-records to the Python process that actually runs AAR instead of a short-lived launcher redirector.
-This changes no public RLM authority boundary.
-
-Release evidence for this public candidate includes:
-
-- Python 3.11 through 3.14 coverage;
-- a 445-pass Windows repository run with one filesystem-capability skip and the expected Sampling
-  deprecation warning;
-- 30-tool MCP v7 surface;
-- additive SQLite schema through v5;
-- a required pre-tag full repository run across the Python 3.11–3.14 Linux CI matrix;
-- a clean exact-wheel supervisor/frontend probe on Linux/WSL;
-- durable supervisor, frontend replacement, process-loss, stale-writer, receipt-reuse, and policy-bound RLM successor scenarios.
-
-Earlier native-Windows and installed-Hermes compatibility rows are retained as
-**maintainer-reported historical context**. Their supporting host receipts are not included in this
-public repository, so those rows are not independently auditable from this tree and are not release
-criteria for the public source candidate.
-
-The Windows release workstation passes the focused public-plugin, package, and local Codex
-acceptance gates. Its full repository run still has six known failures in legacy MCP Sampling and
-process-owner lifecycle tests; those paths are not used by the remote public container and are not
-claimed as a full Windows supervisor gate for this release.
-
-Still open:
-
-- portable automatic restoration of broader IPython workspace state into a new generation;
-- general external-effect reconciliation adapters;
-- multi-tenant isolation for arbitrary local programmable execution;
-- generic exactly-once effects;
-- package-registry publication, official Plugin Directory publication, and stable API guarantees.
-
-Read [TECHNICAL-STATUS.md](TECHNICAL-STATUS.md), [HOST-COMPATIBILITY.md](HOST-COMPATIBILITY.md), and
-[Model routing and fair evaluation](docs/MODEL-ROUTING-AND-EVALUATION.md) before making production
-claims.
+This candidate has not been deployed or submitted for official Plugin Directory review or
+publication. Provider-signed attestation and OpenAI approval are also not completed. Read
+[Technical status](TECHNICAL-STATUS.md), [Host compatibility](HOST-COMPATIBILITY.md), and the
+[candidate release notes](docs/RELEASE-v0.4.0a6.md) before making release or production claims.
 
 ---
 

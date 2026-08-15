@@ -1,0 +1,42 @@
+{
+  "schema_id": "aar.release-status.v1",
+  "candidate": {
+    "version": "0.4.0a6",
+    "state": "candidate_unreleased",
+    "operation_skill_version": "0.9.6",
+    "codex_profile_version": "0.4.0+codex.20260815100000"
+  },
+  "source": {
+    "commit": null,
+    "tree": null,
+    "wheel": null,
+    "binding_mode": "post-freeze-external-receipt"
+  },
+  "verification": {
+    "matrix": {
+      "total": 62,
+      "local_repair_status": "pending"
+    },
+    "windows_full_suite": "PENDING",
+    "supported_python_ci": "PENDING",
+    "exact_wheel": "PENDING",
+    "fresh_restarted_host_luna_drill": "PENDING",
+    "independent_review": "PENDING"
+  },
+  "behavior": {
+    "exact_native_child_terminalization": true,
+    "database_runtime_process_lock": true,
+    "generation_unique_publication_non_destructive_retention": true,
+    "codex_subprocess_provider_authority": "NO_ATOMIC_AUTHORITY",
+    "codex_setup_mutations": "manual_plan_before_mutation",
+    "automatic_install_or_rollback": false
+  },
+  "external_limits": {
+    "official_plugin_directory": "not_submitted",
+    "openai_review_approval": "not_completed",
+    "provider_signed_attestation": "not_available"
+  },
+  "historical": {
+    "0.4.0a5": "blocked_unreleased_historical"
+  }
+}

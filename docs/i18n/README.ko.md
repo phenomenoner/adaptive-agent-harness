@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.4.0a5-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a5)
+[![Release](https://img.shields.io/badge/release-v0.4.0a6-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#프로젝트-상태)
 
@@ -190,7 +190,7 @@ Adaptive Agent Harness는 다음에 적합합니다.
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a5"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a6"
 ```
 
 ### Codex App 설정
@@ -257,11 +257,11 @@ MCP frontend는 의도적으로 교체 가능합니다. continuity database나 w
 
 ## 프로젝트 상태
 
-현재 공개 alpha: **`0.4.0a5`**.
+현재 공개 alpha: **`0.4.0a6`**.
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.4.0a5` receipt-backed model routing, current verification, and exact release
-> boundaries, read the canonical English [release notes](../RELEASE-v0.4.0a5.md) and
+> context. For `v0.4.0a6` receipt-backed model routing, current verification, and exact release
+> boundaries, read the canonical English [release notes](../RELEASE-v0.4.0a6.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
 

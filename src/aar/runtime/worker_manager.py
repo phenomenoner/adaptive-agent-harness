@@ -111,6 +111,7 @@ class WorkerManager:
         pid: int,
         capability_digest: str,
         environment_digest: str,
+        bound_identity: ProcessStartIdentity | None = None,
     ) -> ManagedWorker:
         conflicting = next(
             (
@@ -126,7 +127,9 @@ class WorkerManager:
                 "an active or unresolved worker still owns this workspace; "
                 "successor registration is blocked"
             )
-        identity = process_identity(pid)
+        identity = process_identity(pid) if bound_identity is None else bound_identity
+        if identity.pid != pid:
+            raise ProcessIdentityMismatch("bound worker identity does not match the child PID")
         material = {
             "worker_kind": worker_kind,
             "workspace_id": workspace_id,
