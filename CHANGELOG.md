@@ -2,6 +2,56 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
+## [0.4.0a5] — 2026-08-15
+
+### Fixed
+
+- distinguish exact process `MATCH`, conclusive `MISMATCH`, and temporarily `UNAVAILABLE`
+  observations throughout supervisor, frontend, worker heartbeat, orphan recovery, and stop paths;
+- bind Linux destructive signals to verified pidfds and Windows termination/wait to one verified
+  process handle, including terminal readback and PID-reuse denial;
+- reap the exact launcher child on startup timeout or post-spawn failure before releasing the
+  startup lock, and accept a foreign Ready owner only after that contender is terminal;
+- prevent predecessor cleanup from removing replacement supervisor endpoints, credentials,
+  shutdown requests, or discovery records; publish generation-specific Unix socket paths;
+- stage checkpoint-restored workers before the durable old-binding handoff so one active binding is
+  preserved without blocking a valid successor;
+- bypass the Windows virtual-environment launcher redirector for supervisor and IPython children,
+  while keeping the active environment's package and executable identity;
+- make Codex configuration rollback readback-driven and fail-contained when a command outcome,
+  current state, installed plugin version, or concurrent mutation cannot be proven transaction-
+  owned;
+- report a retained desired configuration plus failed production startup as
+  `configuration_committed_runtime_unready`, not as setup success, rollback, or an unclassified
+  partial state;
+- keep Windows runtime ownership markers readable while locking a separate byte range, and cap
+  deprecated MCP Sampling waits to the platform-supported timeout without changing host authority.
+
+### Changed
+
+- update the canonical `aar-operations` workflow to `0.9.5` with explicit identity-unavailable,
+  retry-safe setup recovery, restart, fresh-task, and native-capability verification guidance;
+- refresh the Codex plugin cachebuster so existing installations cannot retain the prior bundled
+  lifecycle code or skill bytes.
+
+### Verification gate
+
+- SDD fail-first regressions cover identity uncertainty, exact signalling, startup cleanup,
+  replacement cleanup, worker handoff, transaction containment, Windows child PID ownership,
+  lock sharing, and large-deadline Sampling waits;
+- the stable source candidate passes 445 Windows repository tests with one directory-symlink
+  capability skip and one expected MCP Sampling deprecation warning;
+- generated contracts, MCP assets, Codex/Hermes profiles, the exact wheel, supported-Python CI,
+  restarted Desktop native verification, and a fresh independent release review are required on
+  the exact final commit before publication.
+
+### Boundaries
+
+- the public caller-delegated RLM service still leaves every provider credential and physical model
+  call with the host;
+- GitHub release and local Codex verification are not deployment, ChatGPT execution, OpenAI
+  approval, or official Plugin Directory publication.
+
 ## [0.4.0a4] — 2026-08-15
 
 ### Fixed
@@ -211,3 +261,4 @@ Linux GitHub Actions repository matrix.
 [0.3.0a2]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.3.0a2
 [0.4.0a0]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a0
 [0.4.0a4]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a4
+[0.4.0a5]: https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a5

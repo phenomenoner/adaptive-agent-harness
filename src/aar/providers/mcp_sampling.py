@@ -174,10 +174,17 @@ class McpSamplingGatewayTransport:
             )
             raise GatewayCallOutcomeUnknown(call.provider_request_id)
         try:
-            result = future.result(timeout=provider_wait_ms / 1_000)
+            result = future.result(
+                timeout=min(provider_wait_ms / 1_000, threading.TIMEOUT_MAX)
+            )
         except concurrent.futures.TimeoutError as error:
             future.cancel()
-            cleanup_finished.wait(timeout=max(0.0, total_deadline - time.monotonic()))
+            cleanup_finished.wait(
+                timeout=min(
+                    max(0.0, total_deadline - time.monotonic()),
+                    threading.TIMEOUT_MAX,
+                )
+            )
             raise GatewayCallOutcomeUnknown(call.provider_request_id) from error
         except Exception as error:
             # Scheduling onto the session owner loop is the last point where

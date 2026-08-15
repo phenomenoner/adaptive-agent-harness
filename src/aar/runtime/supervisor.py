@@ -28,10 +28,11 @@ from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.mcp.server import AarMcpApplication, build_server
 from aar.runtime.model_broker import ModelBrokerRegistry
 from aar.runtime.process_identity import (
+    ProcessIdentityState,
     ProcessStartIdentity,
     SupervisorDiscoveryRecord,
     current_process_identity,
-    process_identity_matches,
+    observe_process_identity,
 )
 from aar.runtime.supervisor_protocol import (
     MAX_PRIVATE_PAYLOAD_BYTES,
@@ -250,7 +251,11 @@ class SupervisorService:
         host.drain_runtime_resources()
         self._remove_owned_private_files()
         if discovery is not None:
-            terminal_state = "stopped" if self._stop_reason == "requested" else "reconcile-required"
+            terminal_state = (
+                "stopped"
+                if self._stop_reason in {"requested", "host_adapter_request"}
+                else "reconcile-required"
+            )
             with contextlib.suppress(Exception):
                 host.registry.transition_supervisor_run(
                     runtime_generation=discovery.runtime_generation,
@@ -268,13 +273,15 @@ class SupervisorService:
         if self.transport == "unix":
             if os.name == "nt":
                 raise SupervisorError("Unix-domain supervisor transport is unavailable on Windows")
-            path = self.socket_path
+            assert self.process_identity is not None
+            identity_suffix = (
+                f"{self.process_identity.pid}-{self.process_identity.start_time}"
+            )
+            path = self.private_dir / f"supervisor-{identity_suffix}.sock"
             if len(os.fsencode(path)) >= 104:
                 digest = self._runtime_home_digest.removeprefix("sha256:")[:24]
-                path = Path("/tmp") / f"aar-{digest}.sock"
-                self.socket_path = path
-            with contextlib.suppress(FileNotFoundError):
-                path.unlink()
+                path = Path("/tmp") / f"aar-{digest}-{identity_suffix}.sock"
+            self.socket_path = path
             listener = await anyio.create_unix_listener(path, mode=stat.S_IRUSR | stat.S_IWUSR)
             os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
             return listener, "unix", str(path)
@@ -495,54 +502,81 @@ class SupervisorService:
             )
         except ValueError as error:
             raise SupervisorError("existing supervisor discovery record is invalid") from error
-        if process_identity_matches(prior.process_identity):
+        observation = observe_process_identity(prior.process_identity)
+        if observation.state is ProcessIdentityState.UNAVAILABLE:
+            raise SupervisorError(
+                "existing supervisor process identity unavailable; cleanup is unsafe"
+            ) from observation.error
+        if observation.state is ProcessIdentityState.MATCH:
             raise SupervisorError("existing discovery record still names a live exact process")
-        self.discovery_path.unlink()
-        with contextlib.suppress(FileNotFoundError):
-            self.credential_path.unlink()
-        with contextlib.suppress(FileNotFoundError):
-            self.shutdown_request_path.unlink()
-        if prior.endpoint_kind == "unix":
-            endpoint = Path(prior.endpoint_ref)
+        if not self._discovery_is(prior):
+            return
+        if prior.endpoint_kind == "unix" and self._discovery_is(prior):
             with contextlib.suppress(FileNotFoundError):
-                endpoint.unlink()
+                Path(prior.endpoint_ref).unlink()
+        if self._discovery_is(prior):
+            self._unlink_if_bytes_match(
+                self.shutdown_request_path,
+                self._shutdown_request_bytes(prior),
+            )
+        if self._discovery_is(prior):
+            try:
+                credential = self.credential_path.read_bytes()
+            except OSError:
+                credential = None
+            if (
+                credential is not None
+                and _bytes_digest(credential) == prior.attachment_credential_digest
+            ):
+                self._unlink_if_bytes_match(self.credential_path, credential)
+        if self._discovery_is(prior):
+            self._unlink_if_bytes_match(
+                self.discovery_path,
+                canonical_json_bytes(prior),
+            )
 
     def _remove_owned_private_files(self) -> None:
         discovery = self.discovery
-        if discovery is not None and self.discovery_path.exists():
-            with contextlib.suppress(ValueError, OSError):
-                observed = SupervisorDiscoveryRecord.model_validate_json(
-                    self.discovery_path.read_bytes(), strict=True
-                )
-                if observed.discovery_digest == discovery.discovery_digest:
-                    self.discovery_path.unlink()
-        if self._credential is not None and self.credential_path.exists():
-            with contextlib.suppress(OSError):
-                if hmac.compare_digest(self.credential_path.read_bytes(), self._credential):
-                    self.credential_path.unlink()
-        if discovery is not None and discovery.endpoint_kind == "unix":
-            endpoint = Path(discovery.endpoint_ref)
+        if discovery is None:
+            if self.transport == "unix" and self._listener is not None:
+                with contextlib.suppress(FileNotFoundError):
+                    self.socket_path.unlink()
+            if self._credential is not None:
+                self._unlink_if_bytes_match(self.credential_path, self._credential)
+            return
+        if not self._discovery_is(discovery):
+            return
+        if discovery.endpoint_kind == "unix" and self._discovery_is(discovery):
             with contextlib.suppress(FileNotFoundError):
-                endpoint.unlink()
-        elif discovery is None and self.transport == "unix" and self._listener is not None:
-            with contextlib.suppress(FileNotFoundError):
-                self.socket_path.unlink()
-        with contextlib.suppress(FileNotFoundError):
-            self.shutdown_request_path.unlink()
+                Path(discovery.endpoint_ref).unlink()
+        if self._discovery_is(discovery):
+            self._unlink_if_bytes_match(
+                self.shutdown_request_path,
+                self._shutdown_request_bytes(discovery),
+            )
+        if self._credential is not None and self._discovery_is(discovery):
+            self._unlink_if_bytes_match(self.credential_path, self._credential)
+        if self._discovery_is(discovery):
+            self._unlink_if_bytes_match(
+                self.discovery_path,
+                canonical_json_bytes(discovery),
+            )
 
     def _consume_shutdown_request(self) -> bool:
         try:
-            document = json.loads(self.shutdown_request_path.read_text(encoding="utf-8"))
+            raw_text = self.shutdown_request_path.read_text(encoding="utf-8")
+            raw_bytes = raw_text.encode("utf-8")
+            document = json.loads(raw_text)
         except FileNotFoundError:
             return False
-        except (OSError, json.JSONDecodeError):
-            with contextlib.suppress(OSError):
-                self.shutdown_request_path.unlink()
+        except OSError:
+            return False
+        except json.JSONDecodeError:
+            self._unlink_if_bytes_match(self.shutdown_request_path, raw_bytes)
             return False
         expected_keys = {"discovery_digest", "process_identity", "schema_version"}
         if not isinstance(document, dict) or set(document) != expected_keys:
-            with contextlib.suppress(OSError):
-                self.shutdown_request_path.unlink()
+            self._unlink_if_bytes_match(self.shutdown_request_path, raw_bytes)
             return False
         discovery = self.discovery
         identity = self.process_identity
@@ -553,9 +587,43 @@ class SupervisorService:
             and document["discovery_digest"] == discovery.discovery_digest
             and document["process_identity"] == identity.model_dump(mode="json")
         )
-        with contextlib.suppress(OSError):
-            self.shutdown_request_path.unlink()
+        self._unlink_if_bytes_match(self.shutdown_request_path, raw_bytes)
         return accepted
+
+    def _discovery_is(self, expected: SupervisorDiscoveryRecord) -> bool:
+        try:
+            observed = SupervisorDiscoveryRecord.model_validate_json(
+                self.discovery_path.read_bytes(), strict=True
+            )
+        except (OSError, ValueError):
+            return False
+        return observed.discovery_digest == expected.discovery_digest
+
+    @staticmethod
+    def _shutdown_request_bytes(discovery: SupervisorDiscoveryRecord) -> bytes:
+        return canonical_json_bytes(
+            {
+                "discovery_digest": discovery.discovery_digest,
+                "process_identity": discovery.process_identity.model_dump(mode="json"),
+                "schema_version": SHUTDOWN_REQUEST_SCHEMA_VERSION,
+            }
+        )
+
+    @staticmethod
+    def _unlink_if_bytes_match(path: Path, expected: bytes) -> bool:
+        try:
+            first = path.read_bytes()
+            if not hmac.compare_digest(first, expected):
+                return False
+            second = path.read_bytes()
+            if not hmac.compare_digest(second, expected):
+                return False
+            path.unlink()
+            return True
+        except FileNotFoundError:
+            return False
+        except OSError:
+            return False
 
     def _append_lifecycle(self, state: str, *, reason: str | None = None) -> None:
         identity = self.process_identity

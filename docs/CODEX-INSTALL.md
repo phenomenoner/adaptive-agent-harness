@@ -12,7 +12,7 @@ aar-codex-setup --stop-runtime
 From the pinned public tag:
 
 ```powershell
-uv tool install --force "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a4"
+uv tool install --force "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a5"
 aar-codex-setup
 ```
 
@@ -23,11 +23,11 @@ publication.
 Maintainers who already have an immutable wheel may instead use:
 
 ```powershell
-uv tool install --force D:\path\to\adaptive_agent_runtime-0.4.0a4-py3-none-any.whl
+uv tool install --force D:\path\to\adaptive_agent_runtime-0.4.0a5-py3-none-any.whl
 aar-codex-setup
 ```
 
-`aar-codex-setup` performs six bounded actions:
+`aar-codex-setup` performs seven bounded actions:
 
 1. reads the bundled plugin's exact MCP command and arguments (`aar-codex-mcp`, empty arguments);
 2. runs that exact declaration in an isolated Codex runtime, verifies an attached supervisor,
@@ -40,7 +40,9 @@ aar-codex-setup
 5. keeps that plugin as the sole AAR MCP transport authority. If a legacy global `aar` server points
    to the same package launcher, setup removes it; if it points elsewhere, setup stops without
    deleting the conflicting operator configuration;
-6. starts or reuses one exact production supervisor under `~/.aar/codex` from the explicit setup
+6. verifies each configuration mutation with authoritative readback and compare-fences every undo.
+   A foreign, unreadable, or ambiguous current state is contained without destructive rollback;
+7. starts or reuses one exact production supervisor under `~/.aar/codex` from the explicit setup
    process. Normal Codex task startup remains a fast attach path instead of owning the supervisor.
 
 The command prints a JSON receipt. A passing receipt must contain `status: "passed"`, dependency
@@ -51,12 +53,23 @@ plugin version, the exact `aar-codex-mcp` launcher, and a `codex_runtime` object
 `mcp_authority: "plugin"`, `marketplace_replaced`, `legacy_global_mcp_removed`,
 `configuration_changed`, and `plugin_changed` state what was selected or written.
 
+If production startup fails after the desired plugin-only configuration has passed final readback,
+setup reports `status: "configuration_committed_runtime_unready"`. That is retry-safe retained
+configuration, not setup success and not rollback; rerun `aar-codex-setup` to recover the production
+owner. A structured transaction-containment error means setup refused to overwrite state it could
+not prove it owned. Inspect the reported normalized current state before retrying or changing Codex
+configuration.
+
 Restart Codex App only when `restart_required` is true, then call `aar_capabilities` in a fresh
 task. A no-op rerun reports `restart_required: false`. Config, catalog, an embedded `--database`
 probe, or setup output alone is not fresh-host runtime proof. Codex versions that defer MCP tools
 may require native tool search to load the exact `mcp__aar__aar_capabilities` name. The search
 result is not evidence; invoke the loaded tool and verify its package, tool-surface, skill,
 supervisor-mode, and runtime-generation fields.
+
+If setup or the launcher reports that native process identity is unavailable, do not delete the
+runtime-home control files and do not start a second supervisor manually. Retry after the native
+identity observation recovers; uncertainty is intentionally not treated as process absence.
 
 Useful bounded variants:
 

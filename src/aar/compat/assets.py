@@ -18,7 +18,7 @@ from aar.versions import PACKAGE_VERSION
 
 PROFILE_CONTRACT_VERSION = "aar.host-profiles.v1"
 PROFILE_VERSION = "0.4.0"
-CODEX_PROFILE_VERSION = "0.4.0+codex.20260814183626"
+CODEX_PROFILE_VERSION = "0.4.0+codex.20260815075547"
 SKILL_FILES = ("SKILL.md", "agents/openai.yaml", "metadata.json")
 OPTIONAL_SKILL_FILES = ("SKILL.md", "agents/openai.yaml")
 CODEX_ROOT = Path("profiles/codex/plugins/adaptive-agent-runtime")
@@ -178,10 +178,16 @@ def host_documents(root: Path) -> dict[Path, bytes]:
         b"this plugin as the sole AAR MCP transport authority, and runs a minimal real-worker\n"
         b"dependency preflight. A matching legacy global AAR server is removed; a conflicting"
         b" server\n"
-        b"fails closed for operator review. Current plugin state is left untouched on a repeated"
-        b" setup; only\n"
-        b"restart the Codex App when the receipt reports `restart_required: true`. Then start a"
-        b" fresh task and\n"
+        b"fails closed for operator review. Configuration mutations use current-state readback and"
+        b" compare-fenced rollback; an ambiguous or foreign state is contained without destructive"
+        b" cleanup. A `configuration_committed_runtime_unready` receipt keeps the desired"
+        b" plugin-only configuration but is not setup success; rerun setup to recover the"
+        b" production owner.\n"
+        b"If native process identity is temporarily unavailable, do not delete control files or"
+        b" start a second owner. Retry after observation recovers. Current plugin state is left"
+        b" untouched on"
+        b" a repeated setup; only restart Codex Desktop when the receipt reports"
+        b" `restart_required: true`. Then start a fresh task and\n"
         b"invoke\n"
         b"`$aar-operations`. Use `$aar-ipython-codegraph` only for explicitly selected,\n"
         b"digest-verified source artifacts and an already available external CodeGraph.\n"

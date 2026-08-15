@@ -8,7 +8,6 @@ import importlib.metadata
 import json
 import queue
 import subprocess
-import sys
 import threading
 from dataclasses import dataclass, field
 from typing import Any, Literal, TextIO
@@ -19,6 +18,7 @@ from aar.runtime.programming import (
     WorkspaceClosed,
     WorkspaceOperationConflict,
 )
+from aar.runtime.python_child import exact_module_command
 from aar.runtime.worker_manager import ManagedWorker, WorkerManager
 from aar.runtime.workspace import (
     StaleWorkspaceGeneration,
@@ -297,8 +297,17 @@ class SupervisedIPythonWorkspaceBackend:
         with self._lock:
             current = self._states.get(spec.workspace.value)
 
-        def restored_state(generation: int) -> _WorkerState:
-            state = self._spawn(spec.workspace, spec.session, generation=generation)
+        def restored_state(
+            generation: int,
+            *,
+            defer_managed_registration: bool = False,
+        ) -> _WorkerState:
+            state = self._spawn(
+                spec.workspace,
+                spec.session,
+                generation=generation,
+                register_managed=not defer_managed_registration,
+            )
             try:
                 self._request(
                     state,
@@ -317,6 +326,52 @@ class SupervisedIPythonWorkspaceBackend:
                 )
                 raise
             return state
+
+        def install_replacement(
+            current_state: _WorkerState,
+            state: _WorkerState,
+            *,
+            disposition: Literal["lost", "terminated"],
+            reason: str,
+        ) -> None:
+            deferred = self._worker_manager is not None and state.managed is None
+            with self._lock:
+                if self._states.get(spec.workspace.value) is not current_state:
+                    self._terminate(state.process)
+                    self._managed_finish(
+                        state,
+                        disposition="terminated",
+                        reason="checkpoint_restore_conflict",
+                    )
+                    raise WorkspaceOperationConflict("workspace changed during restore")
+                if not deferred:
+                    self._states[spec.workspace.value] = state
+            try:
+                if disposition == "terminated":
+                    self._managed_mark_terminating(current_state)
+                self._terminate(current_state.process)
+                self._managed_finish(
+                    current_state,
+                    disposition=disposition,
+                    reason=reason,
+                )
+                current_state.closed = True
+                if deferred:
+                    self._register_managed(spec.workspace, state)
+                    with self._lock:
+                        if self._states.get(spec.workspace.value) is not current_state:
+                            raise WorkspaceOperationConflict(
+                                "workspace changed during managed restore handoff"
+                            )
+                        self._states[spec.workspace.value] = state
+            except BaseException:
+                self._terminate(state.process)
+                self._managed_finish(
+                    state,
+                    disposition="terminated",
+                    reason="checkpoint_restore_handoff_failed",
+                )
+                raise
 
         if current is None:
             if spec.expected_handle is not None and not spec.recover_lost_generation:
@@ -387,26 +442,16 @@ class SupervisedIPythonWorkspaceBackend:
                             "existing recovery generation does not match checkpoint"
                         )
                     return self._handle(spec.workspace, current)
-                state = restored_state(current.generation)
-                with self._lock:
-                    if self._states.get(spec.workspace.value) is not current:
-                        self._terminate(state.process)
-                        self._managed_finish(
-                            state,
-                            disposition="terminated",
-                            reason="checkpoint_restore_conflict",
-                        )
-                        raise WorkspaceOperationConflict(
-                            "workspace changed during recovery restore"
-                        )
-                    self._states[spec.workspace.value] = state
-                self._terminate(current.process)
-                self._managed_finish(
+                state = restored_state(
+                    current.generation,
+                    defer_managed_registration=self._worker_manager is not None,
+                )
+                install_replacement(
                     current,
                     disposition="lost",
                     reason="checkpoint_restore_retry",
+                    state=state,
                 )
-                current.closed = True
                 return self._handle(spec.workspace, state)
             if spec.recover_lost_generation and current.lost:
                 if spec.expected_handle.backend != self.descriptor:
@@ -425,25 +470,16 @@ class SupervisedIPythonWorkspaceBackend:
                 self._check_handle(current, spec.expected_handle)
             if current.running_operation is not None:
                 raise WorkspaceOperationConflict("cannot restore while an operation is running")
-            state = restored_state(current.generation + 1)
-            with self._lock:
-                if self._states.get(spec.workspace.value) is not current:
-                    self._terminate(state.process)
-                    self._managed_finish(
-                        state,
-                        disposition="terminated",
-                        reason="checkpoint_restore_conflict",
-                    )
-                    raise WorkspaceOperationConflict("workspace changed during restore")
-                self._states[spec.workspace.value] = state
-            self._managed_mark_terminating(current)
-            self._terminate(current.process)
-            self._managed_finish(
+            state = restored_state(
+                current.generation + 1,
+                defer_managed_registration=self._worker_manager is not None,
+            )
+            install_replacement(
                 current,
                 disposition="terminated",
                 reason="checkpoint_restore_successor",
+                state=state,
             )
-            current.closed = True
             return self._handle(spec.workspace, state)
 
     def health(self, handle: ProgrammableWorkspaceHandle) -> WorkspaceHealth:
@@ -555,10 +591,18 @@ class SupervisedIPythonWorkspaceBackend:
             state.closed = True
 
     def _spawn(
-        self, workspace: WorkspaceRef, session: SessionRef, *, generation: int
+        self,
+        workspace: WorkspaceRef,
+        session: SessionRef,
+        *,
+        generation: int,
+        register_managed: bool = True,
     ) -> _WorkerState:
         process = subprocess.Popen(
-            [sys.executable, "-I", "-m", "aar.runtime.ipython_worker"],
+            exact_module_command(
+                "aar.runtime.ipython_worker",
+                isolated=True,
+            ),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -571,19 +615,24 @@ class SupervisedIPythonWorkspaceBackend:
             ready = self._read_response(state, timeout_s=self._startup_timeout_s)
             if not ready.get("ok") or not ready.get("ready"):
                 raise WorkspaceWorkerProtocolError("IPython worker did not report ready")
-            if self._worker_manager is not None:
-                state.managed = self._worker_manager.register(
-                    worker_kind="ipython",
-                    workspace_id=workspace.value,
-                    workspace_generation=generation,
-                    pid=process.pid,
-                    capability_digest=self.descriptor.capability_digest,
-                    environment_digest=self._environment.digest,
-                )
+            if register_managed:
+                self._register_managed(workspace, state)
         except BaseException:
             self._terminate(process)
             raise
         return state
+
+    def _register_managed(self, workspace: WorkspaceRef, state: _WorkerState) -> None:
+        if self._worker_manager is None or state.managed is not None:
+            return
+        state.managed = self._worker_manager.register(
+            worker_kind="ipython",
+            workspace_id=workspace.value,
+            workspace_generation=state.generation,
+            pid=state.process.pid,
+            capability_digest=self.descriptor.capability_digest,
+            environment_digest=self._environment.digest,
+        )
 
     def _request(
         self, state: _WorkerState, payload: dict[str, Any], *, timeout_s: float
@@ -864,7 +913,8 @@ class SupervisedIPythonWorkspaceBackend:
     def _terminate(process: subprocess.Popen[str]) -> None:
         if process.poll() is not None:
             return
-        process.terminate()
+        with contextlib.suppress(ProcessLookupError):
+            process.terminate()
         try:
             process.wait(timeout=2)
         except subprocess.TimeoutExpired:

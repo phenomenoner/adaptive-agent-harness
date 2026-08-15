@@ -12,13 +12,14 @@ class RuntimeOwnershipConflict(RuntimeError):
 class RuntimeOwnershipLock:
     """Process-scoped non-blocking ownership for one reference-host database."""
 
+    _WINDOWS_LOCK_OFFSET = 4_096
+
     def __init__(self, database_path: Path) -> None:
         database_path = database_path.resolve()
         self.path = Path(f"{database_path}.runtime.lock")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._stream: BinaryIO | None = self.path.open("a+b")
         try:
-            self._ensure_lock_byte()
             self._lock()
             self._write_owner_marker()
         except BaseException:
@@ -26,16 +27,9 @@ class RuntimeOwnershipLock:
             self._stream = None
             raise
 
-    def _ensure_lock_byte(self) -> None:
-        assert self._stream is not None
-        self._stream.seek(0, os.SEEK_END)
-        if self._stream.tell() == 0:
-            self._stream.write(b"\0")
-            self._stream.flush()
-
     def _lock(self) -> None:
         assert self._stream is not None
-        self._stream.seek(0)
+        self._stream.seek(self._WINDOWS_LOCK_OFFSET if os.name == "nt" else 0)
         try:
             if os.name == "nt":
                 import msvcrt
@@ -66,7 +60,7 @@ class RuntimeOwnershipLock:
             return
         self._stream = None
         try:
-            stream.seek(0)
+            stream.seek(self._WINDOWS_LOCK_OFFSET if os.name == "nt" else 0)
             if os.name == "nt":
                 import msvcrt
 

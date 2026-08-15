@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.4.0a4-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a4)
+[![Release](https://img.shields.io/badge/release-v0.4.0a5-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a5)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#project-status)
 
@@ -215,7 +215,7 @@ See [Why RLM + IPython](docs/WHY-RLM-AND-IPYTHON.md) for the deeper design ratio
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a4"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a5"
 ```
 
 ### Codex App setup
@@ -288,7 +288,7 @@ The MCP frontend is intentionally replaceable. It does not own the continuity da
 
 ## Project status
 
-Current public alpha: **`0.4.0a4`**.
+Current public alpha: **`0.4.0a5`**.
 
 This release retains the durable production-model boundary from `v0.3.0a2` and adds the separate
 eleven-tool public plugin profile. For a public RLM job, the main agent fixes one callable model and
@@ -297,13 +297,17 @@ claim tickets, idempotent bounded commits, restart recovery, and honest caller-r
 host-receipt-bound provenance. The service does not receive provider credentials or silently choose
 a provider route.
 
-`v0.4.0a4` also repairs the local Codex lifecycle: the plugin now declares a dedicated
-`aar-codex-mcp` adapter, setup exercises that exact empty-argument path, and one setup-provisioned
-supervisor survives replaceable frontend tasks. This changes no public RLM authority boundary.
+`v0.4.0a5` hardens the local Codex lifecycle around three-state process identity, exact-instance
+signalling, startup cleanup, staged worker replacement, generation-specific supervisor endpoints,
+and compare-fenced installer rollback. Windows virtual-environment children now bind lifecycle
+records to the Python process that actually runs AAR instead of a short-lived launcher redirector.
+This changes no public RLM authority boundary.
 
 Release evidence for this public candidate includes:
 
 - Python 3.11 through 3.14 coverage;
+- a 445-pass Windows repository run with one filesystem-capability skip and the expected Sampling
+  deprecation warning;
 - 30-tool MCP v7 surface;
 - additive SQLite schema through v5;
 - a required pre-tag full repository run across the Python 3.11–3.14 Linux CI matrix;

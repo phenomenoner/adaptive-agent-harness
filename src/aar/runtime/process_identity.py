@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import ctypes
 import os
+import select
+import signal
 import sys
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Literal, Self
 
@@ -40,6 +44,31 @@ IdentityPlatform = Literal["linux", "windows"]
 
 class ProcessIdentityUnavailable(RuntimeError):
     """Native process-start identity could not be obtained safely."""
+
+
+class ProcessIdentityNotFound(ProcessIdentityUnavailable):
+    """The operating system conclusively reports that the PID is absent."""
+
+
+class ProcessIdentityMismatch(RuntimeError):
+    """An exact process handle could not be bound to the recorded identity."""
+
+
+class ProcessIdentityState(StrEnum):
+    """Three-state result for safety-sensitive process ownership decisions."""
+
+    MATCH = "MATCH"
+    MISMATCH = "MISMATCH"
+    UNAVAILABLE = "UNAVAILABLE"
+
+
+@dataclass(frozen=True)
+class ProcessIdentityObservation:
+    """One native identity observation without collapsing uncertainty into absence."""
+
+    state: ProcessIdentityState
+    observed: ProcessStartIdentity | None = None
+    error: ProcessIdentityUnavailable | None = None
 
 
 class ProcessStartIdentity(StrictModel):
@@ -188,8 +217,13 @@ def _linux_process_identity(pid: int) -> ProcessStartIdentity:
     stat_path = Path("/proc") / str(pid) / "stat"
     boot_id_path = Path("/proc/sys/kernel/random/boot_id")
     try:
-        stat_text = stat_path.read_text(encoding="ascii")
         boot_id = boot_id_path.read_text(encoding="ascii").strip()
+    except (OSError, UnicodeError) as error:
+        raise ProcessIdentityUnavailable("native Linux boot identity is unavailable") from error
+    try:
+        stat_text = stat_path.read_text(encoding="ascii")
+    except (FileNotFoundError, ProcessLookupError) as error:
+        raise ProcessIdentityNotFound(f"native Linux process PID {pid} is absent") from error
     except (OSError, UnicodeError) as error:
         raise ProcessIdentityUnavailable(
             f"native Linux process identity unavailable for PID {pid}"
@@ -247,6 +281,8 @@ def _windows_process_start_time(pid: int) -> int:
     handle = kernel32.OpenProcess(process_query_limited_information, 0, pid)
     if not handle:
         error_code = ctypes.get_last_error()
+        if error_code in {87, 1168}:
+            raise ProcessIdentityNotFound(f"native Windows process PID {pid} is absent")
         raise ProcessIdentityUnavailable(
             f"GetProcessTimes could not open PID {pid} (winerror={error_code})"
         )
@@ -267,6 +303,11 @@ def _windows_process_start_time(pid: int) -> int:
                 f"GetProcessTimes failed for PID {pid} (winerror={error_code})"
             )
         value = (int(creation.dwHighDateTime) << 32) | int(creation.dwLowDateTime)
+        exit_value = (int(exit_time.dwHighDateTime) << 32) | int(exit_time.dwLowDateTime)
+        if exit_value:
+            raise ProcessIdentityNotFound(
+                f"native Windows process PID {pid} has terminated"
+            )
         if value <= 0:
             raise ProcessIdentityUnavailable(
                 f"GetProcessTimes returned no creation time for PID {pid}"
@@ -311,14 +352,245 @@ def current_process_identity() -> ProcessStartIdentity:
     return process_identity(os.getpid())
 
 
-def process_identity_matches(identity: ProcessStartIdentity) -> bool:
-    """Return false when identity cannot be re-read; never infer from PID alone."""
+def observe_process_identity(identity: ProcessStartIdentity) -> ProcessIdentityObservation:
+    """Observe one recorded identity as MATCH, MISMATCH, or UNAVAILABLE."""
 
     try:
         observed = process_identity(identity.pid)
-    except ProcessIdentityUnavailable:
+    except ProcessIdentityNotFound:
+        return ProcessIdentityObservation(state=ProcessIdentityState.MISMATCH)
+    except ProcessIdentityUnavailable as error:
+        return ProcessIdentityObservation(
+            state=ProcessIdentityState.UNAVAILABLE,
+            error=error,
+        )
+    return ProcessIdentityObservation(
+        state=(
+            ProcessIdentityState.MATCH
+            if observed == identity
+            else ProcessIdentityState.MISMATCH
+        ),
+        observed=observed,
+    )
+
+
+def process_identity_matches(identity: ProcessStartIdentity) -> bool:
+    """Return exact identity equality and raise when observation is unavailable."""
+
+    observation = observe_process_identity(identity)
+    if observation.state is ProcessIdentityState.UNAVAILABLE:
+        assert observation.error is not None
+        raise observation.error
+    return observation.state is ProcessIdentityState.MATCH
+
+
+def _windows_start_time_from_handle(kernel32: object, handle: int, pid: int) -> int:
+    creation = _FILETIME()
+    exit_time = _FILETIME()
+    kernel_time = _FILETIME()
+    user_time = _FILETIME()
+    if not kernel32.GetProcessTimes(  # type: ignore[attr-defined]
+        handle,
+        ctypes.byref(creation),
+        ctypes.byref(exit_time),
+        ctypes.byref(kernel_time),
+        ctypes.byref(user_time),
+    ):
+        error_code = ctypes.get_last_error()
+        raise ProcessIdentityUnavailable(
+            f"GetProcessTimes failed for PID {pid} (winerror={error_code})"
+        )
+    value = (int(creation.dwHighDateTime) << 32) | int(creation.dwLowDateTime)
+    exit_value = (int(exit_time.dwHighDateTime) << 32) | int(exit_time.dwLowDateTime)
+    if exit_value:
+        raise ProcessIdentityNotFound(f"native Windows process PID {pid} has terminated")
+    if value <= 0:
+        raise ProcessIdentityUnavailable(
+            f"GetProcessTimes returned no creation time for PID {pid}"
+        )
+    return value
+
+
+class ExactProcessHandle:
+    """Race-free signal and terminal-readback handle for one recorded process."""
+
+    def __init__(
+        self,
+        identity: ProcessStartIdentity,
+        *,
+        kind: Literal["linux-pidfd", "windows-handle"],
+        handle: int,
+        kernel32: object | None = None,
+    ) -> None:
+        self.identity = identity
+        self.kind = kind
+        self.handle = handle
+        self._kernel32 = kernel32
+        self.last_error: int | None = None
+        self._closed = False
+
+    def __enter__(self) -> ExactProcessHandle:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    def send_signal(self, signum: int) -> bool:
+        """Signal only the process instance bound to this handle."""
+
+        if self._closed:
+            raise ProcessIdentityUnavailable("exact process handle is closed")
+        if self.kind == "linux-pidfd":
+            sender = getattr(signal, "pidfd_send_signal", None)
+            if sender is None:
+                raise ProcessIdentityUnavailable("pidfd_send_signal is unavailable")
+            try:
+                sender(self.handle, signum)
+            except ProcessLookupError:
+                return False
+            except OSError as error:
+                raise ProcessIdentityUnavailable(
+                    f"pidfd signal failed for PID {self.identity.pid}"
+                ) from error
+            return True
+
+        assert self._kernel32 is not None
+        if self._kernel32.TerminateProcess(self.handle, 0):  # type: ignore[attr-defined]
+            return True
+        self.last_error = ctypes.get_last_error()
         return False
-    return observed == identity
+
+    def wait(self, timeout_sec: float) -> bool:
+        """Return true only after terminal state is observed through this exact handle."""
+
+        if timeout_sec < 0:
+            raise ValueError("timeout_sec must be non-negative")
+        if self._closed:
+            raise ProcessIdentityUnavailable("exact process handle is closed")
+        if self.kind == "linux-pidfd":
+            poller = select.poll()
+            poller.register(self.handle, select.POLLIN)
+            timeout_ms = min(int(timeout_sec * 1_000), 2_147_483_647)
+            return bool(poller.poll(timeout_ms))
+
+        assert self._kernel32 is not None
+        timeout_ms = min(int(timeout_sec * 1_000), 0xFFFFFFFE)
+        result = int(
+            self._kernel32.WaitForSingleObject(self.handle, timeout_ms)  # type: ignore[attr-defined]
+        )
+        if result == 0:
+            return True
+        if result == 0x00000102:
+            return False
+        error_code = ctypes.get_last_error()
+        raise ProcessIdentityUnavailable(
+            f"WaitForSingleObject failed for PID {self.identity.pid} "
+            f"(winerror={error_code})"
+        )
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        if self.kind == "linux-pidfd":
+            os.close(self.handle)
+            return
+        assert self._kernel32 is not None
+        self._kernel32.CloseHandle(self.handle)  # type: ignore[attr-defined]
+
+
+def open_exact_process(
+    identity: ProcessStartIdentity,
+    *,
+    terminate: bool = False,
+) -> ExactProcessHandle:
+    """Open and post-open verify a race-free handle for one recorded identity."""
+
+    if os.name == "nt":
+        if identity.platform != "windows":
+            raise ProcessIdentityMismatch("recorded process platform is not Windows")
+        process_query_limited_information = 0x1000
+        synchronize = 0x00100000
+        process_terminate = 0x0001
+        access = process_query_limited_information | synchronize
+        if terminate:
+            access |= process_terminate
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+        kernel32.OpenProcess.restype = ctypes.c_void_p
+        kernel32.GetProcessTimes.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(_FILETIME),
+            ctypes.POINTER(_FILETIME),
+            ctypes.POINTER(_FILETIME),
+            ctypes.POINTER(_FILETIME),
+        ]
+        kernel32.GetProcessTimes.restype = ctypes.c_int
+        kernel32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        kernel32.TerminateProcess.restype = ctypes.c_int
+        kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        kernel32.WaitForSingleObject.restype = ctypes.c_uint32
+        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+        kernel32.CloseHandle.restype = ctypes.c_int
+        handle = kernel32.OpenProcess(access, 0, identity.pid)
+        if not handle:
+            error_code = ctypes.get_last_error()
+            if error_code in {87, 1168}:
+                raise ProcessIdentityMismatch(
+                    f"recorded process PID {identity.pid} is absent"
+                )
+            raise ProcessIdentityUnavailable(
+                f"could not open exact process PID {identity.pid} (winerror={error_code})"
+            )
+        try:
+            start_time = _windows_start_time_from_handle(kernel32, handle, identity.pid)
+            if start_time != identity.start_time:
+                raise ProcessIdentityMismatch(
+                    f"PID {identity.pid} creation time does not match recorded identity"
+                )
+            return ExactProcessHandle(
+                identity,
+                kind="windows-handle",
+                handle=handle,
+                kernel32=kernel32,
+            )
+        except ProcessIdentityNotFound as error:
+            kernel32.CloseHandle(handle)
+            raise ProcessIdentityMismatch(
+                f"recorded process PID {identity.pid} has terminated"
+            ) from error
+        except BaseException:
+            kernel32.CloseHandle(handle)
+            raise
+
+    if not sys.platform.startswith("linux") or identity.platform != "linux":
+        raise ProcessIdentityUnavailable("exact process handles require Linux/WSL or Windows")
+    opener = getattr(os, "pidfd_open", None)
+    if opener is None or getattr(signal, "pidfd_send_signal", None) is None:
+        raise ProcessIdentityUnavailable("Linux pidfd signalling support is unavailable")
+    try:
+        descriptor = opener(identity.pid, 0)
+    except ProcessLookupError as error:
+        raise ProcessIdentityMismatch(
+            f"recorded process PID {identity.pid} is absent"
+        ) from error
+    except OSError as error:
+        raise ProcessIdentityUnavailable(
+            f"could not open pidfd for PID {identity.pid}"
+        ) from error
+    try:
+        observation = observe_process_identity(identity)
+        if observation.state is ProcessIdentityState.MISMATCH:
+            raise ProcessIdentityMismatch(
+                f"PID {identity.pid} does not match recorded identity after pidfd open"
+            )
+        if observation.state is ProcessIdentityState.UNAVAILABLE:
+            assert observation.error is not None
+            raise observation.error
+        return ExactProcessHandle(identity, kind="linux-pidfd", handle=descriptor)
+    except BaseException:
+        os.close(descriptor)
+        raise
 
 
 # Explicit names make platform-specific tests and callers self-documenting.
@@ -338,9 +610,14 @@ __all__ = [
     "DiscoveryRecord",
     "EndpointKind",
     "EndpointRef",
+    "ExactProcessHandle",
     "IdentityPlatform",
     "NativeProcessIdentity",
     "ProcessIdentity",
+    "ProcessIdentityMismatch",
+    "ProcessIdentityNotFound",
+    "ProcessIdentityObservation",
+    "ProcessIdentityState",
     "ProcessIdentityUnavailable",
     "ProcessStartIdentity",
     "SupervisorDiscovery",
@@ -351,6 +628,8 @@ __all__ = [
     "get_process_identity",
     "is_process_identity_current",
     "native_process_identity",
+    "observe_process_identity",
+    "open_exact_process",
     "process_identity",
     "process_identity_matches",
     "read_process_identity",

@@ -15,11 +15,14 @@ from typing import Any
 
 import pytest
 
+from aar.compat.codex_mcp import stop_codex_supervisor
 from aar.runtime.process_identity import (
     ProcessStartIdentity,
     SupervisorDiscoveryRecord,
+    open_exact_process,
     process_identity_matches,
 )
+from aar.runtime.python_child import exact_module_command
 from aar.runtime.registry import OperationRegistry
 from aar.runtime.supervisor_protocol import PrivateFrame, SupervisorLifecycleReceipt
 
@@ -52,15 +55,16 @@ def _start_supervisor(
     runtime_home: Path, *, backend: str = "plain"
 ) -> tuple[subprocess.Popen[str], SupervisorDiscoveryRecord]:
     process = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
+        exact_module_command(
             "aar.runtime.supervisor",
+            [
             "--runtime-home",
             str(runtime_home),
             "--programmable-backend",
             backend,
-        ],
+            ],
+            isolated=False,
+        ),
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -69,9 +73,9 @@ def _start_supervisor(
     return process, _wait_discovery(runtime_home, process)
 
 
-def _stop_supervisor(process: subprocess.Popen[str]) -> None:
+def _stop_supervisor(process: subprocess.Popen[str], runtime_home: Path) -> None:
     if process.poll() is None:
-        process.terminate()
+        assert stop_codex_supervisor(runtime_home)
     try:
         process.wait(timeout=20)
     except subprocess.TimeoutExpired:
@@ -208,15 +212,16 @@ def test_frontends_reconnect_without_owning_runtime_and_cleanup_is_exact(tmp_pat
         } == {discovery.runtime_generation}
 
         contender = subprocess.run(
-            [
-                sys.executable,
-                "-m",
+            exact_module_command(
                 "aar.runtime.supervisor",
+                [
                 "--runtime-home",
                 str(runtime_home),
                 "--programmable-backend",
                 "plain",
-            ],
+                ],
+                isolated=False,
+            ),
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -229,7 +234,7 @@ def test_frontends_reconnect_without_owning_runtime_and_cleanup_is_exact(tmp_pat
         )
         assert observed.discovery_digest == discovery.discovery_digest
     finally:
-        _stop_supervisor(process)
+        _stop_supervisor(process, runtime_home)
 
     assert not (private / "discovery.json").exists()
     assert not (private / "attachment.key").exists()
@@ -321,7 +326,7 @@ def test_hard_owner_loss_reconciles_predecessor_and_worker_binding(tmp_path: Pat
             "predecessor_process_absent_on_startup",
         )
         assert worker is not None
-        assert worker[0] in {"lost", "terminated"}
+        assert worker[0] in {"lost", "quarantined", "terminated"}
         assert worker[1]
         assert not process_identity_matches(worker_identity)
         assert _tool_call(runtime_home, name="aar_capabilities", arguments={})[
@@ -332,9 +337,11 @@ def test_hard_owner_loss_reconciles_predecessor_and_worker_binding(tmp_path: Pat
             first.kill()
             first.wait(timeout=10)
         if successor is not None:
-            _stop_supervisor(successor)
+            _stop_supervisor(successor, runtime_home)
         if worker_identity is not None and process_identity_matches(worker_identity):
-            os.kill(worker_identity.pid, signal.SIGKILL)
+            with open_exact_process(worker_identity, terminate=True) as target:
+                target.send_signal(signal.SIGTERM)
+                target.wait(5)
             pytest.fail("test-owned predecessor worker survived successor recovery")
 
 
@@ -407,4 +414,4 @@ def test_durable_rlm_survives_frontend_exit_and_reconnects_by_operation_id(
         assert terminal["snapshot"]["result"]
         assert supervisor.poll() is None
     finally:
-        _stop_supervisor(supervisor)
+        _stop_supervisor(supervisor, runtime_home)

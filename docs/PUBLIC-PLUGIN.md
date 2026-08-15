@@ -160,7 +160,7 @@ verified adapter.
 Build from the repository root:
 
 ```bash
-docker build -f deploy/public/Dockerfile -t adaptive-agent-runtime:0.4.0a4 .
+docker build -f deploy/public/Dockerfile -t adaptive-agent-runtime:0.4.0a5 .
 ```
 
 The default image runs as UID/GID `10001`, owns `/var/lib/aar` with mode `0700`, exposes port
@@ -186,7 +186,7 @@ well-known and health routes. Keep the service data volume private and persisten
 Before starting, read back non-secret configuration:
 
 ```bash
-docker run --rm --env-file deploy.env adaptive-agent-runtime:0.4.0a4 --check-config
+docker run --rm --env-file deploy.env adaptive-agent-runtime:0.4.0a5 --check-config
 ```
 
 The readback reports only whether a domain-challenge token is configured; it never prints the token.

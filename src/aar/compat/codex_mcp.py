@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import hmac
 import os
 import signal
 import stat
@@ -19,9 +20,14 @@ from typing import BinaryIO
 
 from aar.canonical import canonical_json_bytes
 from aar.runtime.process_identity import (
+    ProcessIdentityMismatch,
+    ProcessIdentityState,
+    ProcessIdentityUnavailable,
     SupervisorDiscoveryRecord,
-    process_identity_matches,
+    observe_process_identity,
+    open_exact_process,
 )
+from aar.runtime.python_child import exact_module_command
 from aar.runtime.supervisor_client import (
     CREDENTIAL_FILE_NAME,
     DISCOVERY_FILE_NAME,
@@ -97,7 +103,14 @@ def _load_discovery(
         runtime_home,
         tolerate_transient_unreadable=tolerate_transient_unreadable,
     )
-    if discovery is None or not process_identity_matches(discovery.process_identity):
+    if discovery is None:
+        return None
+    observation = observe_process_identity(discovery.process_identity)
+    if observation.state is ProcessIdentityState.UNAVAILABLE:
+        raise CodexMcpLauncherError(
+            "Codex supervisor process identity unavailable; refusing cleanup or replacement"
+        ) from observation.error
+    if observation.state is ProcessIdentityState.MISMATCH:
         return None
     return discovery
 
@@ -168,15 +181,16 @@ def _spawn_supervisor(
     programmable_backend: str,
     log_path: Path,
 ) -> subprocess.Popen[bytes]:
-    command = [
-        sys.executable,
-        "-m",
+    command = exact_module_command(
         "aar.runtime.supervisor",
-        "--runtime-home",
-        os.fspath(runtime_home),
-        "--programmable-backend",
-        programmable_backend,
-    ]
+        [
+            "--runtime-home",
+            os.fspath(runtime_home),
+            "--programmable-backend",
+            programmable_backend,
+        ],
+        isolated=False,
+    )
     if log_path.exists() and log_path.stat().st_size > MAX_LAUNCH_LOG_BYTES:
         descriptor = os.open(log_path, os.O_TRUNC | os.O_WRONLY, 0o600)
         os.close(descriptor)
@@ -202,6 +216,34 @@ def _spawn_supervisor(
         return subprocess.Popen(command, **options)  # type: ignore[arg-type]
     finally:
         log.close()
+
+
+def _reap_spawned_process(process: subprocess.Popen[bytes], timeout_sec: float) -> None:
+    """Make the exact Popen child terminal and reaped before startup ownership is released."""
+
+    if process.poll() is not None:
+        process.wait()
+        return
+    with contextlib.suppress(ProcessLookupError):
+        process.terminate()
+    try:
+        process.wait(timeout=timeout_sec)
+        return
+    except subprocess.TimeoutExpired:
+        process.kill()
+    process.wait(timeout=timeout_sec)
+
+
+def _accept_discovery_after_spawn(
+    discovery: SupervisorDiscoveryRecord,
+    process: subprocess.Popen[bytes],
+    *,
+    cleanup_timeout_sec: float,
+) -> SupervisorDiscoveryRecord:
+    if discovery.pid == process.pid:
+        return discovery
+    _reap_spawned_process(process, cleanup_timeout_sec)
+    return discovery
 
 
 def ensure_codex_supervisor(
@@ -243,23 +285,82 @@ def ensure_codex_supervisor(
             programmable_backend=programmable_backend,
             log_path=log_path,
         )
-        deadline = time.monotonic() + startup_timeout_sec
-        while time.monotonic() < deadline:
+        try:
+            deadline = time.monotonic() + startup_timeout_sec
+            while time.monotonic() < deadline:
+                discovery = _load_discovery(
+                    runtime_home,
+                    tolerate_transient_unreadable=True,
+                )
+                if discovery is not None:
+                    return _accept_discovery_after_spawn(
+                        discovery,
+                        process,
+                        cleanup_timeout_sec=startup_timeout_sec,
+                    )
+                returncode = process.poll()
+                if returncode is not None:
+                    detail = _launch_log_tail(log_path)
+                    suffix = f": {detail}" if detail else ""
+                    raise CodexMcpLauncherError(
+                        f"Codex supervisor exited before Ready ({returncode}){suffix}"
+                    )
+                time.sleep(0.05)
             discovery = _load_discovery(
                 runtime_home,
                 tolerate_transient_unreadable=True,
             )
             if discovery is not None:
-                return discovery
-            returncode = process.poll()
-            if returncode is not None:
-                detail = _launch_log_tail(log_path)
-                suffix = f": {detail}" if detail else ""
-                raise CodexMcpLauncherError(
-                    f"Codex supervisor exited before Ready ({returncode}){suffix}"
+                return _accept_discovery_after_spawn(
+                    discovery,
+                    process,
+                    cleanup_timeout_sec=startup_timeout_sec,
                 )
-            time.sleep(0.05)
-        raise CodexMcpLauncherError("Codex supervisor did not become Ready before timeout")
+            raise CodexMcpLauncherError(
+                "Codex supervisor did not become Ready before timeout"
+            )
+        except BaseException as startup_error:
+            try:
+                _reap_spawned_process(process, startup_timeout_sec)
+            except BaseException as cleanup_error:
+                raise CodexMcpLauncherError(
+                    "Codex supervisor startup failed and its exact child could not be reaped"
+                ) from cleanup_error
+            raise startup_error
+
+
+def _shutdown_request_bytes(discovery: SupervisorDiscoveryRecord) -> bytes:
+    return canonical_json_bytes(
+        {
+            "discovery_digest": discovery.discovery_digest,
+            "process_identity": discovery.process_identity.model_dump(mode="json"),
+            "schema_version": SHUTDOWN_REQUEST_SCHEMA_VERSION,
+        }
+    )
+
+
+def _discovery_bytes_match(path: Path, discovery: SupervisorDiscoveryRecord) -> bool:
+    try:
+        observed = SupervisorDiscoveryRecord.model_validate_json(path.read_bytes(), strict=True)
+    except (OSError, ValueError):
+        return False
+    return observed.discovery_digest == discovery.discovery_digest
+
+
+def _unlink_if_bytes_match(path: Path, expected: bytes) -> bool:
+    try:
+        first = path.read_bytes()
+        if not hmac.compare_digest(first, expected):
+            return False
+        second = path.read_bytes()
+        if not hmac.compare_digest(second, expected):
+            return False
+        path.unlink()
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return False
 
 
 def _remove_stale_private_files(
@@ -268,17 +369,29 @@ def _remove_stale_private_files(
     private = runtime_home / PRIVATE_DIR_NAME
     discovery_path = private / DISCOVERY_FILE_NAME
     credential_path = private / CREDENTIAL_FILE_NAME
-    with contextlib.suppress(OSError, ValueError):
-        observed = SupervisorDiscoveryRecord.model_validate_json(
-            discovery_path.read_bytes(), strict=True
-        )
-        if observed.discovery_digest == discovery.discovery_digest:
-            discovery_path.unlink()
-    with contextlib.suppress(OSError):
-        credential = credential_path.read_bytes()
-        digest = f"sha256:{hashlib.sha256(credential).hexdigest()}"
-        if digest == discovery.attachment_credential_digest:
-            credential_path.unlink()
+    request_path = private / SHUTDOWN_REQUEST_FILE_NAME
+    if not _discovery_bytes_match(discovery_path, discovery):
+        return
+    if discovery.endpoint_kind == "unix" and _discovery_bytes_match(
+        discovery_path, discovery
+    ):
+        with contextlib.suppress(FileNotFoundError):
+            Path(discovery.endpoint_ref).unlink()
+    if _discovery_bytes_match(discovery_path, discovery):
+        _unlink_if_bytes_match(request_path, _shutdown_request_bytes(discovery))
+    if _discovery_bytes_match(discovery_path, discovery):
+        try:
+            credential = credential_path.read_bytes()
+        except OSError:
+            credential = None
+        if (
+            credential is not None
+            and f"sha256:{hashlib.sha256(credential).hexdigest()}"
+            == discovery.attachment_credential_digest
+        ):
+            _unlink_if_bytes_match(credential_path, credential)
+    if _discovery_bytes_match(discovery_path, discovery):
+        _unlink_if_bytes_match(discovery_path, canonical_json_bytes(discovery))
 
 
 def _write_shutdown_request(
@@ -287,13 +400,7 @@ def _write_shutdown_request(
     private = _private_dir(runtime_home)
     target = private / SHUTDOWN_REQUEST_FILE_NAME
     temporary = private / f".{SHUTDOWN_REQUEST_FILE_NAME}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
-    payload = canonical_json_bytes(
-        {
-            "discovery_digest": discovery.discovery_digest,
-            "process_identity": discovery.process_identity.model_dump(mode="json"),
-            "schema_version": SHUTDOWN_REQUEST_SCHEMA_VERSION,
-        }
-    )
+    payload = _shutdown_request_bytes(discovery)
     descriptor = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     try:
         view = memoryview(payload)
@@ -311,59 +418,36 @@ def _write_shutdown_request(
 
 
 def _terminate_windows_process(discovery: SupervisorDiscoveryRecord, timeout_sec: float) -> None:
-    import ctypes
-
-    process_terminate = 0x0001
-    synchronize = 0x00100000
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel32.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_bool, ctypes.c_ulong]
-    kernel32.OpenProcess.restype = ctypes.c_void_p
-    kernel32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
-    kernel32.TerminateProcess.restype = ctypes.c_bool
-    kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
-    kernel32.WaitForSingleObject.restype = ctypes.c_ulong
-    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
-    kernel32.CloseHandle.restype = ctypes.c_bool
-
-    handle = kernel32.OpenProcess(
-        process_terminate | synchronize,
-        False,
-        discovery.pid,
-    )
-    if not handle:
-        if not process_identity_matches(discovery.process_identity):
-            return
-        raise CodexMcpLauncherError(
-            f"could not open Codex supervisor for termination (winerror={ctypes.get_last_error()})"
-        )
     try:
-        if not process_identity_matches(discovery.process_identity):
-            return
-        if not kernel32.TerminateProcess(handle, 0):
-            # Windows returns access denied when the process reached termination
-            # after OpenProcess but before TerminateProcess.  A signalled handle
-            # is the authoritative terminal readback for that exact process.
-            error_code = ctypes.get_last_error()
-            wait_result = kernel32.WaitForSingleObject(handle, int(timeout_sec * 1_000))
-            if wait_result == 0:
-                return
-            if wait_result == 0x00000102:
+        target = open_exact_process(discovery.process_identity, terminate=True)
+    except ProcessIdentityMismatch:
+        return
+    except ProcessIdentityUnavailable as error:
+        raise CodexMcpLauncherError(
+            "could not open the exact Codex supervisor process for termination"
+        ) from error
+    with target:
+        sent = target.send_signal(signal.SIGTERM)
+        if not sent:
+            try:
+                terminal = target.wait(timeout_sec)
+            except ProcessIdentityUnavailable as error:
                 raise CodexMcpLauncherError(
-                    "Codex supervisor termination was denied and it remained live"
-                )
+                    f"could not terminate Codex supervisor (winerror={target.last_error})"
+                ) from error
+            if terminal:
+                return
             raise CodexMcpLauncherError(
-                f"could not terminate Codex supervisor (winerror={error_code})"
+                "Codex supervisor termination was denied and it remained live"
             )
-        wait_result = kernel32.WaitForSingleObject(handle, int(timeout_sec * 1_000))
-        if wait_result == 0x00000102:
+        try:
+            terminal = target.wait(timeout_sec)
+        except ProcessIdentityUnavailable as error:
+            raise CodexMcpLauncherError(
+                "could not wait for Codex supervisor termination"
+            ) from error
+        if not terminal:
             raise CodexMcpLauncherError("Codex supervisor did not stop before timeout")
-        if wait_result != 0:
-            error_code = ctypes.get_last_error()
-            raise CodexMcpLauncherError(
-                f"could not wait for Codex supervisor termination (winerror={error_code})"
-            )
-    finally:
-        kernel32.CloseHandle(handle)
 
 
 def stop_codex_supervisor(runtime_home: Path, *, timeout_sec: float = 20.0) -> bool:
@@ -372,13 +456,23 @@ def stop_codex_supervisor(runtime_home: Path, *, timeout_sec: float = 20.0) -> b
     discovery = _read_discovery(runtime_home)
     if discovery is None:
         return False
-    if not process_identity_matches(discovery.process_identity):
+    observation = observe_process_identity(discovery.process_identity)
+    if observation.state is ProcessIdentityState.UNAVAILABLE:
+        raise CodexMcpLauncherError(
+            "Codex supervisor process identity unavailable; stop was not attempted"
+        ) from observation.error
+    if observation.state is ProcessIdentityState.MISMATCH:
         _remove_stale_private_files(runtime_home, discovery)
         return True
     _write_shutdown_request(runtime_home, discovery)
     deadline = time.monotonic() + timeout_sec
     while time.monotonic() < deadline:
-        if not process_identity_matches(discovery.process_identity):
+        observation = observe_process_identity(discovery.process_identity)
+        if observation.state is ProcessIdentityState.UNAVAILABLE:
+            raise CodexMcpLauncherError(
+                "Codex supervisor process identity unavailable while stopping"
+            ) from observation.error
+        if observation.state is ProcessIdentityState.MISMATCH:
             _remove_stale_private_files(runtime_home, discovery)
             return True
         time.sleep(0.05)
@@ -390,14 +484,23 @@ def stop_codex_supervisor(runtime_home: Path, *, timeout_sec: float = 20.0) -> b
         # fallback termination into a false setup failure.
         _remove_stale_private_files(runtime_home, discovery)
         return True
-    os.kill(discovery.pid, signal.SIGTERM)
-    deadline = time.monotonic() + timeout_sec
-    while time.monotonic() < deadline:
-        if not process_identity_matches(discovery.process_identity):
-            _remove_stale_private_files(runtime_home, discovery)
-            return True
-        time.sleep(0.05)
-    raise CodexMcpLauncherError("Codex supervisor did not stop after fallback termination")
+    try:
+        target = open_exact_process(discovery.process_identity, terminate=True)
+    except ProcessIdentityMismatch:
+        _remove_stale_private_files(runtime_home, discovery)
+        return True
+    except ProcessIdentityUnavailable as error:
+        raise CodexMcpLauncherError(
+            "exact Codex supervisor fallback termination is unavailable"
+        ) from error
+    with target:
+        target.send_signal(signal.SIGTERM)
+        if not target.wait(timeout_sec):
+            raise CodexMcpLauncherError(
+                "Codex supervisor did not stop after fallback termination"
+            )
+    _remove_stale_private_files(runtime_home, discovery)
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:

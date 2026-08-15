@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import contextlib
 import os
 import signal
-import time
 from dataclasses import dataclass
 from typing import Literal, Self
 
@@ -13,10 +11,13 @@ from pydantic import model_validator
 
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.runtime.process_identity import (
+    ProcessIdentityMismatch,
+    ProcessIdentityState,
     ProcessIdentityUnavailable,
     ProcessStartIdentity,
+    observe_process_identity,
+    open_exact_process,
     process_identity,
-    process_identity_matches,
 )
 from aar.runtime.registry import OperationRegistry, WorkerBindingRecord
 from aar.schemas import Digest, OperationRef, StrictModel
@@ -111,6 +112,20 @@ class WorkerManager:
         capability_digest: str,
         environment_digest: str,
     ) -> ManagedWorker:
+        conflicting = next(
+            (
+                binding
+                for binding in self.registry.active_worker_bindings()
+                if binding.worker_kind == worker_kind
+                and binding.workspace_id == workspace_id
+            ),
+            None,
+        )
+        if conflicting is not None:
+            raise RuntimeError(
+                "an active or unresolved worker still owns this workspace; "
+                "successor registration is blocked"
+            )
         identity = process_identity(pid)
         material = {
             "worker_kind": worker_kind,
@@ -140,7 +155,11 @@ class WorkerManager:
         operation: OperationRef | None = None,
         last_event_sequence: int | None = None,
     ) -> WorkerBindingRecord:
-        if not process_identity_matches(managed.process_identity):
+        observation = observe_process_identity(managed.process_identity)
+        if observation.state is ProcessIdentityState.UNAVAILABLE:
+            assert observation.error is not None
+            raise observation.error
+        if observation.state is ProcessIdentityState.MISMATCH:
             return self.finish(managed, disposition="lost", reason="worker_identity_missing")
         return self.registry.heartbeat_worker_binding(
             worker_id=managed.worker_id,
@@ -194,15 +213,22 @@ class WorkerManager:
                 disposition="quarantined",
                 reason="malformed_process_identity",
             )
-        try:
-            observed = process_identity(binding.pid)
-        except ProcessIdentityUnavailable:
+        observation = observe_process_identity(expected)
+        if observation.state is ProcessIdentityState.UNAVAILABLE:
+            return binding
+        if observation.state is ProcessIdentityState.MISMATCH:
             return self._finish_prior(
                 binding,
                 expected,
-                disposition="lost",
-                reason="orphan_process_absent",
+                disposition="quarantined",
+                reason=(
+                    "orphan_process_absent"
+                    if observation.observed is None
+                    else "pid_reused_identity_mismatch"
+                ),
             )
+        assert observation.observed is not None
+        observed = observation.observed
         if observed != expected:
             return self._finish_prior(
                 binding,
@@ -217,12 +243,24 @@ class WorkerManager:
                 disposition="quarantined",
                 reason="refused_to_terminate_supervisor_process",
             )
-        terminated = self._terminate_exact(expected)
+        try:
+            terminated = self._terminate_exact(expected)
+        except ProcessIdentityMismatch:
+            return self._finish_prior(
+                binding,
+                expected,
+                disposition="quarantined",
+                reason="orphan_identity_changed_before_exact_signal",
+            )
+        except ProcessIdentityUnavailable:
+            return binding
+        if not terminated:
+            return binding
         return self._finish_prior(
             binding,
             expected,
-            disposition="terminated" if terminated else "quarantined",
-            reason="orphan_fenced" if terminated else "orphan_termination_unconfirmed",
+            disposition="terminated",
+            reason="orphan_fenced",
         )
 
     def _finish_prior(
@@ -267,26 +305,22 @@ class WorkerManager:
         )
 
     def _terminate_exact(self, identity: ProcessStartIdentity) -> bool:
-        if not process_identity_matches(identity):
-            return True
-        try:
-            os.kill(identity.pid, signal.SIGTERM)
-        except (OSError, ProcessLookupError):
-            return not process_identity_matches(identity)
-        deadline = time.monotonic() + self._termination_timeout_s
-        while time.monotonic() < deadline:
-            if not process_identity_matches(identity):
-                return True
-            time.sleep(0.02)
-        if os.name != "nt" and process_identity_matches(identity):
-            with contextlib.suppress(OSError, ProcessLookupError):
-                os.kill(identity.pid, signal.SIGKILL)
-            deadline = time.monotonic() + self._termination_timeout_s
-            while time.monotonic() < deadline:
-                if not process_identity_matches(identity):
+        target = open_exact_process(identity, terminate=True)
+        with target:
+            if os.name == "nt":
+                sent = target.send_signal(signal.SIGTERM)
+                if not sent and target.wait(0):
                     return True
-                time.sleep(0.02)
-        return not process_identity_matches(identity)
+                return target.wait(self._termination_timeout_s)
+            sent = target.send_signal(signal.SIGTERM)
+            if not sent:
+                return target.wait(0)
+            if target.wait(self._termination_timeout_s):
+                return True
+            sent = target.send_signal(signal.SIGKILL)
+            if not sent:
+                return target.wait(0)
+            return target.wait(self._termination_timeout_s)
 
 
 __all__ = [

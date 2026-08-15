@@ -70,6 +70,16 @@ The explicit `aar-codex-setup` path also provisions or reuses the production own
 its receipt must include a ready `codex_runtime` binding. A task-started fallback owner may be killed
 by host tree teardown, in which case only a fresh successor-generation readback proves recovery.
 
+For a local Codex upgrade, stop the exact discovered runtime, replace the exact package, run
+`aar-codex-setup`, and trust its normalized state readback rather than editing marketplace or global
+MCP configuration by hand. If setup reports `configuration_committed_runtime_unready`, the desired
+plugin-only configuration is retained but setup did not pass; rerun setup to recover the production
+owner. If process identity is temporarily unavailable, do not delete control files or start a
+second owner—retry after native observation recovers. When setup reports `restart_required: true`,
+restart Codex Desktop, start a fresh task, load the deferred capability tool when needed, and make
+one native `aar_capabilities` call. The old task's catalog or a same-task transport error cannot
+prove that the updated plugin was picked up.
+
 Keep these exact public field names explicit:
 
 - Every tool except `aar_capabilities` requires the outer argument name `context`. Its value is

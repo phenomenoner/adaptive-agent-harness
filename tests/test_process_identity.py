@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import json
 import os
+import signal
+import subprocess
 import sys
 
 import pytest
 from pydantic import ValidationError
 
+import aar.runtime.process_identity as process_identity_module
 from aar.canonical import canonical_sha256
 from aar.runtime.process_identity import (
     DEFAULT_PROTOCOL_VERSION,
@@ -14,9 +18,11 @@ from aar.runtime.process_identity import (
     ProcessStartIdentity,
     SupervisorDiscoveryRecord,
     current_process_identity,
+    open_exact_process,
     process_identity,
     process_identity_matches,
 )
+from aar.runtime.python_child import exact_module_command
 
 DIGEST = canonical_sha256({"fixture": "process-identity"})
 OTHER_DIGEST = canonical_sha256({"fixture": "other"})
@@ -46,7 +52,66 @@ def test_dead_or_missing_pid_fails_closed() -> None:
         process_identity(2**31 - 1)
 
 
+def test_process_identity_matches_propagates_native_unavailability(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    identity = current_process_identity()
+
+    def unavailable(_pid: int) -> ProcessStartIdentity:
+        raise ProcessIdentityUnavailable("transient native observation failure")
+
+    monkeypatch.setattr(process_identity_module, "process_identity", unavailable)
+
+    with pytest.raises(ProcessIdentityUnavailable, match="transient native observation"):
+        process_identity_matches(identity)
+
+
+def test_exact_process_handle_signals_and_observes_one_real_python_child() -> None:
+    process = subprocess.Popen(
+        exact_module_command("aar.runtime.ipython_worker", isolated=True),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+    )
+    try:
+        assert process.stdout is not None
+        assert '"ready":true' in process.stdout.readline()
+        assert process.stdin is not None
+        process.stdin.write(
+            json.dumps(
+                {
+                    "command": "execute",
+                    "code": "__import__('os').getpid()",
+                    "max_events": 8,
+                    "max_output_chars": 4_096,
+                    "artifact_enabled": False,
+                },
+                separators=(",", ":"),
+            )
+            + "\n"
+        )
+        process.stdin.flush()
+        response = json.loads(process.stdout.readline())
+        assert response["ok"] is True
+        assert response["status"] == "succeeded"
+        assert response["result"] == process.pid
+        identity = process_identity(process.pid)
+        with open_exact_process(identity, terminate=True) as target:
+            assert target.send_signal(signal.SIGTERM)
+            assert target.wait(5)
+        process.wait(timeout=5)
+        assert process.returncode is not None
+        assert not process_identity_matches(identity)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+
+
 def test_unsupported_platform_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(process_identity_module.os, "name", "posix")
     monkeypatch.setattr(sys, "platform", "plan9")
     with pytest.raises(ProcessIdentityUnavailable, match="unsupported"):
         process_identity(os.getpid())

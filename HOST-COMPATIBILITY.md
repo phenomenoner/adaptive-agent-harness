@@ -4,7 +4,7 @@ Adaptive Agent Harness (AAR) exposes a host-neutral Python contract and a local-
 
 ## Supported baseline
 
-| Surface | Public support in `v0.4.0a4` | Verification path | Important boundary |
+| Surface | Public support in `v0.4.0a5` | Verification path | Important boundary |
 |---|---|---|---|
 | Python package | CPython 3.11–3.14 | `uv sync --locked`, repository tests, exact-wheel install | Python execution is not a security sandbox |
 | MCP client | Local stdio, 30-tool `aar.mcp-tools.v7` surface | `aar-mcp`, `aar_capabilities`, generated schema verification | Transport success is not operation success |
@@ -55,9 +55,15 @@ aar-codex-setup
 
 Restart Codex after changing the tool installation or plugin, then make a native
 `aar_capabilities` call from a fresh task. Codex may first need to load the exact deferred tool;
-that search step, config text, and catalog visibility are not runtime proof. A passing `v0.4.0a4`
-Desktop readback reports package `0.4.0a4`, operation skill `0.9.4`, 30 tools,
-`attached-supervisor`, and `frontend_ephemeral: true`.
+that search step, config text, and catalog visibility are not runtime proof. The `v0.4.0a5`
+release gate requires package `0.4.0a5`, operation skill `0.9.5`, 30 tools,
+`attached-supervisor`, `frontend_ephemeral: true`, and the expected successor generation in that
+native response.
+
+Setup mutations are compare-fenced against authoritative marketplace, plugin, and global-MCP
+readback. `configuration_committed_runtime_unready` retains the verified desired configuration but
+does not pass setup; rerun setup. An unavailable process identity permits neither stale cleanup nor
+a second supervisor, so retry observation instead of deleting runtime-home files.
 
 Codex approval settings remain host policy. A successful approval or tool call does not prove external-effect execution or delivery unless the authoritative host records that outcome.
 
@@ -90,8 +96,8 @@ PY
 hermes mcp test aar
 ```
 
-A passing Hermes `v0.4.0a4` local-profile readback reports package `0.4.0a4`, operation skill
-`0.9.4`, and 30 MCP tools; this release does not replay the historical installed-Hermes row.
+The generated Hermes `v0.4.0a5` profile declares package `0.4.0a5`, operation skill `0.9.5`, and
+30 MCP tools; this release does not replay the historical installed-Hermes row.
 
 ### Receipt-backed model routing
 
@@ -122,11 +128,11 @@ fixed route and exact prompts, issues pre-spend claim tickets, and accepts only 
 commits; the host executes every actual model call. Restart and replay preserve the same route and
 idempotency boundaries. A different task route requires a different job.
 
-The release candidate passed exact-wheel HTTP/authentication/isolation/restart tests, deterministic
-plugin and scoped-skill generation, and a fresh local Codex marketplace-derived lifecycle with an
-actual `gpt-5.6-sol` / `max` host call. The resulting provenance is intentionally
-`caller_reported`, not provider-signed. A final independent review covered 77 required release cells
-and reported no actionable findings.
+The caller-delegated public-profile implementation previously passed exact-wheel
+HTTP/authentication/isolation/restart tests, deterministic plugin and scoped-skill generation, and
+a local marketplace-derived lifecycle with an actual `gpt-5.6-sol` / `max` host call. The resulting
+provenance is intentionally `caller_reported`, not provider-signed. Those receipts establish the
+product boundary but do not substitute for the `v0.4.0a5` exact-commit release review.
 
 This row does not claim a production HTTPS deployment, public OAuth flow, reviewer execution,
 ChatGPT execution, OpenAI approval, or Plugin Directory publication. Those require a deployed
@@ -168,7 +174,7 @@ Do not infer activation from a wheel existing on disk. Do not infer model-route 
 - Package installation does not create an operating-system service, register a host, or configure credentials.
 - Generated host profiles do not change AAR's authority ceiling.
 - Published compatibility covers the public contract and documented setup paths, not every host version or platform configuration.
-- The `v0.4.0a4` Windows workstation passed the 36-test focused Codex launcher/setup/package shard.
-  The full repository run reported 399 passed, one skipped, and six legacy
-  Sampling/process-owner lifecycle tests still red;
-  full Windows supervisor support is not a release claim.
+- The stable `v0.4.0a5` source candidate passed 445 Windows repository tests covering exact-process
+  identity and signalling, launcher cleanup, managed-worker handoff, installer containment, and
+  lock sharing. One directory-symlink capability test was skipped and the deprecated Sampling path
+  emitted its expected warning. Exact-wheel and fresh-task evidence remain separate gates.

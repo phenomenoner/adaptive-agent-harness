@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "adaptive-agent-runtime"
-version = "0.4.0a4"
+version = "0.4.0a5"
 description = "Host-neutral programmable execution and adaptation runtime for agent harnesses"
 readme = "README.md"
 license = { file = "LICENSE" }

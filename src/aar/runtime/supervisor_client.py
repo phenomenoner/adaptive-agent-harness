@@ -18,9 +18,10 @@ from anyio.abc import SocketStream
 
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.runtime.process_identity import (
+    ProcessIdentityState,
     SupervisorDiscoveryRecord,
     current_process_identity,
-    process_identity_matches,
+    observe_process_identity,
 )
 from aar.runtime.supervisor_protocol import (
     MAX_PRIVATE_PAYLOAD_BYTES,
@@ -236,7 +237,12 @@ class SupervisorClient:
             )
         except (OSError, ValueError) as error:
             raise SupervisorClientError("valid supervisor discovery is unavailable") from error
-        if not process_identity_matches(discovery.process_identity):
+        observation = observe_process_identity(discovery.process_identity)
+        if observation.state is ProcessIdentityState.UNAVAILABLE:
+            raise SupervisorClientError(
+                "supervisor process identity is temporarily unavailable"
+            ) from observation.error
+        if observation.state is ProcessIdentityState.MISMATCH:
             raise SupervisorClientError("supervisor discovery names an absent or reused process")
         self.discovery = discovery
         return discovery

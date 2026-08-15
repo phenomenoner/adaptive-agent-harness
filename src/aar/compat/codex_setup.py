@@ -188,6 +188,97 @@ def _global_aar_entry(config: Path) -> dict[str, Any] | None:
     return entry
 
 
+class CodexConfigurationTransactionError(RuntimeError):
+    """A failed setup transition whose pre-state could not be restored safely."""
+
+    def __init__(self, message: str, *, details: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.details = details
+
+
+def _normalized_marketplace(call: InvokeCodex) -> str | None:
+    try:
+        document = json.loads(call(("plugin", "marketplace", "list", "--json")))
+        marketplaces = document.get("marketplaces", [])
+    except (AttributeError, TypeError, json.JSONDecodeError) as error:
+        raise RuntimeError("Codex marketplace state is unreadable") from error
+    if not isinstance(marketplaces, list):
+        raise RuntimeError("Codex marketplace state is invalid")
+    matches = [
+        item
+        for item in marketplaces
+        if isinstance(item, dict) and item.get("name") == MARKETPLACE_NAME
+    ]
+    if len(matches) > 1:
+        raise RuntimeError("Codex reports more than one aar-local marketplace")
+    if not matches:
+        return None
+    root = matches[0].get("root")
+    if not isinstance(root, str) or not root:
+        raise RuntimeError("the existing aar-local marketplace has no readable root")
+    return os.path.normcase(os.fspath(Path(root).expanduser().resolve(strict=False)))
+
+
+def _normalized_plugin(call: InvokeCodex) -> dict[str, Any] | None:
+    try:
+        document = json.loads(call(("plugin", "list", "--json")))
+        installed = document.get("installed", [])
+    except (AttributeError, TypeError, json.JSONDecodeError) as error:
+        raise RuntimeError("Codex plugin state is unreadable") from error
+    if not isinstance(installed, list):
+        raise RuntimeError("Codex plugin state is invalid")
+    matches = [
+        item
+        for item in installed
+        if isinstance(item, dict) and item.get("pluginId") == PLUGIN_SELECTOR
+    ]
+    if len(matches) > 1:
+        raise RuntimeError("Codex reports more than one installed AAR plugin")
+    if not matches:
+        return None
+    plugin = matches[0]
+    version = plugin.get("version")
+    enabled = plugin.get("enabled")
+    if not isinstance(version, str) or not version or not isinstance(enabled, bool):
+        raise RuntimeError("the installed AAR plugin state is incomplete")
+    return {
+        "enabled": enabled,
+        "plugin_id": PLUGIN_SELECTOR,
+        "version": version,
+    }
+
+
+def _normalized_global_entry(config: Path) -> dict[str, Any] | None:
+    entry = _global_aar_entry(config)
+    if entry is None:
+        return None
+    command = entry.get("command")
+    args = entry.get("args", [])
+    if args is None:
+        args = []
+    if not isinstance(command, str) or not isinstance(args, list) or not all(
+        isinstance(item, str) for item in args
+    ):
+        raise RuntimeError("the global AAR MCP entry cannot be normalized safely")
+    return {
+        "args": list(args),
+        "command": command,
+        "unexpected_fields": sorted(set(entry) - {"args", "command"}),
+    }
+
+
+def _codex_state(call: InvokeCodex, config: Path) -> dict[str, Any]:
+    return {
+        "marketplace_root": _normalized_marketplace(call),
+        "plugin": _normalized_plugin(call),
+        "global_mcp": _normalized_global_entry(config),
+    }
+
+
+def _state_with(state: dict[str, Any], **changes: Any) -> dict[str, Any]:
+    return {**state, **changes}
+
+
 def configure_codex(
     codex: Path,
     aar_mcp: Path,
@@ -197,131 +288,353 @@ def configure_codex(
     invoke: InvokeCodex | None = None,
     codex_config: Path | None = None,
 ) -> dict[str, Any]:
-    """Install/update the plugin and keep it as the sole AAR MCP authority."""
+    """Install/update the plugin as one compare-fenced, sole-authority transaction."""
     call = invoke or (lambda arguments: _invoke_codex(codex, arguments))
     config = (codex_config or _default_codex_config()).expanduser().resolve(strict=False)
     marketplace = marketplace.expanduser().resolve(strict=True)
+    target_root = os.path.normcase(os.fspath(marketplace))
     plugin_mcp_command, plugin_mcp_args = _plugin_mcp_spec(marketplace)
     preflight_launcher = plugin_mcp_launcher or aar_mcp
-    legacy_mcp = _global_aar_entry(config)
+    expected_version = _plugin_version(marketplace)
+    target_plugin = {
+        "enabled": True,
+        "plugin_id": PLUGIN_SELECTOR,
+        "version": expected_version,
+    }
+
+    pre_state = _codex_state(call, config)
+    legacy_mcp = pre_state["global_mcp"]
     legacy_global_mcp_removed = legacy_mcp is not None
     if legacy_mcp is not None:
-        command = legacy_mcp.get("command")
-        args = legacy_mcp.get("args", [])
-        unexpected_fields = set(legacy_mcp) - {"args", "command"}
         allowed_commands = {
             os.fspath(aar_mcp).casefold(),
             os.fspath(preflight_launcher).casefold(),
         }
         if (
-            not isinstance(command, str)
-            or command.casefold() not in allowed_commands
-            or args not in (None, [])
-            or unexpected_fields
+            legacy_mcp["command"].casefold() not in allowed_commands
+            or legacy_mcp["args"]
+            or legacy_mcp["unexpected_fields"]
         ):
             raise RuntimeError(
                 "a conflicting global MCP server named 'aar' is configured; remove or rename it "
                 "explicitly before installing the AAR plugin"
             )
-    listed = json.loads(call(("plugin", "marketplace", "list", "--json")))
-    marketplaces = listed.get("marketplaces", [])
-    current = next(
-        (item for item in marketplaces if item.get("name") == MARKETPLACE_NAME), None
-    )
-    marketplace_added = current is None
-    marketplace_replaced = False
-    previous_marketplace: Path | None = None
-    if marketplace_added:
-        call(("plugin", "marketplace", "add", os.fspath(marketplace), "--json"))
-        active_marketplace = marketplace
-    else:
-        current_root = current.get("root")
-        if not current_root:
-            raise RuntimeError("the existing aar-local marketplace has no readable root")
-        active_marketplace = Path(str(current_root)).expanduser().resolve(strict=False)
-        if not _same_path(active_marketplace, marketplace):
-            previous_marketplace = active_marketplace
-            call(("plugin", "marketplace", "remove", MARKETPLACE_NAME))
-            try:
-                call(("plugin", "marketplace", "add", os.fspath(marketplace), "--json"))
-            except Exception as install_error:
-                try:
-                    call(
-                        (
-                            "plugin",
-                            "marketplace",
-                            "add",
-                            os.fspath(previous_marketplace),
-                            "--json",
-                        )
-                    )
-                except Exception as rollback_error:
-                    raise RuntimeError(
-                        "failed to install the bundled aar-local marketplace and failed to "
-                        "restore its prior root"
-                    ) from rollback_error
-                raise RuntimeError(
-                    "failed to install the bundled aar-local marketplace; its prior root was "
-                    "restored"
-                ) from install_error
-            active_marketplace = marketplace
-            marketplace_replaced = True
 
-    expected_version = _plugin_version(marketplace)
-    plugin_list = json.loads(call(("plugin", "list", "--json")))
-    current_plugin = next(
-        (
-            item
-            for item in plugin_list.get("installed", [])
-            if item.get("pluginId") == PLUGIN_SELECTOR
-        ),
-        None,
-    )
-    plugin_changed = marketplace_added or marketplace_replaced or not (
-        current_plugin is not None
-        and current_plugin.get("version") == expected_version
-        and current_plugin.get("enabled") is True
-    )
-    if plugin_changed:
+    current_state = pre_state
+    owned_states = [pre_state]
+    completed_mutations: list[dict[str, Any]] = []
+    observation_failed = False
+    failure_stage = "initial-state"
+
+    def attempt(
+        stage: str,
+        arguments: tuple[str, ...],
+        predicted: dict[str, Any],
+        *,
+        accept,
+    ) -> str:
+        nonlocal current_state, failure_stage, observation_failed
+        failure_stage = stage
+        completed_mutations.append({"command": list(arguments), "stage": stage})
+        output = call(arguments)
         try:
-            installed = json.loads(call(("plugin", "add", PLUGIN_SELECTOR, "--json")))
-        except Exception as install_error:
-            if marketplace_replaced:
-                assert previous_marketplace is not None
-                try:
-                    call(("plugin", "marketplace", "remove", MARKETPLACE_NAME))
-                    call(
-                        (
-                            "plugin",
-                            "marketplace",
-                            "add",
-                            os.fspath(previous_marketplace),
-                            "--json",
-                        )
-                    )
-                    call(("plugin", "add", PLUGIN_SELECTOR, "--json"))
-                except Exception as rollback_error:
-                    raise RuntimeError(
-                        "failed to install the bundled AAR plugin and failed to restore its prior "
-                        "marketplace binding"
-                    ) from rollback_error
-                raise RuntimeError(
-                    "failed to install the bundled AAR plugin; its prior marketplace binding was "
-                    "restored"
-                ) from install_error
+            observed = _codex_state(call, config)
+        except Exception:
+            observation_failed = True
             raise
-    else:
-        installed = current_plugin
-    if installed is None or installed.get("version") != expected_version:
-        raise RuntimeError(
-            "the configured aar-local marketplace did not install the bundled plugin version; "
-            "inspect or replace the stale marketplace before retrying"
+        if not accept(current_state, observed):
+            raise RuntimeError(f"Codex state drifted during {stage}")
+        owned_states.append(observed)
+        current_state = observed
+        return output
+
+    def containment(
+        original: BaseException,
+        *,
+        rollback_status: str,
+        observed: dict[str, Any],
+    ) -> CodexConfigurationTransactionError:
+        details = {
+            "completed_mutations": completed_mutations,
+            "current_state": observed,
+            "original_error": f"{type(original).__name__}: {original}",
+            "rollback_status": rollback_status,
+        }
+        return CodexConfigurationTransactionError(
+            "Codex configuration transaction failed and was safely contained",
+            details=details,
         )
 
-    if legacy_global_mcp_removed:
-        call(("mcp", "remove", "aar"))
-        if _global_aar_entry(config) is not None:
-            raise RuntimeError("the legacy global AAR MCP server remained after removal")
+    def rollback(original: BaseException) -> None:
+        nonlocal current_state
+        if observation_failed:
+            raise containment(
+                original,
+                rollback_status="contained",
+                observed={"error": "current Codex state is unreadable", "status": "unreadable"},
+            ) from original
+        try:
+            observed = _codex_state(call, config)
+        except Exception as read_error:
+            raise containment(
+                original,
+                rollback_status="contained",
+                observed={
+                    "error": f"{type(read_error).__name__}: {read_error}",
+                    "status": "unreadable",
+                },
+            ) from original
+        if observed not in owned_states:
+            raise containment(
+                original,
+                rollback_status="contained",
+                observed=observed,
+            ) from original
+        current_state = observed
+        prior_plugin = pre_state["plugin"]
+        if (
+            current_state["plugin"] != prior_plugin
+            and prior_plugin is not None
+            and pre_state["marketplace_root"] == target_root
+            and prior_plugin["version"] != expected_version
+        ):
+            raise containment(
+                original,
+                rollback_status="contained",
+                observed=current_state,
+            ) from original
+
+        def undo(
+            stage: str,
+            arguments: tuple[str, ...],
+            expected: dict[str, Any],
+        ) -> None:
+            nonlocal current_state
+            try:
+                fresh = _codex_state(call, config)
+            except Exception as read_error:
+                raise containment(
+                    original,
+                    rollback_status="contained",
+                    observed={
+                        "error": f"{type(read_error).__name__}: {read_error}",
+                        "stage": stage,
+                        "status": "unreadable",
+                    },
+                ) from original
+            if fresh != current_state:
+                raise containment(
+                    original,
+                    rollback_status="contained",
+                    observed=fresh,
+                ) from original
+            completed_mutations.append(
+                {"command": list(arguments), "stage": f"rollback:{stage}"}
+            )
+            try:
+                call(arguments)
+                after = _codex_state(call, config)
+            except Exception as rollback_error:
+                raise containment(
+                    original,
+                    rollback_status="rollback_failed",
+                    observed={
+                        "error": f"{type(rollback_error).__name__}: {rollback_error}",
+                        "stage": stage,
+                        "status": "unreadable_or_unrestored",
+                    },
+                ) from original
+            if after != expected:
+                raise containment(
+                    original,
+                    rollback_status="rollback_failed",
+                    observed=after,
+                ) from original
+            current_state = after
+
+        if current_state["global_mcp"] != pre_state["global_mcp"]:
+            if pre_state["global_mcp"] is None:
+                raise containment(
+                    original,
+                    rollback_status="contained",
+                    observed=current_state,
+                ) from original
+            prior_global = pre_state["global_mcp"]
+            undo(
+                "restore-global-mcp",
+                (
+                    "mcp",
+                    "add",
+                    "aar",
+                    "--",
+                    prior_global["command"],
+                    *prior_global["args"],
+                ),
+                _state_with(current_state, global_mcp=prior_global),
+            )
+
+        if current_state["plugin"] != pre_state["plugin"] and current_state["plugin"]:
+            undo(
+                "remove-transaction-plugin",
+                ("plugin", "remove", PLUGIN_SELECTOR),
+                _state_with(current_state, plugin=None),
+            )
+        if current_state["marketplace_root"] != pre_state["marketplace_root"]:
+            if current_state["marketplace_root"] is not None:
+                undo(
+                    "remove-transaction-marketplace",
+                    ("plugin", "marketplace", "remove", MARKETPLACE_NAME),
+                    _state_with(current_state, marketplace_root=None),
+                )
+            if pre_state["marketplace_root"] is not None:
+                undo(
+                    "restore-prior-marketplace",
+                    (
+                        "plugin",
+                        "marketplace",
+                        "add",
+                        pre_state["marketplace_root"],
+                        "--json",
+                    ),
+                    _state_with(
+                        current_state,
+                        marketplace_root=pre_state["marketplace_root"],
+                    ),
+                )
+        if current_state["plugin"] != pre_state["plugin"]:
+            prior_plugin = pre_state["plugin"]
+            if prior_plugin is None:
+                raise containment(
+                    original,
+                    rollback_status="rollback_failed",
+                    observed=current_state,
+                ) from original
+            expected_enabled = _state_with(
+                current_state,
+                plugin={**prior_plugin, "enabled": True},
+            )
+            undo(
+                "restore-prior-plugin",
+                ("plugin", "add", PLUGIN_SELECTOR, "--json"),
+                expected_enabled,
+            )
+            if prior_plugin["enabled"] is False:
+                undo(
+                    "restore-prior-plugin-disabled-state",
+                    ("plugin", "disable", PLUGIN_SELECTOR),
+                    _state_with(current_state, plugin=prior_plugin),
+                )
+        try:
+            final = _codex_state(call, config)
+        except Exception as read_error:
+            raise containment(
+                original,
+                rollback_status="rollback_failed",
+                observed={
+                    "error": f"{type(read_error).__name__}: {read_error}",
+                    "status": "unreadable",
+                },
+            ) from original
+        if final != pre_state:
+            raise containment(
+                original,
+                rollback_status="rollback_failed",
+                observed=final,
+            ) from original
+        if failure_stage.startswith("marketplace"):
+            message = f"{original}; its prior root was restored"
+        elif failure_stage.startswith("plugin"):
+            message = f"{original}; its prior marketplace binding was restored"
+        else:
+            message = f"{original}; prior Codex configuration was restored"
+        raise RuntimeError(message) from original
+
+    marketplace_added = pre_state["marketplace_root"] is None
+    marketplace_replaced = (
+        pre_state["marketplace_root"] is not None
+        and pre_state["marketplace_root"] != target_root
+    )
+    plugin_changed = pre_state["plugin"] != target_plugin or marketplace_replaced
+
+    try:
+        if marketplace_added:
+            predicted = _state_with(current_state, marketplace_root=target_root)
+            attempt(
+                "marketplace-add",
+                ("plugin", "marketplace", "add", os.fspath(marketplace), "--json"),
+                predicted,
+                accept=lambda before, after: after == predicted,
+            )
+        elif marketplace_replaced:
+            predicted = _state_with(current_state, marketplace_root=None)
+            attempt(
+                "marketplace-remove-prior",
+                ("plugin", "marketplace", "remove", MARKETPLACE_NAME),
+                predicted,
+                accept=lambda before, after: after == predicted,
+            )
+            predicted = _state_with(current_state, marketplace_root=target_root)
+            attempt(
+                "marketplace-add-target",
+                ("plugin", "marketplace", "add", os.fspath(marketplace), "--json"),
+                predicted,
+                accept=lambda before, after: after == predicted,
+            )
+
+        if plugin_changed:
+            predicted = _state_with(current_state, plugin=target_plugin)
+
+            def plugin_transition(_before: dict[str, Any], after: dict[str, Any]) -> bool:
+                return after == predicted
+
+            attempt(
+                "plugin-add",
+                ("plugin", "add", PLUGIN_SELECTOR, "--json"),
+                predicted,
+                accept=plugin_transition,
+            )
+            if current_state["plugin"] != target_plugin:
+                raise RuntimeError(
+                    "the configured aar-local marketplace did not install an enabled bundled "
+                    "plugin version"
+                )
+
+        if legacy_global_mcp_removed:
+            predicted = _state_with(current_state, global_mcp=None)
+
+            def global_remove_transition(
+                before: dict[str, Any], after: dict[str, Any]
+            ) -> bool:
+                return (
+                    after["marketplace_root"] == before["marketplace_root"]
+                    and after["plugin"] == before["plugin"]
+                    and after["global_mcp"] in (before["global_mcp"], None)
+                )
+
+            attempt(
+                "global-mcp-remove",
+                ("mcp", "remove", "aar"),
+                predicted,
+                accept=global_remove_transition,
+            )
+            if current_state["global_mcp"] is not None:
+                raise RuntimeError("the legacy global AAR MCP server remained after removal")
+
+        failure_stage = "final-sole-authority-readback"
+        final_state = _codex_state(call, config)
+        desired_state = {
+            "global_mcp": None,
+            "marketplace_root": target_root,
+            "plugin": target_plugin,
+        }
+        if final_state != desired_state:
+            raise RuntimeError("final Codex sole-authority readback does not match the target")
+        current_state = final_state
+        owned_states.append(final_state)
+    except Exception as original:
+        rollback(original)
+        raise AssertionError("rollback must raise") from original  # pragma: no cover
+
     return {
         "configuration_changed": (
             marketplace_added
@@ -333,13 +646,13 @@ def configure_codex(
         "codex_config": os.fspath(config),
         "marketplace_added": marketplace_added,
         "marketplace_replaced": marketplace_replaced,
-        "marketplace_path": os.fspath(active_marketplace),
+        "marketplace_path": os.fspath(marketplace),
         "mcp_authority": "plugin",
         "plugin_mcp_args": plugin_mcp_args,
         "plugin_mcp_command": plugin_mcp_command,
-        "plugin_id": installed.get("pluginId", PLUGIN_SELECTOR),
+        "plugin_id": PLUGIN_SELECTOR,
         "plugin_changed": plugin_changed,
-        "plugin_version": installed["version"],
+        "plugin_version": expected_version,
         "preflight_launcher": os.fspath(preflight_launcher),
     }
 
@@ -568,6 +881,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.codex_runtime_home is not None and not args.stop_runtime:
         parser.error("--codex-runtime-home requires --stop-runtime")
 
+    configured: dict[str, Any] | None = None
     try:
         if args.stop_runtime:
             runtime_home = (
@@ -606,7 +920,6 @@ def main(argv: list[str] | None = None) -> int:
                 run_setup_preflight(codex_mcp, declared_args=plugin_mcp_args)
             )
         )
-        configured = None
         codex_runtime = None
         if not args.preflight_only:
             configured = configure_codex(
@@ -643,17 +956,25 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
     except Exception as exc:  # pragma: no cover - exercised through CLI process tests
-        print(
-            json.dumps(
-                {
-                    "schema_version": SETUP_SCHEMA_VERSION,
-                    "status": "failed",
+        if configured is not None:
+            failure = {
+                "schema_version": SETUP_SCHEMA_VERSION,
+                "status": "configuration_committed_runtime_unready",
+                "configuration": configured,
+                "runtime_failure": {
                     "error": str(exc),
+                    "type": type(exc).__name__,
                 },
-                ensure_ascii=False,
-                indent=2,
-                sort_keys=True,
-            ),
+                "retry_safe": True,
+            }
+        else:
+            failure = {
+                "schema_version": SETUP_SCHEMA_VERSION,
+                "status": "failed",
+                "error": str(exc),
+            }
+        print(
+            json.dumps(failure, ensure_ascii=False, indent=2, sort_keys=True),
             file=sys.stderr,
         )
         return 1

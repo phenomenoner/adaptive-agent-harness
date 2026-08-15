@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -11,6 +12,8 @@ from aar.runtime.ipython_backend import (
     WorkspaceWorkerLost,
 )
 from aar.runtime.programming import PlainPythonWorkspaceBackend, WorkspaceBackend
+from aar.runtime.registry import OperationRegistry
+from aar.runtime.worker_manager import WorkerManager
 from aar.runtime.workspace import StaleWorkspaceGeneration
 from aar.runtime.workspace_models import (
     ProgrammableWorkspaceHandle,
@@ -34,6 +37,35 @@ def current(result) -> ProgrammableWorkspaceHandle:
         generation=result.generation,
         revision=result.revision_after,
     )
+
+
+def test_worker_terminate_treats_lookup_race_as_exit_and_reaps() -> None:
+    events: list[str] = []
+
+    class ExitedDuringTerminate:
+        returncode: int | None = None
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def terminate(self) -> None:
+            events.append("terminate-missing")
+            raise ProcessLookupError("worker exited before terminate")
+
+        def kill(self) -> None:
+            events.append("kill")
+
+        def wait(self, timeout: float | None = None) -> int:
+            events.append("wait")
+            self.returncode = 0
+            return self.returncode
+
+    process = ExitedDuringTerminate()
+
+    SupervisedIPythonWorkspaceBackend._terminate(process)  # type: ignore[arg-type]
+
+    assert events == ["terminate-missing", "wait"]
+    assert process.returncode == 0
 
 
 def test_supervised_ipython_executes_real_cells_and_persists_namespace() -> None:
@@ -153,6 +185,56 @@ def test_ipython_checkpoint_restores_only_explicit_portable_values(monkeypatch) 
             backend.inspect(checkpoint_handle)
     finally:
         backend.close(restored, reason="test complete")
+
+
+def test_managed_checkpoint_restore_stages_successor_before_binding_handoff(
+    tmp_path: Path,
+) -> None:
+    registry = OperationRegistry(tmp_path / "managed-restore.sqlite3", lambda: 1_700_000_000_000)
+    runtime_generation = registry.start_runtime()
+    manager = WorkerManager(
+        registry,
+        runtime_generation=runtime_generation,
+        now_ms=lambda: 1_700_000_000_000,
+    )
+    backend = SupervisedIPythonWorkspaceBackend(worker_manager=manager)
+    workspace, session = refs("managed-restore")
+    restored = None
+    try:
+        handle = backend.create(workspace, session)
+        executed = backend.execute(
+            OperationRef(value="operation-managed-restore-execute"),
+            handle,
+            WorkspaceProgramSpec(code="answer = 42\nanswer"),
+        )
+        checkpoint_handle = current(executed)
+        manifest = backend.checkpoint(
+            OperationRef(value="operation-managed-restore-checkpoint"),
+            checkpoint_handle,
+            WorkspaceCheckpointPolicy(),
+            "trace-managed-restore-checkpoint",
+        )
+
+        restored = backend.restore(
+            manifest,
+            WorkspaceRestoreSpec(
+                workspace=workspace,
+                session=session,
+                expected_handle=checkpoint_handle,
+            ),
+        )
+
+        assert restored.generation == 2
+        active = registry.active_worker_bindings()
+        assert len(active) == 1
+        assert active[0].workspace_id == workspace.value
+        assert active[0].workspace_generation == 2
+    finally:
+        if restored is not None:
+            backend.close(restored, reason="test complete")
+        else:
+            backend.shutdown()
+        registry.close()
 
 
 def test_json_subset_checkpoint_restores_across_backend_kinds() -> None:
