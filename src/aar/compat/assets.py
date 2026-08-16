@@ -18,7 +18,7 @@ from aar.versions import PACKAGE_VERSION
 
 PROFILE_CONTRACT_VERSION = "aar.host-profiles.v1"
 PROFILE_VERSION = "0.4.0"
-CODEX_PROFILE_VERSION = "0.4.0+codex.20260815100000"
+CODEX_PROFILE_VERSION = "0.4.0+codex.20260816122000"
 SKILL_FILES = ("SKILL.md", "agents/openai.yaml", "metadata.json")
 OPTIONAL_SKILL_FILES = ("SKILL.md", "agents/openai.yaml")
 CODEX_ROOT = Path("profiles/codex/plugins/adaptive-agent-runtime")
@@ -169,9 +169,11 @@ def host_documents(root: Path) -> dict[Path, bytes]:
     ).encode()
     codex_readme = f"""# Codex host profile
 
-Candidate package: `{PACKAGE_VERSION}`; bundled operation skill: `{OPERATION_SKILL_VERSION}`. The
-source repository's machine-readable authority is `profiles/release-status-v1.json`; official
-Plugin Directory publication is not completed.
+Release package: `{PACKAGE_VERSION}`; bundled operation skill: `{OPERATION_SKILL_VERSION}`. The
+source repository's immutable release snapshot is `profiles/release-status-v1.json`; exact
+post-freeze evidence is bound by
+`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. This profile does not establish official
+Plugin Directory publication, which requires separate external authority.
 Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so
 `aar-codex-mcp` and its declared IPython, NumPy, and pandas dependencies are available, then run
 `aar-codex-setup`. The setup command uses the marketplace bundled in the installed wheel and
@@ -191,8 +193,9 @@ unavailable, do not delete control files or start a second owner.
 
 When setup reports `restart_required: true`, or a preserved manual receipt reports
 `restart_required_after_manual_apply: true`, restart Codex Desktop, start a fresh task, load the
-deferred capability tool when needed, and make one native `aar_capabilities` call. The old task's
-catalog or a same-task transport error cannot prove that the candidate was picked up. Invoke
+deferred capability tool when needed, and make one native `aar_capabilities` call. A later no-op
+inspection with `restart_required: false` does not erase the preserved handoff. The old task's
+catalog or a same-task transport error cannot prove that the release was picked up. Invoke
 `$aar-operations` for public MCP workflows. Use `$aar-ipython-codegraph` only for explicitly
 selected, digest-verified source artifacts and an already available external CodeGraph.
 """.encode()

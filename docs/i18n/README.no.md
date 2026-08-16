@@ -199,7 +199,7 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-Start Codex App på nytt hvis oppsettskvitteringen sier at konfigurasjonen er endret, og kall deretter `aar_capabilities` i en ny oppgave.
+Start Codex Desktop på nytt hvis oppsettskvitteringen viser `restart_required: true`; ta vare på kvitteringen `restart_required_after_manual_apply: true` etter manuell anvendelse; en senere no-op-kvittering med `restart_required: false` opphever ikke kravet om omstart. Kall deretter `aar_capabilities` i en ny oppgave.
 
 ### Utvikle fra kildekode
 

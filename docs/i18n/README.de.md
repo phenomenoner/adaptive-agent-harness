@@ -199,7 +199,7 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-Starte Codex App neu, wenn der Einrichtungsbeleg meldet, dass sich die Konfiguration geändert hat, und rufe anschließend `aar_capabilities` in einer neuen Aufgabe auf.
+Starte Codex Desktop neu, wenn der Einrichtungsbeleg `restart_required: true` meldet; bewahre nach der manuellen Anwendung den Beleg `restart_required_after_manual_apply: true` auf; ein späterer No-op-Beleg mit `restart_required: false` hebt die Neustartpflicht nicht auf. Rufe anschließend `aar_capabilities` in einer neuen Aufgabe auf.
 
 ### Aus dem Quellcode entwickeln
 

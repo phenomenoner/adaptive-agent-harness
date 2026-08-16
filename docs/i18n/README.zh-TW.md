@@ -199,7 +199,7 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-如果 setup receipt 表示設定已變更，請重新啟動 Codex App，然後在新的 task 中呼叫 `aar_capabilities`。
+如果 setup receipt 表示 `restart_required: true`，請重新啟動 Codex Desktop；手動套用後請保留手動套用的 receipt `restart_required_after_manual_apply: true`；後續 no-op receipt 中的 `restart_required: false` 不能清除重新啟動的必要性。然後在新的 task 中呼叫 `aar_capabilities`。
 
 ### 從 source 開發
 

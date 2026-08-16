@@ -290,17 +290,17 @@ The MCP frontend is intentionally replaceable. It does not own the continuity da
 
 ## Project status
 
-The current source is the **`0.4.0a6`** candidate, state `candidate_unreleased`. Its prepared
-immutable reference is `phenomenoner/adaptive-agent-harness@v0.4.0a6`, and the corresponding
-[GitHub release page](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6)
-will resolve only after the pending gates pass and the tag is published. The preceding
-`0.4.0a5` candidate is **blocked, unreleased, and historical**; it is not the current release.
-The single machine-readable status authority is
-[`profiles/release-status-v1.json`](profiles/release-status-v1.json). It records a 63-row repair
-matrix whose local repair status, Windows full suite, supported-Python CI, exact wheel, fresh
-restarted host/Luna drill, and independent review remain `PENDING` until their receipts are bound.
+The current source implements the **`0.4.0a6`** release snapshot. Its stable source reference is
+`phenomenoner/adaptive-agent-harness@v0.4.0a6`, with the corresponding
+[GitHub release page](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6).
+The in-tree machine-readable snapshot is
+[`profiles/release-status-v1.json`](profiles/release-status-v1.json). Exact commit, tree, wheel,
+supported-Python CI, local install, fresh native/RLM, review, tag, and downloaded-asset evidence is
+bound outside the objects it hashes by the release asset
+`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. The preceding `0.4.0a5` candidate is
+**blocked, unreleased, and historical**; it is not the current release.
 
-The candidate preserves the host-owned RLM boundary: the main agent fixes one callable model and
+This release preserves the host-owned RLM boundary: the main agent fixes one callable model and
 optional effort per job, the host performs each actual model call, and AAR stores bounded tickets,
 receipts, and continuation state without provider credentials. The lifecycle repair uses an exact
 native child handle for terminalization, generation-unique endpoint/credential/request paths, and an
@@ -311,10 +311,16 @@ Codex setup route reports
 `NO_ATOMIC_AUTHORITY`, returns an ordered manual plan before any mutation, and does not claim
 automatic installation or rollback.
 
-This candidate has not been deployed or submitted for official Plugin Directory review or
-publication. Provider-signed attestation and OpenAI approval are also not completed. Read
-[Technical status](TECHNICAL-STATUS.md), [Host compatibility](HOST-COMPATIBILITY.md), and the
-[candidate release notes](docs/RELEASE-v0.4.0a6.md) before making release or production claims.
+After `aar-codex-setup`, restart Codex Desktop and verify from a fresh task when the current receipt
+reports `restart_required: true` or a preserved manual-plan receipt reports
+`restart_required_after_manual_apply: true`. A later no-op result with `restart_required: false`
+does not erase that handoff.
+
+This GitHub release snapshot does not establish production deployment, official Plugin Directory
+review/publication, OpenAI approval, or provider-signed attestation; those require separate external
+authority. Read [Technical status](TECHNICAL-STATUS.md),
+[Host compatibility](HOST-COMPATIBILITY.md), and the
+[release notes](docs/RELEASE-v0.4.0a6.md) before making production claims.
 
 ---
 

@@ -1,28 +1,69 @@
 {
   "schema_id": "aar.release-status.v1",
-  "candidate": {
+  "snapshot": {
+    "scope": "immutable_release_snapshot",
     "version": "0.4.0a6",
-    "state": "candidate_unreleased",
+    "tag": "v0.4.0a6",
     "operation_skill_version": "0.9.6",
-    "codex_profile_version": "0.4.0+codex.20260815100000"
+    "codex_profile_version": "0.4.0+codex.20260816122000"
   },
-  "source": {
-    "commit": null,
-    "tree": null,
-    "wheel": null,
-    "binding_mode": "post-freeze-external-receipt"
+  "evidence_binding": {
+    "mode": "post_freeze_external_receipt",
+    "self_hashes_embedded": false,
+    "reason": "Commit, tree, and enclosing wheel hashes would be self-referential inside the objects they hash.",
+    "receipt": {
+      "schema_id": "aar.release-receipt.v1",
+      "asset_name": "adaptive-agent-runtime-v0.4.0a6-release-receipt.json",
+      "required_fields": [
+        "source.commit",
+        "source.tree",
+        "artifacts.wheel.name",
+        "artifacts.wheel.sha256",
+        "artifacts.wheel.length",
+        "artifacts.wheel_sidecar.name",
+        "artifacts.wheel_sidecar.sha256",
+        "ci.head_sha",
+        "ci.run_id",
+        "ci.conclusion",
+        "local_install.receipt_sha256",
+        "native_capability.receipt_sha256",
+        "caller_delegated_rlm.receipt_sha256",
+        "independent_review.primary_sha256",
+        "independent_review.narrow_sha256",
+        "independent_review.verdict",
+        "release.tag",
+        "release.tag_target",
+        "release.asset_readback"
+      ]
+    }
   },
   "verification": {
-    "matrix": {
-      "total": 63,
-      "local_repair_status": "pending"
+    "completed_before_freeze": {
+      "lifecycle_repair_matrix": {
+        "required_rows": 63,
+        "status": "completed"
+      },
+      "windows_behavioral_suite": {
+        "status": "completed"
+      }
     },
-    "windows_full_suite": "PENDING",
-    "supported_python_ci": "PENDING",
-    "exact_wheel": "PENDING",
-    "fresh_restarted_host_luna_drill": "PENDING",
-    "independent_review": "PENDING"
+    "post_freeze": {
+      "authority": "adaptive-agent-runtime-v0.4.0a6-release-receipt.json",
+      "required_fields_source": "evidence_binding.receipt.required_fields"
+    }
   },
+  "public_consumers": [
+    "README.md",
+    "CHANGELOG.md",
+    "TECHNICAL-STATUS.md",
+    "HOST-COMPATIBILITY.md",
+    "docs/RELEASE-v0.4.0a6.md",
+    "profiles/codex/plugins/adaptive-agent-runtime/README.md",
+    "docs/CODEX-INSTALL.md",
+    "docs/PUBLIC-PLUGIN.md",
+    "src/aar/compat/assets.py",
+    "tests/test_public_release_consistency.py"
+  ],
   "behavior": {
     "exact_native_child_terminalization": true,
     "database_runtime_process_lock": true,
@@ -32,9 +73,9 @@
     "automatic_install_or_rollback": false
   },
   "external_limits": {
-    "official_plugin_directory": "not_submitted",
-    "openai_review_approval": "not_completed",
-    "provider_signed_attestation": "not_available"
+    "official_plugin_directory": "not_established_by_this_snapshot",
+    "openai_review_approval": "not_established_by_this_snapshot",
+    "provider_signed_attestation": "not_established_by_this_snapshot"
   },
   "historical": {
     "0.4.0a5": "blocked_unreleased_historical"

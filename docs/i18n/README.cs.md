@@ -199,7 +199,7 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-Pokud potvrzení nastavení hlásí změnu konfigurace, restartujte Codex App a poté v nové úloze zavolejte `aar_capabilities`.
+Restartujte Codex Desktop, pokud potvrzení nastavení uvádí `restart_required: true`; po ručním použití zachovejte potvrzení `restart_required_after_manual_apply: true`; pozdější potvrzení bez změn s hodnotou `restart_required: false` nemůže povinnost restartu zrušit. Poté v nové úloze zavolejte `aar_capabilities`.
 
 ### Vývoj ze zdrojového kódu
 

@@ -199,7 +199,7 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-Perkraukite Codex App, jei sąrankos kvite nurodyta, kad konfigūracija pasikeitė, tada naujoje užduotyje iškvieskite `aar_capabilities`.
+Perkraukite Codex Desktop, jei sąrankos kvite nurodyta `restart_required: true`; po rankinio pritaikymo išsaugokite kvitą `restart_required_after_manual_apply: true`; vėlesnis no-op kvitas su `restart_required: false` nepanaikina būtinybės paleisti iš naujo. Tada naujoje užduotyje iškvieskite `aar_capabilities`.
 
 ### Kūrimas iš šaltinio
 

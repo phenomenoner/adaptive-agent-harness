@@ -1,8 +1,10 @@
 # Codex host profile
 
-Candidate package: `0.4.0a6`; bundled operation skill: `0.9.6`. The
-source repository's machine-readable authority is `profiles/release-status-v1.json`; official
-Plugin Directory publication is not completed.
+Release package: `0.4.0a6`; bundled operation skill: `0.9.6`. The
+source repository's immutable release snapshot is `profiles/release-status-v1.json`; exact
+post-freeze evidence is bound by
+`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. This profile does not establish official
+Plugin Directory publication, which requires separate external authority.
 Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so
 `aar-codex-mcp` and its declared IPython, NumPy, and pandas dependencies are available, then run
 `aar-codex-setup`. The setup command uses the marketplace bundled in the installed wheel and
@@ -22,7 +24,8 @@ unavailable, do not delete control files or start a second owner.
 
 When setup reports `restart_required: true`, or a preserved manual receipt reports
 `restart_required_after_manual_apply: true`, restart Codex Desktop, start a fresh task, load the
-deferred capability tool when needed, and make one native `aar_capabilities` call. The old task's
-catalog or a same-task transport error cannot prove that the candidate was picked up. Invoke
+deferred capability tool when needed, and make one native `aar_capabilities` call. A later no-op
+inspection with `restart_required: false` does not erase the preserved handoff. The old task's
+catalog or a same-task transport error cannot prove that the release was picked up. Invoke
 `$aar-operations` for public MCP workflows. Use `$aar-ipython-codegraph` only for explicitly
 selected, digest-verified source artifacts and an already available external CodeGraph.

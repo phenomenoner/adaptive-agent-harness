@@ -199,7 +199,7 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-setup receipt が設定変更を示した場合は Codex App を再起動し、新しい task で `aar_capabilities` を呼び出してください。
+設定レシートが `restart_required: true` を示した場合は Codex Desktop を再起動してください。手動適用後は `restart_required_after_manual_apply: true` のレシートを保持し、その後の no-op レシートに `restart_required: false` が含まれていても再起動の必要性は取り消されません。続いて新しい task で `aar_capabilities` を呼び出してください。
 
 ### source から開発
 

@@ -1,13 +1,12 @@
-# Adaptive Agent Harness v0.4.0a6 candidate
+# Adaptive Agent Harness v0.4.0a6 release notes
 
-This document describes the **unreleased** `0.4.0a6` source candidate. It is not a tag, GitHub
-release, deployment, Plugin Directory submission, OpenAI approval, or provider-signed attestation.
-The prepared immutable source reference is `phenomenoner/adaptive-agent-harness@v0.4.0a6`; it does
-not exist until the release gate passes and that exact tag is published.
-The machine-readable authority for this page and the other public release surfaces is
-[`profiles/release-status-v1.json`](../profiles/release-status-v1.json).
+This document is the **`0.4.0a6` release snapshot**. Its stable source reference is
+`phenomenoner/adaptive-agent-harness@v0.4.0a6`. The immutable in-tree contract is
+[`profiles/release-status-v1.json`](../profiles/release-status-v1.json); exact source, wheel, CI,
+install, fresh-host/RLM, review, tag, and downloaded-asset evidence is bound separately by
+`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`.
 
-## What changed in this candidate
+## What changed in this release
 
 - Spawned supervisor and IPython children are admitted with one exact native process object and
   terminalized through that object, including same-handle wait and at-most-once terminal receipts.
@@ -29,16 +28,16 @@ The machine-readable authority for this page and the other public release surfac
 
 ## Verification state
 
-The lifecycle repair matrix contains **63** required rows. The candidate status file currently
-records the local repair result, Windows full suite, supported-Python CI, exact-wheel check, fresh
-restarted host/Luna drill, and independent review as `PENDING`; no count or receipt is fabricated
-here. Exact source commit, tree, and wheel fields remain null until a post-freeze external receipt
-binds them.
+The lifecycle repair matrix contains **63** required rows, and its Windows behavioral evidence is
+completed pre-freeze. Exact source commit/tree, supported-Python CI, wheel and sidecar, local
+install, fresh native pickup, caller-delegated Luna/max drill, independent review, tag target, and
+downloaded-asset readback are recorded in the external release receipt rather than inside the Git
+tree or wheel they hash.
 
-The candidate is intended to be evaluated at T1 (the 63-row matrix), T2 (real process, publication,
-provider, stop-wait, and client-attach seams), and T3 (supported hosts, exact wheel, restart/fresh
-task, and the caller-delegated Luna/max drill). Passing a local unit subset alone is not a release
-claim.
+Verification uses T1 for the 63-row matrix, T2 for real process, publication, provider, stop-wait,
+and client-attach seams, and T3 for supported hosts, the exact wheel, restart/fresh task, and the
+caller-delegated Luna/max drill. Passing a local unit subset alone does not establish the external
+receipt claim.
 
 ## Compatibility and publication boundary
 
@@ -47,9 +46,9 @@ credentials, authorize effects, activate assets, or deliver messages. A provider
 host-owned: the caller chooses one model and optional effort per job, and AAR records the resulting
 ticket and receipt.
 
-Official Plugin Directory deployment, reviewer access, OpenAI review/approval/publication, and
-provider-signed attestation are **not completed** for this candidate. GitHub publication and local
-Codex installation are separate later gates and must not be inferred from this document.
+This GitHub release snapshot does not establish official Plugin Directory deployment, reviewer
+access, OpenAI review/approval/publication, or provider-signed attestation. Those require separate
+external authority and must not be inferred from this document.
 
 Historical `v0.4.0a5` material remains explicitly blocked/unreleased and must not be treated as the
-current candidate.
+current release.

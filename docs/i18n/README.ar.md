@@ -199,7 +199,7 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-أعد تشغيل Codex App إذا أفاد إيصال الإعداد بأن الإعدادات تغيّرت، ثم استدعِ `aar_capabilities` في مهمة جديدة.
+أعد تشغيل Codex Desktop إذا أشار إيصال الإعداد إلى `restart_required: true`، واحتفظ بإيصال إعادة التشغيل اليدوي `restart_required_after_manual_apply: true` بعد التطبيق؛ ولا يمكن لإيصال لاحق بلا تغيير يحتوي على `restart_required: false` أن يلغي التزام إعادة التشغيل. ثم استدعِ `aar_capabilities` في مهمة جديدة.
 
 ### التطوير من المصدر
 

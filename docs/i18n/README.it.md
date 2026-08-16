@@ -199,7 +199,7 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-Riavvia Codex App se la ricevuta di configurazione indica che la configurazione è cambiata, poi chiama `aar_capabilities` in una nuova attività.
+Riavvia Codex Desktop se la ricevuta di configurazione indica `restart_required: true`; dopo l’applicazione manuale, conserva la ricevuta `restart_required_after_manual_apply: true`; una ricevuta no-op successiva con `restart_required: false` non annulla l’obbligo di riavvio. Poi chiama `aar_capabilities` in una nuova attività.
 
 ### Sviluppare dal codice sorgente
 

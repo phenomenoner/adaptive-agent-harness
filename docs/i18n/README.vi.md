@@ -199,7 +199,7 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-Khởi động lại Codex App nếu biên nhận thiết lập cho biết cấu hình đã thay đổi, sau đó gọi `aar_capabilities` trong một task mới.
+Khởi động lại Codex Desktop nếu biên nhận thiết lập cho biết `restart_required: true`; sau khi áp dụng thủ công, giữ lại biên nhận `restart_required_after_manual_apply: true`; biên nhận no-op về sau có `restart_required: false` không thể xóa bỏ yêu cầu khởi động lại. Sau đó gọi `aar_capabilities` trong một task mới.
 
 ### Phát triển từ source
 

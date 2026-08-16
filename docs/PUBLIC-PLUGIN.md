@@ -1,10 +1,13 @@
 # Adaptive Agent Runtime public plugin
 
-**Repository status:** the `0.4.0a6` source candidate includes the remote MCP server, public skill source,
-deterministic plugin builder, container recipe, and local verification scenarios. It does not claim
-a production endpoint, reviewer account, OpenAI review approval, or Plugin Directory publication.
-The candidate is unreleased; see [`profiles/release-status-v1.json`](../profiles/release-status-v1.json)
-for the central status authority and pending verification receipts.
+**Repository status:** the `0.4.0a6` release snapshot includes the remote MCP server, public skill
+source, deterministic plugin builder, container recipe, and local verification scenarios. Its
+immutable in-tree contract is
+[`profiles/release-status-v1.json`](../profiles/release-status-v1.json); exact source, artifact, CI,
+install, host, review, tag, and asset-readback evidence is bound by
+`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. This GitHub release snapshot does not establish
+a production endpoint, reviewer account, OpenAI approval, or official Plugin Directory publication;
+those require separate external authority.
 
 Adaptive Agent Runtime is AAR's curated public-directory product for ChatGPT and Codex. It combines
 tenant-private structured workspaces with bounded caller-delegated RLM coordination. The host that

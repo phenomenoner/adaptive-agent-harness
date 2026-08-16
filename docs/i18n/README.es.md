@@ -199,7 +199,7 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-Reinicia Codex App si el recibo de configuración indica que la configuración cambió y, a continuación, llama a `aar_capabilities` en una tarea nueva.
+Reinicia Codex Desktop si el recibo de configuración indica `restart_required: true`; conserva, tras la aplicación manual, el recibo `restart_required_after_manual_apply: true`; un recibo posterior sin cambios con `restart_required: false` no puede borrar la obligación de reiniciar. Después, llama a `aar_capabilities` en una tarea nueva.
 
 ### Desarrollar desde el código fuente
 

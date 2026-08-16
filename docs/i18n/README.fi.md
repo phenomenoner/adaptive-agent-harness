@@ -199,7 +199,7 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-Käynnistä Codex App uudelleen, jos asetusten kuitti ilmoittaa määritysten muuttuneen, ja kutsu sen jälkeen `aar_capabilities` uudessa tehtävässä.
+Käynnistä Codex Desktop uudelleen, jos asetusten kuitti ilmoittaa `restart_required: true`; säilytä manuaalisen soveltamisen jälkeen kuitti `restart_required_after_manual_apply: true`; myöhempi no-op-kuitti, jossa on `restart_required: false`, ei poista uudelleenkäynnistysvelvoitetta. Kutsu sen jälkeen `aar_capabilities` uudessa tehtävässä.
 
 ### Kehitys lähdekoodista
 

@@ -1,22 +1,24 @@
 # Host Compatibility
 
-This page describes the **unreleased `v0.4.0a6` candidate**. Its machine-readable authority is
-[`profiles/release-status-v1.json`](profiles/release-status-v1.json). The preceding `v0.4.0a5`
-candidate is **blocked, unreleased, and historical**.
+This page is the host-facing part of the **`v0.4.0a6` release snapshot**. Its immutable in-tree
+contract is [`profiles/release-status-v1.json`](profiles/release-status-v1.json); exact post-freeze
+evidence is bound by `adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. The preceding
+`v0.4.0a5` candidate is **blocked, unreleased, and historical**.
 
 ## Compatibility matrix
 
-| Host | Candidate surface | Evidence status | Boundary |
+| Host | Release surface | Evidence authority | Boundary |
 |---|---|---|---|
-| Python 3.11–3.14 | package and local APIs | supported-Python CI `PENDING` | package metadata is not host proof |
-| Generic MCP | local stdio, `aar.mcp-tools.v7`, 30 tools | local matrix `PENDING` | catalog visibility is not callable-runtime proof |
-| Codex Desktop | generated plugin, `aar-codex-mcp`, `aar-codex-setup`, `aar-operations` 0.9.6 | fresh restarted host/Luna drill `PENDING` | Codex owns approvals, credentials, and tool policy |
-| Hermes | generated profile and `aar-mcp` | host receipt `PENDING` | Hermes owns MCP Sampling and physical provider calls |
-| ChatGPT/Codex public plugin | remote OAuth profile, 11 curated tools | deployment and review `PENDING` | not official Plugin Directory publication |
+| Python 3.11–3.14 | package and local APIs | exact-ref CI field in external receipt | package metadata is not host proof |
+| Generic MCP | local stdio, `aar.mcp-tools.v7`, 30 tools | completed local matrix plus exact host receipt | catalog visibility is not callable-runtime proof |
+| Codex Desktop | generated plugin, `aar-codex-mcp`, `aar-codex-setup`, `aar-operations` 0.9.6 | fresh native and caller-delegated RLM fields in external receipt | Codex owns approvals, credentials, and tool policy |
+| Hermes | generated profile and `aar-mcp` | generated-byte verification only in this snapshot | Hermes owns MCP Sampling and physical provider calls |
+| ChatGPT/Codex public plugin | remote OAuth profile, 11 curated tools | submission material only | not official Plugin Directory publication |
 
-The repair candidate contains **63** required lifecycle rows. Windows full-suite, supported-Python
-CI, exact-wheel, fresh restarted host/Luna drill, and independent review are all `PENDING` in the
-central status file; this page does not fabricate counts from the blocked historical candidate.
+The release contains **63** required lifecycle rows and completed Windows behavioral evidence.
+Commit, tree, exact wheel, supported-Python CI, local install, fresh restarted native/RLM drill,
+review, tag, and downloaded-asset readback remain separate hash-bound fields in
+`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`.
 
 ## Local Codex setup contract
 
@@ -38,20 +40,23 @@ generation-specific control artifacts as forensic state. The existing database-s
 admits the sole active runtime owner before host construction and is released automatically on process exit. Do
 not delete a successor based on a pathname, visible
 bytes, or a stale owner classification. An explicit offline garbage collector is outside this
-candidate.
+release.
 
 ## Installation and fresh-task verification
 
-Install the exact wheel or pinned candidate source, then run:
+Install the exact wheel or pinned release source, then run:
 
 ```powershell
 aar-codex-setup
 ```
 
-If the receipt reports `restart_required: true`, restart Codex Desktop, open a new task, load the
-deferred capability tool if needed, and make one native `aar_capabilities` call. Require an attached
-supervisor, the expected package/profile/skill versions, the current runtime generation, and the
-candidate capability digest. A same-task catalog does not prove that the new plugin was picked up.
+Restart Codex Desktop, open a new task, load the deferred capability tool if needed, and make one
+native `aar_capabilities` call when the current receipt reports `restart_required: true` **or** a
+preserved non-empty manual-plan receipt reports
+`restart_required_after_manual_apply: true`. A later already-configured result with
+`restart_required: false` does not erase the preserved restart handoff. Require an attached
+supervisor, the expected package/profile/skill versions, current runtime generation, and release
+capability digest. A same-task catalog does not prove that the new plugin was picked up.
 
 For a developer-only local check, the generated host assets can be verified from the repository root:
 
@@ -72,7 +77,7 @@ The fixed Hermes MCP Sampling route is compatibility-only and does not become pu
 
 ## External publication boundary
 
-Official Plugin Directory deployment, reviewer access, OpenAI review/approval/publication, and
-provider-signed attestation are **not completed**. GitHub release and local Codex installation are
-separate later gates. No compatibility row on this page should be read as production deployment or
+This GitHub release snapshot does not establish official Plugin Directory deployment, reviewer
+access, OpenAI review/approval/publication, or provider-signed attestation. Those require separate
+external authority. No compatibility row on this page should be read as production deployment or
 directory availability.

@@ -2,18 +2,20 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
-## [0.4.0a6](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6) — candidate, unreleased
+## [0.4.0a6](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6)
 
-The current source candidate is governed by [`profiles/release-status-v1.json`](profiles/release-status-v1.json).
-The 63-row lifecycle repair, Windows full suite, supported-Python CI, exact wheel, fresh restarted
-host/Luna drill, and independent review are pending receipts. The candidate uses exact native child
+The `0.4.0a6` release snapshot is governed by
+[`profiles/release-status-v1.json`](profiles/release-status-v1.json). Exact source, wheel,
+supported-Python CI, local-install, fresh-host/RLM, independent-review, tag, and asset-readback
+evidence is bound by the external release asset
+`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. This release uses exact native child
 terminalization, the existing database-scoped process lock for single-runtime ownership,
 generation-unique endpoint/credential/request paths with an atomically advanced stable discovery
 pointer and **non-destructive** retention, and a subprocess Codex
 setup route with `NO_ATOMIC_AUTHORITY` that returns an ordered manual plan before any mutation. A
 non-empty manual-plan receipt explicitly preserves the required post-apply Codex restart handoff.
-Official Plugin Directory deployment/review/approval/publication and provider-signed attestation are
-not completed.
+A GitHub release does not establish official Plugin Directory deployment/review/publication,
+OpenAI approval, or provider-signed attestation; those require separate external authority.
 
 ## [0.4.0a5] — blocked, unreleased, historical
 

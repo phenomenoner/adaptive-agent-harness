@@ -1,10 +1,12 @@
 # Install AAR for Codex App
 
-This page describes the **unreleased `0.4.0a6` candidate**. The machine-readable status authority
-is [`profiles/release-status-v1.json`](../profiles/release-status-v1.json); the preceding `0.4.0a5`
-candidate is blocked, unreleased, and historical.
+This page is the Codex installation entrypoint for the **`0.4.0a6` release snapshot**. The immutable
+in-tree contract is [`profiles/release-status-v1.json`](../profiles/release-status-v1.json), while
+exact source, wheel, CI, install, host, review, tag, and asset-readback evidence is bound by
+`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. The preceding `0.4.0a5` candidate is blocked,
+unreleased, and historical.
 
-The normal installation path starts with the exact candidate package and then lets the host inspect
+The normal installation path starts with the exact release package and then lets the host inspect
 the setup plan:
 
 ```powershell
@@ -53,7 +55,7 @@ deliberately **non-destructive**. Retained generation-specific control artifacts
 never delete a successor by pathname or visible bytes. The existing database-scoped
 process lock, rather than a durable lease or reservation record, admits the sole active runtime and is
 released automatically on process exit. Any future offline garbage collector is outside this
-release candidate.
+release.
 
 ## Fresh-task verification
 
@@ -87,8 +89,9 @@ wheel has passed its preflight. It does not grant provider mutation authority.
 
 Release maintainers additionally run Ruff, focused regressions, the full repository suite, Python
 3.11–3.14 compatibility, exact-wheel readback, fresh Codex scenarios, and the caller-delegated
-Luna/max drill. The current 63-row matrix and these release receipts remain pending in the status
-authority; local installation is not official Plugin Directory deployment or publication.
+Luna/max drill. The 63-row repair matrix is pre-freeze evidence; post-freeze results belong in
+`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. Local installation does not establish
+official Plugin Directory deployment or publication.
 
 The setup command does not grant provider credentials, external effects, activation, publication,
 or final delivery. AAR computes and proposes; the host authorizes and delivers.

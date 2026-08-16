@@ -199,7 +199,7 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-รีสตาร์ต Codex App หากใบเสร็จ (receipt) การตั้งค่าระบุว่าการกำหนดค่ามีการเปลี่ยนแปลง จากนั้นเรียก `aar_capabilities` ในงานใหม่
+รีสตาร์ต Codex Desktop หากใบเสร็จการตั้งค่าระบุ `restart_required: true`; หลังใช้แผนด้วยตนเอง ให้เก็บใบเสร็จ `restart_required_after_manual_apply: true` ไว้; ใบเสร็จ no-op ที่ตามมาซึ่งมี `restart_required: false` ไม่สามารถลบล้างภาระการรีสตาร์ตได้ จากนั้นเรียก `aar_capabilities` ในงานใหม่
 
 ### พัฒนาจากซอร์ส
 
