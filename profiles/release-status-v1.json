@@ -59,6 +59,7 @@
     "HOST-COMPATIBILITY.md",
     "docs/RELEASE-v0.4.0a6.md",
     "profiles/codex/plugins/adaptive-agent-runtime/README.md",
+    "profiles/hermes/adaptive-agent-runtime/README.md",
     "docs/CODEX-INSTALL.md",
     "docs/PUBLIC-PLUGIN.md",
     "src/aar/compat/assets.py",

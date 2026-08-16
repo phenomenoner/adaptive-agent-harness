@@ -1,6 +1,10 @@
 # Hermes host profile
 
-Candidate package: `0.4.0a6`; bundled operation skill: `0.9.6`.
+Release package: `0.4.0a6`; bundled operation skill: `0.9.6`. The
+source repository's immutable release snapshot is `profiles/release-status-v1.json`; exact
+post-freeze evidence is bound by
+`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. This profile does not establish official
+Plugin Directory publication, which requires separate external authority.
 Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so `aar-mcp`
 and its declared IPython, NumPy, and pandas dependencies are on the Hermes host PATH, then install
 this directory with `hermes profile install <directory> --name <profile>`. The runtime reads

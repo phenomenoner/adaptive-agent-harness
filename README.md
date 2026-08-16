@@ -8,7 +8,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Candidate](https://img.shields.io/badge/candidate-v0.4.0a6-orange)](docs/RELEASE-v0.4.0a6.md)
+[![Release](https://img.shields.io/badge/release-v0.4.0a6-blue)](docs/RELEASE-v0.4.0a6.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#project-status)
 
@@ -209,11 +209,11 @@ See [Why RLM + IPython](docs/WHY-RLM-AND-IPYTHON.md) for the deeper design ratio
 
 ## Quick start
 
-> **Candidate:** `0.4.0a6` is unreleased. When its tag is published, use a pinned source, inspect
-> the capabilities returned by your host, and start with disposable workspaces. This project
-> executes model-authored Python and is **not a security sandbox**.
+> **Release snapshot:** `0.4.0a6` is pinned by `v0.4.0a6`. Use that pinned source, inspect the
+> capabilities returned by your host, and start with disposable workspaces. This project executes
+> model-authored Python and is **not a security sandbox**.
 
-### Install the candidate tag after publication
+### Install the pinned release
 
 ```bash
 uv tool install --force \
@@ -226,9 +226,11 @@ uv tool install --force \
 aar-codex-setup
 ```
 
-Restart Codex App if the setup receipt says configuration changed. In a fresh task, load the exact
-deferred capability tool if necessary and then call `aar_capabilities`; search or catalog visibility
-alone is not runtime proof.
+Restart Codex App when the setup receipt reports `restart_required: true`. If setup instead returns
+a manual plan, apply it through the owning Codex interface and preserve the receipt with
+`restart_required_after_manual_apply: true`; a later no-op receipt with `restart_required: false`
+does not clear that restart obligation. In a fresh task, load the exact deferred capability tool if
+necessary and then call `aar_capabilities`; search or catalog visibility alone is not runtime proof.
 
 ### Develop from source
 

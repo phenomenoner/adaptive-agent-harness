@@ -14,6 +14,7 @@ MATRIX_ROWS = 63
 EXPECTED_CODEX_PROFILE_VERSION = "0.4.0+codex.20260816122000"
 STATUS_PATH = ROOT / "profiles" / "release-status-v1.json"
 RELEASE_RECEIPT_ASSET = "adaptive-agent-runtime-v0.4.0a6-release-receipt.json"
+HERMES_PROFILE_README = "profiles/hermes/adaptive-agent-runtime/README.md"
 
 PUBLIC_STATUS_CONSUMERS = (
     "README.md",
@@ -22,13 +23,24 @@ PUBLIC_STATUS_CONSUMERS = (
     "HOST-COMPATIBILITY.md",
     "docs/RELEASE-v0.4.0a6.md",
     "profiles/codex/plugins/adaptive-agent-runtime/README.md",
+    HERMES_PROFILE_README,
     "docs/CODEX-INSTALL.md",
     "docs/PUBLIC-PLUGIN.md",
     "src/aar/compat/assets.py",
     "tests/test_public_release_consistency.py",
 )
 
-CURRENT_PUBLIC_SURFACES = PUBLIC_STATUS_CONSUMERS[:8]
+CURRENT_PUBLIC_SURFACES = (
+    "README.md",
+    "CHANGELOG.md",
+    "TECHNICAL-STATUS.md",
+    "HOST-COMPATIBILITY.md",
+    "docs/RELEASE-v0.4.0a6.md",
+    "profiles/codex/plugins/adaptive-agent-runtime/README.md",
+    HERMES_PROFILE_README,
+    "docs/CODEX-INSTALL.md",
+    "docs/PUBLIC-PLUGIN.md",
+)
 
 CURRENT_INSTALL_GUIDES = (
     "README.md",
@@ -107,6 +119,24 @@ def _assert_restart_handoff(text: str, *, surface: str) -> None:
     )
 
 
+def _markdown_section(text: str, heading: str) -> str:
+    lines = text.splitlines()
+    try:
+        start = lines.index(heading)
+    except ValueError:
+        pytest.fail(f"missing Markdown section: {heading}")
+    level = len(heading) - len(heading.lstrip("#"))
+    body: list[str] = []
+    for line in lines[start + 1 :]:
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            next_level = len(stripped) - len(stripped.lstrip("#"))
+            if next_level <= level:
+                break
+        body.append(line)
+    return "\n".join(body)
+
+
 def test_release_status_is_timeless_snapshot_contract() -> None:
     status = _status()
     assert status["schema_id"] == "aar.release-status.v1"
@@ -162,9 +192,13 @@ def test_current_public_surfaces_use_timeless_release_snapshot_wording(path: str
     for stale in (
         "candidate_unreleased",
         "candidate, unreleased",
+        "candidate-v0.4.0a6",
         "current source candidate",
+        "`0.4.0a6` is unreleased",
         "unreleased `0.4.0a6`",
         "unreleased `v0.4.0a6`",
+        "when its tag is published",
+        "install the candidate tag after publication",
         "pending receipts",
         "remain `pending`",
         "are all `pending`",
@@ -189,6 +223,11 @@ def test_current_install_guidance_preserves_both_restart_receipt_paths(path: str
     _assert_restart_handoff(_surface(path), surface=path)
 
 
+def test_readme_codex_quick_start_preserves_manual_restart_handoff_locally() -> None:
+    section = _markdown_section(_surface("README.md"), "### Codex App setup")
+    _assert_restart_handoff(section, surface="README.md Codex App setup")
+
+
 @pytest.mark.parametrize("path", OPERATION_SKILL_COPIES)
 def test_bundled_operation_skills_preserve_manual_restart_handoff(path: str) -> None:
     _assert_restart_handoff(_surface(path), surface=path)
@@ -207,6 +246,17 @@ def test_generated_codex_profile_matches_source() -> None:
         Path("profiles/codex/plugins/adaptive-agent-runtime/.codex-plugin/plugin.json"),
     ):
         assert (ROOT / relative).read_bytes() == generated[relative]
+
+
+def test_generated_hermes_release_readme_matches_source() -> None:
+    relative = Path(HERMES_PROFILE_README)
+    generated = host_documents(ROOT)
+    assert (ROOT / relative).read_bytes() == generated[relative]
+    text = generated[relative].decode()
+    assert "Release package" in text
+    assert "release snapshot" in text.casefold()
+    assert "profiles/release-status-v1.json" in text
+    assert RELEASE_RECEIPT_ASSET in text
 
 
 def test_release_status_preserves_behavior_and_external_boundaries() -> None:
