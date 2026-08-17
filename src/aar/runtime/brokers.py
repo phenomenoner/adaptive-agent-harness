@@ -54,6 +54,7 @@ from aar.runtime.model_broker import (
     ModelReceiptLookupUnavailable,
     ModelRouteDrift,
 )
+from aar.runtime.sqlite_repository import SQLiteConnectionFactory
 from aar.schemas import (
     ArtifactIdRef,
     ArtifactReference,
@@ -737,21 +738,18 @@ class BrokerJournal:
 class FakeArtifactBroker:
     def __init__(self, database_path: Path | None = None) -> None:
         self._content: dict[str, bytes] = {}
-        self._connection: sqlite3.Connection | None = None
+        self._factory: SQLiteConnectionFactory | None = None
         if database_path is not None:
-            self._connection = sqlite3.connect(
-                database_path.resolve(), isolation_level="IMMEDIATE"
-            )
-            self._connection.execute("PRAGMA journal_mode=WAL")
-            self._connection.execute("PRAGMA synchronous=FULL")
-            self._connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS broker_artifacts (
-                    digest TEXT PRIMARY KEY,
-                    content BLOB NOT NULL
+            self._factory = SQLiteConnectionFactory(database_path)
+            with self._factory.transaction(write=True) as connection:
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS broker_artifacts (
+                        digest TEXT PRIMARY KEY,
+                        content BLOB NOT NULL
+                    )
+                    """
                 )
-                """
-            )
 
     def put(
         self,
@@ -763,11 +761,11 @@ class FakeArtifactBroker:
     ) -> ArtifactReference:
         digest = f"sha256:{hashlib.sha256(content).hexdigest()}"
         artifact = ArtifactIdRef(value=f"artifact-{digest.removeprefix('sha256:')[:32]}")
-        if self._connection is None:
+        if self._factory is None:
             self._content[digest] = bytes(content)
         else:
-            with self._connection:
-                self._connection.execute(
+            with self._factory.transaction(write=True) as connection:
+                connection.execute(
                     "INSERT OR IGNORE INTO broker_artifacts(digest, content) VALUES (?, ?)",
                     (digest, bytes(content)),
                 )
@@ -805,12 +803,14 @@ class FakeArtifactBroker:
         return artifact
 
     def read(self, reference: ArtifactReference) -> bytes:
-        if self._connection is None:
+        if self._factory is None:
             content = self._content[reference.digest]
         else:
-            row = self._connection.execute(
-                "SELECT content FROM broker_artifacts WHERE digest = ?", (reference.digest,)
-            ).fetchone()
+            with self._factory.transaction(write=False) as connection:
+                row = connection.execute(
+                    "SELECT content FROM broker_artifacts WHERE digest = ?",
+                    (reference.digest,),
+                ).fetchone()
             if row is None:
                 raise KeyError(reference.digest)
             content = bytes(row[0])
@@ -821,8 +821,8 @@ class FakeArtifactBroker:
         return content
 
     def close(self) -> None:
-        if self._connection is not None:
-            self._connection.close()
+        if self._factory is not None:
+            self._factory.close()
 
 
 class FakeModelBroker:
@@ -844,21 +844,18 @@ class FakeModelBroker:
 class FakeSubagentBroker:
     def __init__(self, database_path: Path | None = None) -> None:
         self._results: dict[str, BrokerReceipt] = {}
-        self._connection: sqlite3.Connection | None = None
+        self._factory: SQLiteConnectionFactory | None = None
         if database_path is not None:
-            self._connection = sqlite3.connect(
-                database_path.resolve(), isolation_level="IMMEDIATE"
-            )
-            self._connection.execute("PRAGMA journal_mode=WAL")
-            self._connection.execute("PRAGMA synchronous=FULL")
-            self._connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS broker_children (
-                    handle TEXT PRIMARY KEY,
-                    receipt_json TEXT NOT NULL
+            self._factory = SQLiteConnectionFactory(database_path)
+            with self._factory.transaction(write=True) as connection:
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS broker_children (
+                        handle TEXT PRIMARY KEY,
+                        receipt_json TEXT NOT NULL
+                    )
+                    """
                 )
-                """
-            )
 
     def submit(self, task: str, context: BrokerContext) -> str:
         digest = canonical_sha256(
@@ -871,11 +868,11 @@ class FakeSubagentBroker:
             digest=digest,
             value=f"completed:{task}",
         )
-        if self._connection is None:
+        if self._factory is None:
             self._results[handle] = receipt
         else:
-            with self._connection:
-                self._connection.execute(
+            with self._factory.transaction(write=True) as connection:
+                connection.execute(
                     """
                     INSERT OR IGNORE INTO broker_children(handle, receipt_json)
                     VALUES (?, ?)
@@ -889,27 +886,30 @@ class FakeSubagentBroker:
             {"task": task, "parent": context.parent_operation.value, "grant": context.grant_id}
         )
         handle = f"child-{digest.removeprefix('sha256:')[:24]}"
-        if self._connection is None:
+        if self._factory is None:
             return handle if handle in self._results else None
-        row = self._connection.execute(
-            "SELECT 1 FROM broker_children WHERE handle = ?",
-            (handle,),
-        ).fetchone()
+        with self._factory.transaction(write=False) as connection:
+            row = connection.execute(
+                "SELECT 1 FROM broker_children WHERE handle = ?",
+                (handle,),
+            ).fetchone()
         return handle if row is not None else None
 
     def result(self, handle: str) -> BrokerReceipt:
-        if self._connection is None:
+        if self._factory is None:
             return self._results[handle]
-        row = self._connection.execute(
-            "SELECT receipt_json FROM broker_children WHERE handle = ?", (handle,)
-        ).fetchone()
+        with self._factory.transaction(write=False) as connection:
+            row = connection.execute(
+                "SELECT receipt_json FROM broker_children WHERE handle = ?",
+                (handle,),
+            ).fetchone()
         if row is None:
             raise KeyError(handle)
         return BrokerReceipt.model_validate_json(str(row[0]), strict=True)
 
     def close(self) -> None:
-        if self._connection is not None:
-            self._connection.close()
+        if self._factory is not None:
+            self._factory.close()
 
 
 class FakeEffectBroker:
