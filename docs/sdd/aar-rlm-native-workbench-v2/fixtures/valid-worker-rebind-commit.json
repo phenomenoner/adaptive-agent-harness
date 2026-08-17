@@ -1,0 +1,60 @@
+{
+  "attempt_fence": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+  "attempt_id": "fixture-attempt",
+  "broker_call_ordinal": null,
+  "cell_execution_id": "fixture-cell",
+  "committed": true,
+  "deadline_unix_ms": 2000000000000,
+  "direction": "supervisor_to_worker",
+  "frame_sequence": 13,
+  "kind": "rebind_commit",
+  "operation": {
+    "type": "operation",
+    "value": "fixture-operation"
+  },
+  "payload": {
+    "phase": "commit",
+    "token": {
+      "cell_execution_id": "fixture-cell",
+      "expected_cancellation_revision": 0,
+      "expected_control_revision": 3,
+      "expected_cumulative_deadline_unix_ms": 2000000000000,
+      "expires_at_unix_ms": 2000000000000,
+      "operation": {
+        "type": "operation",
+        "value": "fixture-operation"
+      },
+      "prior_attempt_fence": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "prior_attempt_id": "fixture-prior-attempt",
+      "prior_authority_generation": 1,
+      "rebind_generation": 1,
+      "schema_version": "aar.workspace-successor-rebind.v1",
+      "settled_receipt_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "single_use": true,
+      "successor_attempt_fence": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "successor_attempt_id": "fixture-successor-attempt",
+      "successor_authority_generation": 2,
+      "successor_outbox_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "suspension_revision": 1,
+      "ticket_id": "fixture-ticket",
+      "token_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "worker_owner_generation": 1,
+      "worker_process_identity_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "workspace": {
+        "type": "workspace",
+        "value": "fixture-workspace"
+      },
+      "workspace_generation": 1,
+      "workspace_revision": 0
+    }
+  },
+  "payload_bytes": 1311,
+  "payload_digest": "sha256:d331f94432225716983b86cd45c3508c1e76abcae72b8b59559479a67a492e60",
+  "schema_version": "aar.workspace-broker-frame.v1",
+  "workspace": {
+    "type": "workspace",
+    "value": "fixture-workspace"
+  },
+  "workspace_generation": 1,
+  "workspace_revision": 0
+}

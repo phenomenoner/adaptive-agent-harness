@@ -1,0 +1,521 @@
+{
+  "schema_version": "aar.sdd.defect-register.v1",
+  "sdd": "AR-RW — RLM-Native IPython Workbench",
+  "baseline": {
+    "package": "adaptive-agent-runtime",
+    "version": "0.4.0a6",
+    "source_commit": "a585ac52bef6f95f9dcfb40dc69f83d6d92b3b90"
+  },
+  "scope_statement": "Bounded audit of the documented full developer MCP, public caller-delegated RLM, durable runtime, DB-backed brokers, programmable IPython worker, host profiles and operation skills. This register is implementation input, not a claim that no other defect exists.",
+  "classifications": [
+    "observed_defect",
+    "source_supported_risk",
+    "product_gap",
+    "declared_boundary"
+  ],
+  "defects": [
+    {
+      "id": "AAR-PD-001",
+      "title": "DB-backed artifact broker violates SQLite thread ownership",
+      "classification": "observed_defect",
+      "severity": "critical",
+      "core_journey_required": true,
+      "native_trigger": "Create a programmable IPython workspace through the installed MCP and call aar_artifact() in a cell.",
+      "observed_result": "WORKSPACE_EXECUTION_FAILED with sqlite3.ProgrammingError stating that the connection was created in a different thread.",
+      "evidence": [
+        {
+          "tier": "T3",
+          "kind": "native_mcp",
+          "id": "eval-native-ipython-20260817-a",
+          "summary": "Persistent cell execution passed; cell artifact publication failed certain at the DB-backed sink."
+        },
+        {
+          "tier": "T1",
+          "kind": "exact_class_probe",
+          "summary": "Same-thread FakeArtifactBroker.put passed; a ThreadPoolExecutor call on the same DB-backed instance reproduced the same SQLite signature."
+        },
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/brokers.py",
+          "lines": "782-816",
+          "summary": "DB connection is created with default thread affinity and no serialization lock."
+        }
+      ],
+      "violated_invariant": "A documented native artifact operation must work through the attached supervisor regardless of the frontend/dispatcher thread that invokes it.",
+      "repair_boundary": "Introduce a thread-safe DB-backed artifact repository with explicit close ownership; do not apply check_same_thread=False without serialized access and race tests.",
+      "acceptance_ids": ["AC-B01", "AC-B03", "AC-A01", "AC-T3-01"]
+    },
+    {
+      "id": "AAR-PD-002",
+      "title": "DB-backed subagent broker has the same cross-thread defect family",
+      "classification": "observed_defect",
+      "severity": "high",
+      "core_journey_required": true,
+      "native_trigger": "Invoke DB-backed FakeSubagentBroker.submit from a dispatcher/worker thread, as an integrated RLM would do.",
+      "observed_result": "Same-thread submit passed; cross-thread submit raised the same sqlite3.ProgrammingError.",
+      "evidence": [
+        {
+          "tier": "T1",
+          "kind": "exact_class_probe",
+          "summary": "Cross-thread submit reproduced on exact v0.4.0a6."
+        },
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/brokers.py",
+          "lines": "866-922",
+          "summary": "Subagent broker repeats the DB connection and no-lock pattern."
+        }
+      ],
+      "violated_invariant": "Recursive subagent work must remain usable from the runtime thread that owns the RLM attempt.",
+      "repair_boundary": "Use a real injected subagent adapter for product work and a thread-safe SQLite reference repository for conformance/history.",
+      "acceptance_ids": ["AC-B02", "AC-B03", "AC-S01", "AC-T3-01"]
+    },
+    {
+      "id": "AAR-PD-003",
+      "title": "aar_artifact logical filename is discarded",
+      "classification": "observed_defect",
+      "severity": "high",
+      "core_journey_required": true,
+      "native_trigger": "Call aar_artifact('result.txt', ...) and inspect the returned workspace event and resolvable reference.",
+      "observed_result": "The worker emits name, but the backend passes only content/media_type/operation to ArtifactBroker and the product event contains no name.",
+      "evidence": [
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/ipython_worker.py",
+          "lines": "159-188",
+          "summary": "Worker captures the requested name."
+        },
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/ipython_backend.py",
+          "lines": "709-730",
+          "summary": "Backend ignores item['name'] when storing and emitting the reference."
+        },
+        {
+          "tier": "T2",
+          "kind": "real_ipython_subprocess",
+          "summary": "A failed-cell artifact was readable by digest but no logical filename was recoverable."
+        }
+      ],
+      "violated_invariant": "A user-declared artifact identity must survive as a normalized result binding without becoming a host path.",
+      "repair_boundary": "Keep ArtifactReference content-addressed; add versioned ArtifactBinding with logical_name, role and producer provenance.",
+      "acceptance_ids": ["AC-A01", "AC-A06", "AC-J05"]
+    },
+    {
+      "id": "AAR-PD-004",
+      "title": "Artifact publication precedes cell terminal settlement",
+      "classification": "observed_defect",
+      "severity": "high",
+      "core_journey_required": true,
+      "native_trigger": "Stage an artifact and then raise an exception in the same IPython cell.",
+      "observed_result": "The cell returns failed, but the artifact event/reference is already durable and readable.",
+      "evidence": [
+        {
+          "tier": "T2",
+          "kind": "real_ipython_subprocess",
+          "summary": "status=failed, event kinds included artifact then exception, artifact_readback='PARTIAL'."
+        },
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/ipython_backend.py",
+          "lines": "702-775",
+          "summary": "Artifact sink writes occur while events are decoded, before final status/result construction."
+        }
+      ],
+      "violated_invariant": "Deliverable publication must be bound to a certain cell commit; failed/suspended/cancelled work cannot silently publish final artifacts.",
+      "repair_boundary": "Add staged artifact state, a CellCommitManifest, idempotent promotion/reconciliation, and an explicit separate diagnostic-artifact policy.",
+      "acceptance_ids": ["AC-A02", "AC-A03", "AC-A04", "AC-L03"]
+    },
+    {
+      "id": "AAR-PD-005",
+      "title": "Portable RLM has no workspace binding or Python action",
+      "classification": "product_gap",
+      "severity": "critical",
+      "core_journey_required": true,
+      "native_trigger": "Start aar_rlm_execute and expect the RLM to own/use the verified IPython workbench.",
+      "observed_result": "RlmJobSpec has no workspace reference and RlmAction supports only evidence.query/model.request.",
+      "evidence": [
+        {
+          "tier": "source",
+          "path": "src/aar/rlm_models.py",
+          "lines": "21-78",
+          "summary": "v1 job/action/result contract has no workbench semantics."
+        },
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/rlm.py",
+          "lines": "272-391",
+          "summary": "Strategies emit fixed one/two-step actions and _execute_action handles only evidence/model."
+        },
+        {
+          "tier": "design",
+          "path": "ARCHITECTURE.md and early portable SPEC",
+          "summary": "Original contract anticipated workspace reference and model-written Python with typed brokers."
+        }
+      ],
+      "violated_invariant": "The completed product journey is one RLM-native workbench operation, not two manually coordinated products.",
+      "repair_boundary": "Add aar_rlm_workbench_execute and v2 workbench models/coordinator while keeping v1 byte-compatible.",
+      "acceptance_ids": ["AC-C02", "AC-J01", "AC-J02", "AC-J05"]
+    },
+    {
+      "id": "AAR-PD-006",
+      "title": "Typed broker facade exists but is unreachable from model-written Python",
+      "classification": "product_gap",
+      "severity": "critical",
+      "core_journey_required": true,
+      "native_trigger": "Run model-written Python and attempt bounded model, subagent, evidence, artifact or effect-intent methods through the documented architecture.",
+      "observed_result": "IPython injects only aar_artifact, aar_display and aar_progress; RLM cannot execute subagent/artifact/effect actions.",
+      "evidence": [
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/ipython_worker.py",
+          "lines": "137-231",
+          "summary": "No typed aar.model/agents/evidence/effects facade or broker-frame path exists."
+        },
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/brokers.py",
+          "lines": "1320-1569",
+          "summary": "BoundBrokerFacade already implements model/subagent/effect/artifact/evidence methods."
+        }
+      ],
+      "violated_invariant": "Python is the orchestration language and typed brokers are the authority boundary; both must be reachable in the same operation.",
+      "repair_boundary": "Add framed worker/supervisor broker IPC, generated capability-bound facade, durable suspension and receipt replay.",
+      "acceptance_ids": ["AC-I01", "AC-I02", "AC-I03", "AC-B05", "AC-J03", "AC-J04"]
+    },
+    {
+      "id": "AAR-PD-007",
+      "title": "Hermes full profile does not provide the promised modern host-owned RLM route",
+      "classification": "observed_defect",
+      "severity": "high",
+      "core_journey_required": true,
+      "native_trigger": "Install the generated Hermes profile and call aar_capabilities before real RLM work.",
+      "observed_result": "mcp.json launches aar-mcp with empty args and live model_broker.configured=false, while profile prose says the profile provides host-owned RLM model calls. The only fixed Sampling route is deprecated compatibility-only; modern caller-delegated RLM is a separate public server.",
+      "evidence": [
+        {
+          "tier": "T3",
+          "kind": "installed_capability_readback",
+          "summary": "package 0.4.0a6, tool surface v7, 30 tools, model_broker.configured=false."
+        },
+        {
+          "tier": "source",
+          "path": "profiles/hermes/adaptive-agent-runtime/mcp.json",
+          "lines": "1-8",
+          "summary": "Empty aar-mcp arguments."
+        },
+        {
+          "tier": "source",
+          "path": "profiles/hermes/adaptive-agent-runtime/README.md",
+          "lines": "13-15",
+          "summary": "Claims ordinary operations and host-owned RLM calls."
+        }
+      ],
+      "violated_invariant": "A generated profile must not advertise a real host-owned call path that its live capabilities do not configure.",
+      "repair_boundary": "Expose generic caller-work claim/commit on the full workbench path or inject a qualified model registry; generate profile prose/capabilities from that exact configuration.",
+      "acceptance_ids": ["AC-M01", "AC-M03", "AC-C05", "AC-COMP03", "AC-T3-03"]
+    },
+    {
+      "id": "AAR-PD-008",
+      "title": "RLM lease heartbeat is step-boundary, not independent",
+      "classification": "observed_defect",
+      "severity": "critical",
+      "core_journey_required": true,
+      "native_trigger": "Run a service-managed model call longer than the fixed 30-second dispatcher attempt lease.",
+      "observed_result": "A 35-second bounded model call crosses lease expiry; the attempt becomes indeterminate/failed even though ordinary work is still running.",
+      "evidence": [
+        {
+          "tier": "T2",
+          "kind": "no_provider_lease_probe",
+          "summary": "35,000 ms work vs 30,000 ms lease reproduced lease_expired."
+        },
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/rlm.py",
+          "lines": "288-383",
+          "summary": "heartbeat callback executes only before/after actions."
+        },
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/dispatcher.py",
+          "lines": "147-155, 275-334",
+          "summary": "Lease is fixed at 30 seconds and handler executes synchronously."
+        }
+      ],
+      "violated_invariant": "Normal bounded work must not lose ownership merely because the broker call blocks its own step loop.",
+      "repair_boundary": "Use an independent lease keeper for active service-managed work and no active lease during caller-delegated waiting.",
+      "acceptance_ids": ["AC-L01", "AC-L02", "AC-L07"]
+    },
+    {
+      "id": "AAR-PD-009",
+      "title": "Late model-journal writer can overwrite quarantine/terminal settlement",
+      "classification": "observed_defect",
+      "severity": "critical",
+      "core_journey_required": true,
+      "native_trigger": "Reconcile an uncertain model call into quarantine while the original physical invocation finishes late.",
+      "observed_result": "The late writer can replace receipt_lookup_unavailable_quarantined with provider_call_indeterminate.",
+      "evidence": [
+        {
+          "tier": "T2",
+          "kind": "model_journal_race_probe",
+          "summary": "Current v0.4.0a6 reproduced non-monotonic late-writer terminalization."
+        },
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/model_broker.py",
+          "lines": "493-741",
+          "summary": "Settlement updates lack a terminal-state/revision compare-and-set guard across racing paths."
+        }
+      ],
+      "violated_invariant": "Quarantine and terminal authority are monotonic; later arrival is not stronger evidence.",
+      "repair_boundary": "Add revision/state guarded CAS transitions and return existing authoritative settlement to stale writers.",
+      "acceptance_ids": ["AC-L05", "AC-L06", "AC-L07"]
+    },
+    {
+      "id": "AAR-PD-010",
+      "title": "Attempt fence does not bind all inner RLM/broker writes",
+      "classification": "source_supported_risk",
+      "severity": "critical",
+      "core_journey_required": true,
+      "native_trigger": "A stale attempt returns from a long broker call after lease loss and writes a broker receipt or RLM step before its next outer heartbeat check.",
+      "observed_result": "Outer terminal transition is fenced, but BrokerContext v1/RlmStore writes do not carry the current attempt/lease identity.",
+      "evidence": [
+        {
+          "tier": "source",
+          "path": "src/aar/broker_models.py and src/aar/runtime/rlm.py",
+          "summary": "Broker context/step persistence bind parent operation and step keys, not the current AttemptFence."
+        },
+        {
+          "tier": "related_runtime",
+          "summary": "Lease-loss and model-journal late-writer probes demonstrate the prerequisite race family; an exact stale-inner-write falsifier is still required."
+        }
+      ],
+      "violated_invariant": "After ownership loss, a stale attempt cannot mutate any inner durable truth, not merely the outer operation row.",
+      "repair_boundary": "Add BrokerContext v2 execution scope and fence every RLM step, journal, artifact, subagent, workspace and result mutation.",
+      "acceptance_ids": ["AC-B04", "AC-L06", "AC-L07"]
+    },
+    {
+      "id": "AAR-PD-011",
+      "title": "In-flight RLM cancellation is only observed at step boundaries",
+      "classification": "source_supported_risk",
+      "severity": "high",
+      "core_journey_required": true,
+      "native_trigger": "Cancel while a model/subagent call or replayable cell is blocked.",
+      "observed_result": "RlmEngine checks cancellation between actions; current broker protocols do not expose a complete caller-ticket cancellation/unknown-outcome state to the workbench.",
+      "evidence": [
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/rlm.py",
+          "lines": "302-383",
+          "summary": "Cancellation checks surround, but do not preempt, action execution."
+        }
+      ],
+      "violated_invariant": "Cancellation is durable intent and must invalidate unspent work while preserving unknown physical outcomes.",
+      "repair_boundary": "Add caller-ticket cancellation, worker interrupt/termination, broker cancel/reconcile, and explicit claimed-outcome-unknown semantics.",
+      "acceptance_ids": ["AC-L03", "AC-L05", "AC-S04"]
+    },
+    {
+      "id": "AAR-PD-012",
+      "title": "RLM result cannot return complete workbench outcome",
+      "classification": "product_gap",
+      "severity": "high",
+      "core_journey_required": true,
+      "native_trigger": "Complete an RLM job that produced named artifacts, child work, workspace state and a structured output.",
+      "observed_result": "RlmResult v1 contains answer, steps, usage and optional failure only; it has no artifact bindings, workspace/checkpoint disposition, child lineage, output schema, or certainty tier.",
+      "evidence": [
+        {
+          "tier": "source",
+          "path": "src/aar/rlm_models.py",
+          "lines": "55-78",
+          "summary": "Current result is too narrow for the documented full journey."
+        }
+      ],
+      "violated_invariant": "The host must receive one bounded result that accounts for every deliverable and subordinate execution without becoming final delivery.",
+      "repair_boundary": "Add aar.rlm-workbench-result.v1 and preserve RlmResult v1 compatibility.",
+      "acceptance_ids": ["AC-J05", "AC-S01", "AC-A01", "AC-O01"]
+    },
+    {
+      "id": "AAR-PD-013",
+      "title": "Worker IPC cannot service typed broker calls during a cell",
+      "classification": "product_gap",
+      "severity": "critical",
+      "core_journey_required": true,
+      "native_trigger": "Model-written Python calls aar.model.request() or aar.agents.run() and waits for a typed result.",
+      "observed_result": "Current protocol is one supervisor request followed by one terminal worker response; no broker request/receipt frames exist.",
+      "evidence": [
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/ipython_worker.py and src/aar/runtime/ipython_backend.py",
+          "summary": "No bidirectional mid-execution broker frame state machine exists."
+        }
+      ],
+      "violated_invariant": "The workbench cannot be the native RLM environment unless Python can cross typed broker boundaries without credentials or raw host effects.",
+      "repair_boundary": "Version framed IPC, route broker intents in the supervisor, and implement controlled suspension/replay.",
+      "acceptance_ids": ["AC-I01", "AC-I02", "AC-I03", "AC-I04", "AC-I05"]
+    },
+    {
+      "id": "AAR-PD-014",
+      "title": "Full local and modern caller-delegated RLM surfaces are fragmented",
+      "classification": "product_gap",
+      "severity": "high",
+      "core_journey_required": true,
+      "native_trigger": "Use current recommended caller-delegated model ownership and persistent IPython in one local RLM operation.",
+      "observed_result": "Modern caller-delegated RLM is in the public HTTP/OAuth product; programmable IPython is in the full local MCP; states and skills are separate and do not share one operation.",
+      "evidence": [
+        {
+          "tier": "source",
+          "path": "README.md, ARCHITECTURE.md, src/aar/mcp/public_rlm.py and src/aar/mcp/server.py",
+          "summary": "The split is explicit; the public product intentionally excludes arbitrary Python."
+        }
+      ],
+      "violated_invariant": "The full local developer journey needs modern host-owned calls without reverting to deprecated MCP Sampling or manual cross-product state transfer.",
+      "repair_boundary": "Add generic caller work tickets to the full workbench MCP while leaving the public curated surface unchanged.",
+      "acceptance_ids": ["AC-COMP02", "AC-COMP03", "AC-J03", "AC-J04"]
+    },
+    {
+      "id": "AAR-PD-015",
+      "title": "Reference subagent implementation is not a real recursive-agent product adapter",
+      "classification": "product_gap",
+      "severity": "high",
+      "core_journey_required": true,
+      "native_trigger": "Model-written Python requests a real retained recursive agent through the installed full MCP.",
+      "observed_result": "ReferenceHost constructs FakeSubagentBroker, which returns deterministic local completed:{task} results; the generated Hermes profile injects no native/caller-delegated child adapter.",
+      "evidence": [
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/reference_host.py",
+          "lines": "184-224",
+          "summary": "Reference fake is the installed product construction when no host adapter is injected."
+        },
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/brokers.py",
+          "lines": "866-922",
+          "summary": "Reference subagent completes synchronously without launching a host child."
+        }
+      ],
+      "violated_invariant": "Recursive-agent capability must correspond to an admitted retained host child, not a fake result hidden behind a production profile.",
+      "repair_boundary": "Inject a real caller-delegated/native SubagentBroker; keep the fake only for tests and explicitly project capability absence otherwise.",
+      "acceptance_ids": ["AC-S01", "AC-S02", "AC-S03", "AC-COMP03"]
+    },
+    {
+      "id": "AAR-PD-016",
+      "title": "Public privacy/retention deletion policy remains external",
+      "classification": "product_gap",
+      "severity": "medium",
+      "core_journey_required": false,
+      "native_trigger": "Deploy public RLM/workspace state in a production identity/retention environment.",
+      "observed_result": "Current public docs keep privacy, retention, deletion, abuse control and production identity as explicit external gates.",
+      "evidence": [
+        {
+          "tier": "documentation",
+          "path": "docs/PUBLIC-PLUGIN.md and docs/PUBLIC-RLM-PRODUCT-BOUNDARY.md",
+          "summary": "No production deployment claim exists."
+        }
+      ],
+      "violated_invariant": "A public production claim requires explicit retention/deletion/identity authority.",
+      "repair_boundary": "Separate production deployment SDD; do not block the local workbench implementation or smuggle this authority into AAR core.",
+      "acceptance_ids": []
+    },
+    {
+      "id": "AAR-PD-017",
+      "title": "IPython process isolation is not a security sandbox",
+      "classification": "declared_boundary",
+      "severity": "high",
+      "core_journey_required": false,
+      "native_trigger": "Treat arbitrary model-written Python as safe production code solely because it runs in a worker process.",
+      "observed_result": "Capabilities and architecture explicitly deny workspace.security-sandbox; process isolation is containment only.",
+      "evidence": [
+        {
+          "tier": "documentation_and_capability",
+          "path": "ARCHITECTURE.md and live aar_capabilities",
+          "summary": "The limitation is explicit and therefore not a hidden bug."
+        }
+      ],
+      "violated_invariant": "No managed/security claim may be inferred from process isolation.",
+      "repair_boundary": "Keep the boundary explicit; require a separate verified security profile for managed use.",
+      "acceptance_ids": ["AC-SEC03"]
+    },
+    {
+      "id": "AAR-PD-018",
+      "title": "Arbitrary live Python object recovery is unsupported",
+      "classification": "declared_boundary",
+      "severity": "medium",
+      "core_journey_required": false,
+      "native_trigger": "Expect arbitrary Python stacks, generators, sockets, DataFrames or provider calls to restart in place.",
+      "observed_result": "Portable checkpoint supports a conservative JSON subset and reports excluded live objects.",
+      "evidence": [
+        {
+          "tier": "documentation_and_source",
+          "path": "ARCHITECTURE.md and programmable workspace checkpoint code",
+          "summary": "Unsupported live state is classified, not silently serialized."
+        }
+      ],
+      "violated_invariant": "Recovery must continue only from certain portable boundaries.",
+      "repair_boundary": "Use pre-cell checkpoints, artifact-backed state and replay; park when required live state is not portable.",
+      "acceptance_ids": ["AC-L09"]
+    },
+    {
+      "id": "AAR-PD-019",
+      "title": "ModelRequest v1 cannot bind the planner's structured response contract",
+      "classification": "product_gap",
+      "severity": "high",
+      "core_journey_required": true,
+      "native_trigger": "Ask the root planner for an execute_cell/finalize/abstain directive and require strict validation before executing code.",
+      "observed_result": "ModelRequest v1 carries only prompt text. It has no response-schema version/digest, maximum response bytes, or purpose binding; prompt-only JSON instructions cannot satisfy the workbench directive contract.",
+      "evidence": [
+        {
+          "tier": "source",
+          "path": "src/aar/broker_models.py",
+          "lines": "10-29",
+          "summary": "ModelRequest v1 contains prompt only; ModelResponse v1 returns output only."
+        }
+      ],
+      "violated_invariant": "No model output becomes executable Python or terminal product truth until it passes the exact admitted response contract.",
+      "repair_boundary": "Add ModelRequest v2 response-contract binding and validate raw caller/model output inside AAR before directive creation; preserve v1 bytes.",
+      "acceptance_ids": ["AC-C02", "AC-M04", "AC-J02"]
+    },
+    {
+      "id": "AAR-PD-020",
+      "title": "Reference fake backends can be projected as product capabilities",
+      "classification": "observed_defect",
+      "severity": "high",
+      "core_journey_required": true,
+      "native_trigger": "Load the generated full profile, inspect capabilities, then invoke model, subagent, or evidence methods without injected production adapters.",
+      "observed_result": "ReferenceHost constructs FakeModelBroker, FakeSubagentBroker, and FakeEvidenceProvider. Live model availability has a configured=false row, but subagent/evidence lack equivalent product-availability truth and capability descriptors still exist.",
+      "evidence": [
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/reference_host.py",
+          "lines": "184-224",
+          "summary": "Reference fakes are constructed by default when no host adapter is injected."
+        },
+        {
+          "tier": "source",
+          "path": "src/aar/runtime/brokers.py",
+          "lines": "704-737, 866-922",
+          "summary": "Evidence/subagent reference behavior is deterministic conformance behavior, not real host work."
+        },
+        {
+          "tier": "test_search",
+          "summary": "No test requires equivalent configured/backend-kind/reference-only projection for model, subagent, and evidence methods."
+        }
+      ],
+      "violated_invariant": "Capability discovery must distinguish a real configured product adapter from reference/conformance behavior before an agent spends work.",
+      "repair_boundary": "Project per-method configured, backend_kind, evidence_tier, and reference_only metadata; fail full-journey admission when any required adapter is absent.",
+      "acceptance_ids": ["AC-C05", "AC-E01", "AC-M01", "AC-S01", "AC-COMP03"]
+    },
+    {
+      "id": "AAR-PD-021",
+      "title": "Portable-regex profile admitted superlinear and cross-runtime-divergent patterns",
+      "classification": "product_gap",
+      "severity": "high",
+      "core_journey_required": true,
+      "native_trigger": "Admit overlapping bounded quantifiers, a trailing dollar anchor, or an ECMAScript-Unicode identity escape in a caller completion schema.",
+      "observed_result": "The c153 fixed-point candidate admitted all three; independent hostile review reproduced exponential Python matching and Python/ECMAScript divergence.",
+      "evidence": [{"tier": "T0", "kind": "immutable_hostile_review", "summary": "REJECT against package sha256:c153a24c4ede761b6e42fc379bb341264cf24a09a8d955e9741578ff551d7573."}],
+      "violated_invariant": "Caller-selected regex must be demonstrably linear and portable across admitted validators.",
+      "repair_boundary": "Preflight the portable profile before Draft meta-validation; allow at most one bounded quantified atom, forbid trailing dollar and nonportable identity escapes, and retain direct plus integrated negative regressions.",
+      "acceptance_ids": ["AC-C02"]
+    }
+  ]
+}

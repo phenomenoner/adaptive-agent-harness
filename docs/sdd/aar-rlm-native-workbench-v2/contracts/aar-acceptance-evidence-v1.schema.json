@@ -1,0 +1,1856 @@
+{
+  "$defs": {
+    "AcceptanceResults": {
+      "additionalProperties": false,
+      "properties": {
+        "authorization_receipt_digests": {
+          "items": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 0,
+          "type": "array"
+        },
+        "candidate": {
+          "additionalProperties": false,
+          "properties": {
+            "artifacts": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "source_archive",
+                      "source_manifest",
+                      "wheel",
+                      "wheel_build_manifest",
+                      "profile",
+                      "skill",
+                      "tool_surface",
+                      "test_bundle",
+                      "fixture_bundle",
+                      "environment",
+                      "stdout",
+                      "raw_receipt",
+                      "review_signature",
+                      "review_public_key"
+                    ],
+                    "type": "string"
+                  },
+                  "relative_path": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "size_bytes": {
+                    "maximum": 9223372036854775807,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "relative_path",
+                  "sha256",
+                  "size_bytes"
+                ],
+                "type": "object"
+              },
+              "maxItems": 256,
+              "minItems": 8,
+              "type": "array"
+            },
+            "build_command": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            },
+            "candidate_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+              "type": "string"
+            },
+            "contract_manifest_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "created_at_unix_ms": {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "manifest_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "package_version": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:a[0-9]+)?$",
+              "type": "string"
+            },
+            "platforms": {
+              "items": {
+                "enum": [
+                  "linux-x86_64",
+                  "windows-x86_64",
+                  "macos-arm64"
+                ],
+                "type": "string"
+              },
+              "maxItems": 3,
+              "minItems": 1,
+              "type": "array"
+            },
+            "profile_digests": {
+              "items": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "maxItems": 32,
+              "minItems": 1,
+              "type": "array"
+            },
+            "python_versions": {
+              "items": {
+                "pattern": "^3\\.(?:11|12|13|14)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              "maxItems": 4,
+              "minItems": 1,
+              "type": "array"
+            },
+            "schema_version": {
+              "const": "aar.acceptance-candidate.v1",
+              "type": "string"
+            },
+            "skill_digests": {
+              "items": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "maxItems": 32,
+              "minItems": 1,
+              "type": "array"
+            },
+            "source_commit": {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            "source_tree_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "tool_surface_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "wheel_digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "schema_version",
+            "candidate_id",
+            "package_version",
+            "source_commit",
+            "source_tree_digest",
+            "wheel_digest",
+            "contract_manifest_digest",
+            "tool_surface_digest",
+            "profile_digests",
+            "skill_digests",
+            "artifacts",
+            "python_versions",
+            "platforms",
+            "build_command",
+            "created_at_unix_ms",
+            "manifest_digest"
+          ],
+          "type": "object"
+        },
+        "claim_status": {
+          "enum": [
+            "not_verified",
+            "implementation_verified",
+            "live_qualified"
+          ],
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "acceptance_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                "type": "string"
+              },
+              "candidate_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                "type": "string"
+              },
+              "command": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              },
+              "environment_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "evidence_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                "type": "string"
+              },
+              "exit_code": {
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "fault_case_id": {
+                "oneOf": [
+                  {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "files": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "source_archive",
+                        "source_manifest",
+                        "wheel",
+                        "wheel_build_manifest",
+                        "profile",
+                        "skill",
+                        "tool_surface",
+                        "test_bundle",
+                        "fixture_bundle",
+                        "environment",
+                        "stdout",
+                        "raw_receipt",
+                        "review_signature",
+                        "review_public_key"
+                      ],
+                      "type": "string"
+                    },
+                    "relative_path": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+                      "type": "string"
+                    },
+                    "sha256": {
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "type": "string"
+                    },
+                    "size_bytes": {
+                      "maximum": 9223372036854775807,
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "relative_path",
+                    "sha256",
+                    "size_bytes"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array"
+              },
+              "fixture_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "observed_at_unix_ms": {
+                "maximum": 9223372036854775807,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "observed_outcome": {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "indeterminate",
+                  "not_run"
+                ],
+                "type": "string"
+              },
+              "receipt_digests": {
+                "items": {
+                  "pattern": "^sha256:[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                "maxItems": 64,
+                "minItems": 0,
+                "type": "array"
+              },
+              "review_signature": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "source_archive",
+                      "source_manifest",
+                      "wheel",
+                      "wheel_build_manifest",
+                      "profile",
+                      "skill",
+                      "tool_surface",
+                      "test_bundle",
+                      "fixture_bundle",
+                      "environment",
+                      "stdout",
+                      "raw_receipt",
+                      "review_signature",
+                      "review_public_key"
+                    ],
+                    "type": "string"
+                  },
+                  "relative_path": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "size_bytes": {
+                    "maximum": 9223372036854775807,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "relative_path",
+                  "sha256",
+                  "size_bytes"
+                ],
+                "type": "object"
+              },
+              "review_signature_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "reviewer_disposition": {
+                "enum": [
+                  "accepted",
+                  "rejected",
+                  "pending"
+                ],
+                "type": "string"
+              },
+              "reviewer_key_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                "type": "string"
+              },
+              "reviewer_principal_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                "type": "string"
+              },
+              "semantic_receipts": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "file": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "kind": {
+                          "enum": [
+                            "source_archive",
+                            "source_manifest",
+                            "wheel",
+                            "wheel_build_manifest",
+                            "profile",
+                            "skill",
+                            "tool_surface",
+                            "test_bundle",
+                            "fixture_bundle",
+                            "environment",
+                            "stdout",
+                            "raw_receipt",
+                            "review_signature",
+                            "review_public_key"
+                          ],
+                          "type": "string"
+                        },
+                        "relative_path": {
+                          "maxLength": 512,
+                          "minLength": 1,
+                          "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+                          "type": "string"
+                        },
+                        "sha256": {
+                          "pattern": "^sha256:[0-9a-f]{64}$",
+                          "type": "string"
+                        },
+                        "size_bytes": {
+                          "maximum": 9223372036854775807,
+                          "minimum": 0,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "relative_path",
+                        "sha256",
+                        "size_bytes"
+                      ],
+                      "type": "object"
+                    },
+                    "kind": {
+                      "enum": [
+                        "host",
+                        "model_route",
+                        "model_usage",
+                        "subagent",
+                        "authorization",
+                        "artifact",
+                        "reconciler"
+                      ],
+                      "type": "string"
+                    },
+                    "receipt_digest": {
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "receipt_digest",
+                    "file"
+                  ],
+                  "type": "object"
+                },
+                "maxItems": 64,
+                "minItems": 0,
+                "type": "array"
+              },
+              "stdout_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "test_or_probe_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "tier": {
+                "enum": [
+                  "T0",
+                  "T1",
+                  "T2",
+                  "T3",
+                  "T4"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "evidence_id",
+              "candidate_id",
+              "acceptance_id",
+              "fault_case_id",
+              "tier",
+              "command",
+              "environment_digest",
+              "test_or_probe_digest",
+              "fixture_digest",
+              "stdout_digest",
+              "receipt_digests",
+              "files",
+              "semantic_receipts",
+              "exit_code",
+              "observed_outcome",
+              "reviewer_disposition",
+              "reviewer_principal_id",
+              "reviewer_key_id",
+              "review_signature",
+              "review_signature_digest",
+              "observed_at_unix_ms"
+            ],
+            "type": "object"
+          },
+          "maxItems": 4096,
+          "minItems": 0,
+          "type": "array"
+        },
+        "fault_matrix_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "matrix_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "results_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "review_keys": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "const": "ed25519",
+                "type": "string"
+              },
+              "public_key": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "source_archive",
+                      "source_manifest",
+                      "wheel",
+                      "wheel_build_manifest",
+                      "profile",
+                      "skill",
+                      "tool_surface",
+                      "test_bundle",
+                      "fixture_bundle",
+                      "environment",
+                      "stdout",
+                      "raw_receipt",
+                      "review_signature",
+                      "review_public_key"
+                    ],
+                    "type": "string"
+                  },
+                  "relative_path": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "size_bytes": {
+                    "maximum": 9223372036854775807,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "relative_path",
+                  "sha256",
+                  "size_bytes"
+                ],
+                "type": "object"
+              },
+              "public_key_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "reviewer_key_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                "type": "string"
+              },
+              "reviewer_principal_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "reviewer_principal_id",
+              "reviewer_key_id",
+              "algorithm",
+              "public_key",
+              "public_key_digest"
+            ],
+            "type": "object"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "aar.acceptance-results.v1",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "candidate",
+        "review_keys",
+        "matrix_digest",
+        "fault_matrix_digest",
+        "evidence",
+        "authorization_receipt_digests",
+        "claim_status",
+        "results_digest"
+      ],
+      "type": "object"
+    },
+    "CandidateManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "artifacts": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "source_archive",
+                  "source_manifest",
+                  "wheel",
+                  "wheel_build_manifest",
+                  "profile",
+                  "skill",
+                  "tool_surface",
+                  "test_bundle",
+                  "fixture_bundle",
+                  "environment",
+                  "stdout",
+                  "raw_receipt",
+                  "review_signature",
+                  "review_public_key"
+                ],
+                "type": "string"
+              },
+              "relative_path": {
+                "maxLength": 512,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "size_bytes": {
+                "maximum": 9223372036854775807,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "relative_path",
+              "sha256",
+              "size_bytes"
+            ],
+            "type": "object"
+          },
+          "maxItems": 256,
+          "minItems": 8,
+          "type": "array"
+        },
+        "build_command": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        },
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "contract_manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "created_at_unix_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "package_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:a[0-9]+)?$",
+          "type": "string"
+        },
+        "platforms": {
+          "items": {
+            "enum": [
+              "linux-x86_64",
+              "windows-x86_64",
+              "macos-arm64"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "type": "array"
+        },
+        "profile_digests": {
+          "items": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array"
+        },
+        "python_versions": {
+          "items": {
+            "pattern": "^3\\.(?:11|12|13|14)(?:\\.[0-9]+)?$",
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "aar.acceptance-candidate.v1",
+          "type": "string"
+        },
+        "skill_digests": {
+          "items": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "type": "array"
+        },
+        "source_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "source_tree_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "tool_surface_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "wheel_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "candidate_id",
+        "package_version",
+        "source_commit",
+        "source_tree_digest",
+        "wheel_digest",
+        "contract_manifest_digest",
+        "tool_surface_digest",
+        "profile_digests",
+        "skill_digests",
+        "artifacts",
+        "python_versions",
+        "platforms",
+        "build_command",
+        "created_at_unix_ms",
+        "manifest_digest"
+      ],
+      "type": "object"
+    },
+    "EnvironmentManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "architecture": {
+          "enum": [
+            "x86_64",
+            "arm64"
+          ],
+          "type": "string"
+        },
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "command_environment_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "os_name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "os_version": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "package_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:a[0-9]+)?$",
+          "type": "string"
+        },
+        "platform": {
+          "enum": [
+            "linux-x86_64",
+            "windows-x86_64",
+            "macos-arm64"
+          ],
+          "type": "string"
+        },
+        "python_version": {
+          "pattern": "^3\\.(?:11|12|13|14)(?:\\.[0-9]+)?$",
+          "type": "string"
+        },
+        "registry_schema_version": {
+          "const": 6,
+          "type": "integer"
+        },
+        "runtime_generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "aar.acceptance-environment.v1",
+          "type": "string"
+        },
+        "source_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "tool_surface_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "candidate_id",
+        "source_commit",
+        "package_version",
+        "tool_surface_digest",
+        "python_version",
+        "platform",
+        "os_name",
+        "os_version",
+        "architecture",
+        "registry_schema_version",
+        "runtime_generation",
+        "command_environment_digest"
+      ],
+      "type": "object"
+    },
+    "EvidenceFileBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "source_archive",
+            "source_manifest",
+            "wheel",
+            "wheel_build_manifest",
+            "profile",
+            "skill",
+            "tool_surface",
+            "test_bundle",
+            "fixture_bundle",
+            "environment",
+            "stdout",
+            "raw_receipt",
+            "review_signature",
+            "review_public_key"
+          ],
+          "type": "string"
+        },
+        "relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "relative_path",
+        "sha256",
+        "size_bytes"
+      ],
+      "type": "object"
+    },
+    "EvidenceItem": {
+      "additionalProperties": false,
+      "properties": {
+        "acceptance_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "command": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "environment_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "evidence_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "exit_code": {
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fault_case_id": {
+          "oneOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "files": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "source_archive",
+                  "source_manifest",
+                  "wheel",
+                  "wheel_build_manifest",
+                  "profile",
+                  "skill",
+                  "tool_surface",
+                  "test_bundle",
+                  "fixture_bundle",
+                  "environment",
+                  "stdout",
+                  "raw_receipt",
+                  "review_signature",
+                  "review_public_key"
+                ],
+                "type": "string"
+              },
+              "relative_path": {
+                "maxLength": 512,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "size_bytes": {
+                "maximum": 9223372036854775807,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "relative_path",
+              "sha256",
+              "size_bytes"
+            ],
+            "type": "object"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "type": "array"
+        },
+        "fixture_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "observed_at_unix_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "observed_outcome": {
+          "enum": [
+            "pass",
+            "fail",
+            "indeterminate",
+            "not_run"
+          ],
+          "type": "string"
+        },
+        "receipt_digests": {
+          "items": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "type": "array"
+        },
+        "review_signature": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "source_archive",
+                "source_manifest",
+                "wheel",
+                "wheel_build_manifest",
+                "profile",
+                "skill",
+                "tool_surface",
+                "test_bundle",
+                "fixture_bundle",
+                "environment",
+                "stdout",
+                "raw_receipt",
+                "review_signature",
+                "review_public_key"
+              ],
+              "type": "string"
+            },
+            "relative_path": {
+              "maxLength": 512,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+              "type": "string"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "size_bytes": {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "relative_path",
+            "sha256",
+            "size_bytes"
+          ],
+          "type": "object"
+        },
+        "review_signature_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "reviewer_disposition": {
+          "enum": [
+            "accepted",
+            "rejected",
+            "pending"
+          ],
+          "type": "string"
+        },
+        "reviewer_key_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "reviewer_principal_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "semantic_receipts": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "file": {
+                "additionalProperties": false,
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "source_archive",
+                      "source_manifest",
+                      "wheel",
+                      "wheel_build_manifest",
+                      "profile",
+                      "skill",
+                      "tool_surface",
+                      "test_bundle",
+                      "fixture_bundle",
+                      "environment",
+                      "stdout",
+                      "raw_receipt",
+                      "review_signature",
+                      "review_public_key"
+                    ],
+                    "type": "string"
+                  },
+                  "relative_path": {
+                    "maxLength": 512,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "pattern": "^sha256:[0-9a-f]{64}$",
+                    "type": "string"
+                  },
+                  "size_bytes": {
+                    "maximum": 9223372036854775807,
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "relative_path",
+                  "sha256",
+                  "size_bytes"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "enum": [
+                  "host",
+                  "model_route",
+                  "model_usage",
+                  "subagent",
+                  "authorization",
+                  "artifact",
+                  "reconciler"
+                ],
+                "type": "string"
+              },
+              "receipt_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "receipt_digest",
+              "file"
+            ],
+            "type": "object"
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "type": "array"
+        },
+        "stdout_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "test_or_probe_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "tier": {
+          "enum": [
+            "T0",
+            "T1",
+            "T2",
+            "T3",
+            "T4"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "candidate_id",
+        "acceptance_id",
+        "fault_case_id",
+        "tier",
+        "command",
+        "environment_digest",
+        "test_or_probe_digest",
+        "fixture_digest",
+        "stdout_digest",
+        "receipt_digests",
+        "files",
+        "semantic_receipts",
+        "exit_code",
+        "observed_outcome",
+        "reviewer_disposition",
+        "reviewer_principal_id",
+        "reviewer_key_id",
+        "review_signature",
+        "review_signature_digest",
+        "observed_at_unix_ms"
+      ],
+      "type": "object"
+    },
+    "FixtureBundleManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "bundle_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "bundle_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "entries": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "fixture_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "input",
+                  "expected",
+                  "fault_injection",
+                  "baseline",
+                  "migration"
+                ],
+                "type": "string"
+              },
+              "relative_path": {
+                "maxLength": 512,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "size_bytes": {
+                "maximum": 9223372036854775807,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "fixture_id",
+              "kind",
+              "relative_path",
+              "sha256",
+              "size_bytes"
+            ],
+            "type": "object"
+          },
+          "maxItems": 256,
+          "minItems": 1,
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "aar.acceptance-fixture-bundle.v1",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "bundle_id",
+        "candidate_id",
+        "entries",
+        "bundle_digest"
+      ],
+      "type": "object"
+    },
+    "FixtureEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "fixture_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "input",
+            "expected",
+            "fault_injection",
+            "baseline",
+            "migration"
+          ],
+          "type": "string"
+        },
+        "relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "fixture_id",
+        "kind",
+        "relative_path",
+        "sha256",
+        "size_bytes"
+      ],
+      "type": "object"
+    },
+    "ReviewKeyBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "ed25519",
+          "type": "string"
+        },
+        "public_key": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "source_archive",
+                "source_manifest",
+                "wheel",
+                "wheel_build_manifest",
+                "profile",
+                "skill",
+                "tool_surface",
+                "test_bundle",
+                "fixture_bundle",
+                "environment",
+                "stdout",
+                "raw_receipt",
+                "review_signature",
+                "review_public_key"
+              ],
+              "type": "string"
+            },
+            "relative_path": {
+              "maxLength": 512,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+              "type": "string"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "size_bytes": {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "relative_path",
+            "sha256",
+            "size_bytes"
+          ],
+          "type": "object"
+        },
+        "public_key_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "reviewer_key_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "reviewer_principal_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reviewer_principal_id",
+        "reviewer_key_id",
+        "algorithm",
+        "public_key",
+        "public_key_digest"
+      ],
+      "type": "object"
+    },
+    "ReviewTrustStore": {
+      "additionalProperties": false,
+      "properties": {
+        "keys": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "const": "ed25519",
+                "type": "string"
+              },
+              "public_key_digest": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "reviewer_key_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                "type": "string"
+              },
+              "reviewer_principal_id": {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "reviewer_principal_id",
+              "reviewer_key_id",
+              "algorithm",
+              "public_key_digest"
+            ],
+            "type": "object"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "aar.acceptance-review-trust.v1",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "keys"
+      ],
+      "type": "object"
+    },
+    "SemanticReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "source_archive",
+                "source_manifest",
+                "wheel",
+                "wheel_build_manifest",
+                "profile",
+                "skill",
+                "tool_surface",
+                "test_bundle",
+                "fixture_bundle",
+                "environment",
+                "stdout",
+                "raw_receipt",
+                "review_signature",
+                "review_public_key"
+              ],
+              "type": "string"
+            },
+            "relative_path": {
+              "maxLength": 512,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+              "type": "string"
+            },
+            "sha256": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "size_bytes": {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "relative_path",
+            "sha256",
+            "size_bytes"
+          ],
+          "type": "object"
+        },
+        "kind": {
+          "enum": [
+            "host",
+            "model_route",
+            "model_usage",
+            "subagent",
+            "authorization",
+            "artifact",
+            "reconciler"
+          ],
+          "type": "string"
+        },
+        "receipt_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "receipt_digest",
+        "file"
+      ],
+      "type": "object"
+    },
+    "SemanticReceiptDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "certainty": {
+          "enum": [
+            "certain",
+            "indeterminate"
+          ],
+          "type": "string"
+        },
+        "issuer_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "host",
+            "model_route",
+            "model_usage",
+            "subagent",
+            "authorization",
+            "artifact",
+            "reconciler"
+          ],
+          "type": "string"
+        },
+        "observed_at_unix_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "operation_id": {
+          "oneOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "payload_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "receipt_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "aar.acceptance-semantic-receipt.v1",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "indeterminate",
+            "granted",
+            "denied",
+            "accepted",
+            "cancelled"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "receipt_id",
+        "kind",
+        "candidate_id",
+        "operation_id",
+        "issuer_id",
+        "status",
+        "certainty",
+        "payload_digest",
+        "observed_at_unix_ms"
+      ],
+      "type": "object"
+    },
+    "SourceManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "clean": {
+          "const": true,
+          "type": "boolean"
+        },
+        "entries": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "executable": {
+                "type": "boolean"
+              },
+              "relative_path": {
+                "maxLength": 512,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+                "type": "string"
+              },
+              "sha256": {
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "size_bytes": {
+                "maximum": 9223372036854775807,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "relative_path",
+              "sha256",
+              "size_bytes",
+              "executable"
+            ],
+            "type": "object"
+          },
+          "maxItems": 65536,
+          "minItems": 1,
+          "type": "array"
+        },
+        "manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "aar.acceptance-source.v1",
+          "type": "string"
+        },
+        "source_archive_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "source_archive_size_bytes": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "source_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "source_tree_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "candidate_id",
+        "source_commit",
+        "clean",
+        "source_archive_digest",
+        "source_archive_size_bytes",
+        "entries",
+        "source_tree_digest",
+        "manifest_digest"
+      ],
+      "type": "object"
+    },
+    "SourceTreeEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "executable": {
+          "type": "boolean"
+        },
+        "relative_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "relative_path",
+        "sha256",
+        "size_bytes",
+        "executable"
+      ],
+      "type": "object"
+    },
+    "WheelBuildManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "build_command": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        },
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "aar.acceptance-wheel-build.v1",
+          "type": "string"
+        },
+        "source_archive_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "source_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "type": "string"
+        },
+        "source_manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "source_manifest_file_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "source_tree_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "wheel_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "candidate_id",
+        "source_manifest_file_digest",
+        "source_manifest_digest",
+        "source_commit",
+        "source_tree_digest",
+        "source_archive_digest",
+        "wheel_digest",
+        "build_command",
+        "manifest_digest"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "aar-acceptance-evidence-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/CandidateManifest"
+    },
+    {
+      "$ref": "#/$defs/EvidenceItem"
+    },
+    {
+      "$ref": "#/$defs/AcceptanceResults"
+    }
+  ],
+  "title": "AAR candidate and acceptance evidence contracts v1"
+}

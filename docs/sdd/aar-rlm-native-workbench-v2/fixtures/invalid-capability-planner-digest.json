@@ -1,0 +1,85 @@
+{
+  "broker_catalog_digest": "sha256:804cd26257a040153ea16ccaa63e4d6b7158e8fdd89e5864c456d2d83fad237d",
+  "methods": [
+    {
+      "adapter_generation": 1,
+      "adapter_id": "fixture-caller-driver",
+      "backend_kind": "caller_driver",
+      "configured": true,
+      "contract_id": "aar.broker-contract.model-request.v2",
+      "evidence_tier": "host_receipt_bound",
+      "method": "model.request",
+      "reference_only": false,
+      "request_schema_digest": "sha256:d4d7f6e03a12d1aa4428ee623e29f3f68f5fab95632891acbd27cf2bae1581de",
+      "response_schema_digest": "sha256:20cd938101b51673f85b5234e373eab0063cc26a670a1fa25f884e1afa029dce"
+    },
+    {
+      "adapter_generation": 1,
+      "adapter_id": "fixture-caller-driver",
+      "backend_kind": "caller_driver",
+      "configured": true,
+      "contract_id": "aar.broker-contract.subagent-submit.v2",
+      "evidence_tier": "host_receipt_bound",
+      "method": "subagent.submit",
+      "reference_only": false,
+      "request_schema_digest": "sha256:767942bcccf46d58512208fb53346dd9ece68b87d541ac542c25c4642f0ff1f3",
+      "response_schema_digest": "sha256:ab383558e919ff14f4c90cd47b7c7a60189a17a6e7fb718976b21c91983582c6"
+    },
+    {
+      "adapter_generation": 1,
+      "adapter_id": "fixture-caller-driver",
+      "backend_kind": "caller_driver",
+      "configured": true,
+      "contract_id": "aar.broker-contract.subagent-result.v2",
+      "evidence_tier": "host_receipt_bound",
+      "method": "subagent.result",
+      "reference_only": false,
+      "request_schema_digest": "sha256:84ea9032e15367f766499ceee69966716cd68b0b1a6d4d9ef7398167141a852b",
+      "response_schema_digest": "sha256:ab383558e919ff14f4c90cd47b7c7a60189a17a6e7fb718976b21c91983582c6"
+    },
+    {
+      "adapter_generation": 1,
+      "adapter_id": "fixture-caller-driver",
+      "backend_kind": "caller_driver",
+      "configured": true,
+      "contract_id": "aar.broker-contract.evidence-query.v2",
+      "evidence_tier": "host_receipt_bound",
+      "method": "evidence.query",
+      "reference_only": false,
+      "request_schema_digest": "sha256:2dfcb0991e56f8a4d3a7306a48058896f521a7c2fa376102adb92633799c5243",
+      "response_schema_digest": "sha256:37ad0560c2f4a7ae41ee4db3848867456a65c27e9080585551d7055c57e5cd55"
+    },
+    {
+      "adapter_generation": 1,
+      "adapter_id": "fixture-artifact-store",
+      "backend_kind": "native",
+      "configured": true,
+      "contract_id": "aar.artifact-stage.v1",
+      "evidence_tier": "host_receipt_bound",
+      "method": "artifact.put",
+      "reference_only": false,
+      "request_schema_digest": "sha256:564182c3967f9debf4447b3a3b9af2e36a296989672c9ead70d168b6ed1a09dc",
+      "response_schema_digest": "sha256:31973b2ae43a7193fe9e6adf77dc4cffbc8e57f36f1630b707561d0d2d22836f"
+    },
+    {
+      "adapter_generation": 1,
+      "adapter_id": "fixture-caller-driver",
+      "backend_kind": "caller_driver",
+      "configured": true,
+      "contract_id": "aar.broker-contract.effect-propose.v2",
+      "evidence_tier": "host_receipt_bound",
+      "method": "effect.propose",
+      "reference_only": false,
+      "request_schema_digest": "sha256:16f3b469077af425c59811a5cb18da170dd306377a8cd8aa201899a8edd30de4",
+      "response_schema_digest": "sha256:4ef2782939021587992f021fe18c864efd843d72f4aced6238df9180730e6b64"
+    }
+  ],
+  "planner_directive_schema_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "planner_directive_schema_version": "aar.rlm-directive.v1",
+  "schema_version": "aar.rlm-workbench-capability.v1",
+  "security_profiles": [
+    "trusted_local"
+  ],
+  "surface_version": "aar.mcp-tools.v8",
+  "tool_surface_digest": "sha256:9fd9ecb65f81ce909ae25018577162a2d96c29bd79e5355a24658f5fa64e84bf"
+}

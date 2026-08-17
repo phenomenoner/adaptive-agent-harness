@@ -1,0 +1,453 @@
+{
+  "cases": [
+    {
+      "acceptance_id": "AC-L05",
+      "action": "claimant crash before reservation commit",
+      "barrier": "before_claim_commit",
+      "expected": "ticket stays pending; physical sends=0",
+      "id": "FC-CALL-001",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L05",
+      "action": "claimant crash after send reservation",
+      "barrier": "after_claim_before_send_mark",
+      "expected": "reservation expires safely; physical sends=0",
+      "id": "FC-CALL-002",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L05",
+      "action": "send attempted before durable mark",
+      "barrier": "before_send_mark_commit",
+      "expected": "adapter rejects; physical sends=0",
+      "id": "FC-CALL-003",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L05",
+      "action": "claimant crash",
+      "barrier": "after_send_mark_before_physical_send",
+      "expected": "ticket is may-have-sent and requires lookup; no blind reclaim",
+      "id": "FC-CALL-004",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L05",
+      "action": "claimant crash",
+      "barrier": "after_physical_send_before_receipt",
+      "expected": "ticket is outcome_unknown; duplicate sends=0",
+      "id": "FC-CALL-005",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L06",
+      "action": "append candidate receipt",
+      "barrier": "late_receipt_after_cancel",
+      "expected": "current reconciler alone may settle or quarantine",
+      "id": "FC-CALL-006",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L06",
+      "action": "append different digest for same physical attempt",
+      "barrier": "conflicting_receipts",
+      "expected": "ticket quarantines; terminal truth is not overwritten",
+      "id": "FC-CALL-007",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L04",
+      "action": "second claimant claims",
+      "barrier": "expired_pre_send_reservation",
+      "expected": "one current claim; stale claimant mutations=0",
+      "id": "FC-CALL-008",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L04",
+      "action": "two claimants race",
+      "barrier": "concurrent_claim",
+      "expected": "one reservation succeeds; one conflict",
+      "id": "FC-CALL-009",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-B04",
+      "action": "wrong principal/generation commits",
+      "barrier": "foreign_claimant_commit",
+      "expected": "mutation rejected; ticket unchanged",
+      "id": "FC-CALL-010",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-B04",
+      "action": "commit with wrong digest",
+      "barrier": "wrong_ticket_digest",
+      "expected": "mutation rejected before observation write",
+      "id": "FC-CALL-011",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L11",
+      "action": "replay changed claim/commit payload",
+      "barrier": "same_key_changed_payload",
+      "expected": "idempotency conflict",
+      "id": "FC-CALL-012",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L03",
+      "action": "cancellation/control revision wins",
+      "barrier": "cancel_before_send_start_cas",
+      "expected": "ticket settles cancelled_before_send; physical sends=0",
+      "id": "FC-CALL-013",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L03",
+      "action": "send-start commit wins",
+      "barrier": "cancel_after_send_start_cas",
+      "expected": "pre-send cancellation conflicts; may-have-sent reconciliation applies",
+      "id": "FC-CALL-014",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L03",
+      "action": "stale control/cancellation/suspension/deadline/claim input",
+      "barrier": "stale_send_start_cross_row_fence",
+      "expected": "send-start rejected; physical sends=0",
+      "id": "FC-CALL-015",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L02",
+      "action": "crash",
+      "barrier": "suspend_transaction_before_commit",
+      "expected": "old attempt remains sole owner; no ticket visible",
+      "id": "FC-WAIT-001",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L02",
+      "action": "crash",
+      "barrier": "suspend_transaction_after_commit",
+      "expected": "ticket visible; no active attempt; worker write-fenced",
+      "id": "FC-WAIT-002",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L04",
+      "action": "crash",
+      "barrier": "settlement_before_successor_outbox",
+      "expected": "reconciler enqueues one successor",
+      "id": "FC-WAIT-003",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L04",
+      "action": "two reconcilers race",
+      "barrier": "duplicate_successor_enqueue",
+      "expected": "unique operation/suspension key yields one successor",
+      "id": "FC-WAIT-004",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L03",
+      "action": "race",
+      "barrier": "cancel_vs_ticket_settle",
+      "expected": "one CAS winner; losing evidence retained as candidate only",
+      "id": "FC-WAIT-005",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L10",
+      "action": "startup sweep",
+      "barrier": "quiet_restart_past_deadline",
+      "expected": "no new send; cancel/lookup/quarantine per send state",
+      "id": "FC-WAIT-006",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L01",
+      "action": "close races",
+      "barrier": "schedule_before_keeper_register",
+      "expected": "new attempt aborts or registered keeper is joined",
+      "id": "FC-LEASE-001",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L01",
+      "action": "race",
+      "barrier": "keeper_heartbeat_vs_terminal",
+      "expected": "terminal attempt never renewed",
+      "id": "FC-LEASE-002",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L01",
+      "action": "inject failure",
+      "barrier": "keeper_failure",
+      "expected": "attempt parks/fails; no silent expiry",
+      "id": "FC-LEASE-003",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-B03",
+      "action": "close runtime owner",
+      "barrier": "close_with_live_callbacks",
+      "expected": "callbacks drained/fenced before stores close",
+      "id": "FC-LEASE-004",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L07",
+      "action": "allow old worker completion after successor claim",
+      "barrier": "stale_attempt_inner_write",
+      "expected": "authoritative broker/RLM/artifact writes=0; matching external evidence enters candidate lane only",
+      "id": "FC-LEASE-005",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L08",
+      "action": "kill worker",
+      "barrier": "worker_loss_before_broker_intent",
+      "expected": "restore checkpoint and recovery-plan; no automatic cell replay",
+      "id": "FC-WORKER-001",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L08",
+      "action": "kill worker",
+      "barrier": "worker_loss_after_send_started",
+      "expected": "receipt lookup/reconcile precedes continuation",
+      "id": "FC-WORKER-002",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L09",
+      "action": "attempt durable facade call",
+      "barrier": "ambient_effect_before_suspend",
+      "expected": "automatic replay forbidden; job recovery-plans or parks",
+      "id": "FC-WORKER-003",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-I01",
+      "action": "empty/missing/extra/wrong-direction frame",
+      "barrier": "typed_frame_payload_or_direction_mutant",
+      "expected": "schema rejects before semantic or authority handling",
+      "id": "FC-WORKER-004",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-I06",
+      "action": "coordinator restart",
+      "barrier": "crash_before_rebind_commit",
+      "expected": "prepared transfer retries or aborts; predecessor remains fenced; successor not authoritative",
+      "id": "FC-REBIND-001",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-I06",
+      "action": "coordinator restart",
+      "barrier": "crash_after_commit_before_delivery",
+      "expected": "exact committed token redelivers; one successor authority",
+      "id": "FC-REBIND-002",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-I06",
+      "action": "coordinator restart",
+      "barrier": "crash_after_delivery_before_ack",
+      "expected": "idempotent commit redelivery and acknowledgement; live stack resumes at most once",
+      "id": "FC-REBIND-003",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-I06",
+      "action": "worker process unavailable",
+      "barrier": "committed_worker_lost",
+      "expected": "successor fenced; transfer consumed as recovery_fenced_loss; recovery planner uses checkpoint",
+      "id": "FC-REBIND-004",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-A02",
+      "action": "cell raises",
+      "barrier": "failed_cell_with_staged_artifact",
+      "expected": "published final artifacts=0",
+      "id": "FC-ART-001",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-A03",
+      "action": "inject failure",
+      "barrier": "second_artifact_stage_failure",
+      "expected": "visible artifacts=0; staged rows reconcile/discard",
+      "id": "FC-ART-002",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-A04",
+      "action": "restart",
+      "barrier": "crash_after_cell_manifest_before_promotion",
+      "expected": "manifest-authorized promotion occurs once",
+      "id": "FC-ART-003",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-J05",
+      "action": "two proposals",
+      "barrier": "planner_and_cell_completion_race",
+      "expected": "one coordinator FinalizationManifest wins",
+      "id": "FC-FINAL-001",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-L03",
+      "action": "race",
+      "barrier": "cancel_before_finalization_cas",
+      "expected": "no success/artifact visibility",
+      "id": "FC-FINAL-002",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-J05",
+      "action": "restart",
+      "barrier": "crash_after_finalization_cas",
+      "expected": "same terminal result/artifacts are projected once",
+      "id": "FC-FINAL-003",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-S01",
+      "action": "restart",
+      "barrier": "crash_before_child_acceptance",
+      "expected": "safe resend using child idempotency identity",
+      "id": "FC-CHILD-001",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-S03",
+      "action": "restart",
+      "barrier": "crash_after_child_acceptance",
+      "expected": "lookup retained child; duplicate child starts=0",
+      "id": "FC-CHILD-002",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-S04",
+      "action": "cancel",
+      "barrier": "parent_cancel_with_live_child",
+      "expected": "child cancellation requested and terminal parent waits or parks",
+      "id": "FC-CHILD-003",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-E01",
+      "action": "admit full journey",
+      "barrier": "reference_fake_profile",
+      "expected": "admission fails; no reference-only backend advertised as configured",
+      "id": "FC-EVID-001",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-C02",
+      "action": "validate hostile completion regex",
+      "barrier": "overlapping_bounded_quantifiers",
+      "expected": "profile rejects before engine compilation; no superlinear matcher work",
+      "id": "FC-CONTRACT-001",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-C02",
+      "action": "validate hostile completion regex",
+      "barrier": "trailing_dollar_newline_divergence",
+      "expected": "profile rejects the nonportable end anchor",
+      "id": "FC-CONTRACT-002",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-C02",
+      "action": "validate hostile completion regex",
+      "barrier": "ecmascript_unicode_identity_escape",
+      "expected": "profile rejects the nonportable identity escape",
+      "id": "FC-CONTRACT-003",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-C04",
+      "action": "terminate migrator",
+      "barrier": "crash_before_begin",
+      "expected": "baseline DB remains authoritative and byte-stable",
+      "id": "FC-MIG-001",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-C04",
+      "action": "terminate transaction",
+      "barrier": "crash_after_ddl_before_registry",
+      "expected": "DDL and registry row roll back together",
+      "id": "FC-MIG-002",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-C04",
+      "action": "terminate transaction",
+      "barrier": "crash_after_registry_before_commit",
+      "expected": "registry row and DDL remain absent after reopen",
+      "id": "FC-MIG-003",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-C04",
+      "action": "run exact migration twice",
+      "barrier": "duplicate_apply",
+      "expected": "second apply is idempotent and digest-equal",
+      "id": "FC-MIG-004",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-C04",
+      "action": "inject foreign-key/integrity failure",
+      "barrier": "integrity_failure",
+      "expected": "transaction rolls back and preserved copy remains recovery authority",
+      "id": "FC-MIG-005",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-C04",
+      "action": "create snapshot through SQLite backup API",
+      "barrier": "committed_pages_only_in_wal",
+      "expected": "snapshot contains the WAL-only row and canonical populated row-set digest",
+      "id": "FC-MIG-006",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-C04",
+      "action": "terminate migration transaction",
+      "barrier": "crash_after_registry_before_attestation",
+      "expected": "DDL, schema row and migration attestation are all absent after reopen",
+      "id": "FC-MIG-007",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-C04",
+      "action": "request prior-snapshot rollback",
+      "barrier": "rollback_after_post_snapshot_write",
+      "expected": "cutover authority rejects rollback and v6 remains authoritative for forward recovery",
+      "id": "FC-MIG-008",
+      "required": true
+    },
+    {
+      "acceptance_id": "AC-C04",
+      "action": "start candidate launcher",
+      "barrier": "missing_external_cutover_authority",
+      "expected": "launcher refuses both candidate admission and prior-snapshot selection",
+      "id": "FC-MIG-009",
+      "required": true
+    }
+  ],
+  "schema_version": "aar.sdd-fault-matrix.v1"
+}

@@ -1,0 +1,16 @@
+{
+  "profiles": [
+    {
+      "cache_policy": "disabled",
+      "fallback_policy": "none",
+      "max_output_tokens": 32768,
+      "model": "gpt-5.6-luna",
+      "profile_id": "hermes-codex-luna-max",
+      "provider": "openai-codex",
+      "provider_driver": "openai-codex",
+      "reasoning_effort": "max",
+      "schema_version": "aar.model-route.v1"
+    }
+  ],
+  "schema_version": "aar.model-route.v1"
+}

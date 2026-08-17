@@ -1,0 +1,113 @@
+{
+  "context": {
+    "budget_artifact_bytes": 33554432,
+    "budget_child_operations": 8,
+    "budget_input_tokens": 1000000,
+    "budget_model_requests": 40,
+    "budget_output_tokens": 500000,
+    "budget_wall_time_ms": 900000,
+    "capability_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "deadline_unix_ms": 2000000000000,
+    "grant_ids": [
+      "fixture-artifact-grant",
+      "fixture-model-grant",
+      "fixture-rlm-grant",
+      "fixture-subagent-grant"
+    ],
+    "idempotency_key": "fixture-idempotency-key",
+    "principal_id": "fixture-principal",
+    "request_id": "fixture-request",
+    "runtime_generation": 1,
+    "schema_version": "aar.mcp-rlm-workbench-context.v1",
+    "session_id": "fixture-session"
+  },
+  "spec": {
+    "artifacts": {
+      "allowed_media_types": [
+        "application/json",
+        "text/markdown",
+        "text/plain"
+      ],
+      "duplicate_name_policy": "reject",
+      "publication": "finalization_manifest"
+    },
+    "budgets": {
+      "cell_wall_time_ms": 60000,
+      "max_artifact_bytes": 33554432,
+      "max_artifact_count": 32,
+      "max_cells": 32,
+      "max_events_per_cell": 128,
+      "max_model_calls": 40,
+      "max_output_chars_per_cell": 65536,
+      "max_recursion_depth": 2,
+      "max_result_bytes": 262144,
+      "max_subagent_calls": 8,
+      "total_wall_time_ms": 900000
+    },
+    "completion": {
+      "allow_optional_live_children": false,
+      "output_contract": {
+        "dialect": "https://json-schema.org/draft/2020-12/schema",
+        "max_instance_bytes": 262144,
+        "profile": "aar.json-schema-profile.v1",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "answer": {
+              "maxLength": 65536,
+              "type": "string"
+            },
+            "artifacts": {
+              "items": {
+                "maxLength": 255,
+                "type": "string"
+              },
+              "maxItems": 32,
+              "type": "array"
+            }
+          },
+          "required": [
+            "answer",
+            "artifacts"
+          ],
+          "type": "object"
+        },
+        "schema_digest": "sha256:2a9d57374744bceb3eb64cf2fee34113c822c592889c4c4be0ca38d36a459727",
+        "schema_version": "aar.json-contract.v1"
+      },
+      "require_named_artifacts": true
+    },
+    "metadata": {
+      "purpose": "contract-fixture"
+    },
+    "model": {
+      "execution_mode": "caller_delegated",
+      "max_corrections": 2,
+      "route_binding": {
+        "cache_policy": "disabled",
+        "catalog_digest": "sha256:f3f3bee35b569cfde7e687b597fbcbf4fd6c5faec3bab839ac6896ee8c220f0d",
+        "fallback_policy": "none",
+        "max_output_tokens": 32768,
+        "model": "gpt-5.6-luna",
+        "profile_digest": "sha256:44bfb42e7691720cfbafa9f54f7b1ef7a620470044f83e285e3cb12247c145a8",
+        "profile_id": "hermes-codex-luna-max",
+        "provider": "openai-codex",
+        "provider_driver": "openai-codex",
+        "reasoning_effort": "max",
+        "schema_version": "aar.model-route.v1"
+      }
+    },
+    "objective": "Produce a verified implementation artifact bundle.",
+    "schema_version": "aar.rlm-workbench-job.v1",
+    "strategy": "python_workbench",
+    "workspace": {
+      "backend": "ipython",
+      "mode": "operation_scoped",
+      "security_profile": "trusted_local",
+      "seed_checkpoint": null,
+      "terminal_disposition": "close_after_terminal_checkpoint"
+    }
+  },
+  "start_only": true
+}

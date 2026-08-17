@@ -1,0 +1,148 @@
+{
+  "claimant": {
+    "adapter_generation": 1,
+    "adapter_id": "fixture-adapter",
+    "claim_expires_at_unix_ms": 2000000000000,
+    "claim_fence": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "claim_id": "fixture-claim",
+    "principal_id": "fixture-principal",
+    "session_id": "fixture-session"
+  },
+  "deadline_unix_ms": 2000000000000,
+  "operation": {
+    "type": "operation",
+    "value": "fixture-operation"
+  },
+  "owner": {
+    "kind": "planner",
+    "phase": "initial",
+    "step_index": 0
+  },
+  "physical_attempt": {
+    "cancel_supported": true,
+    "lookup_supported": true,
+    "physical_attempt_id": "fixture-physical-attempt",
+    "provider_or_child_idempotency_key": "fixture-provider-key",
+    "provider_or_child_request_id": null,
+    "send_started_at_unix_ms": 1999999999000,
+    "sent_at_unix_ms": null,
+    "sent_request_digest": "sha256:5e426054583d343699628e91af981b22f00d932cd9291df7e56f7c49eddd71dd"
+  },
+  "request": {
+    "contract_id": "aar.broker-contract.model-request.v2",
+    "max_output_bytes": 4096,
+    "method": "model.request",
+    "prompt": "fixture",
+    "response_contract": {
+      "dialect": "https://json-schema.org/draft/2020-12/schema",
+      "max_instance_bytes": 262144,
+      "profile": "aar.json-schema-profile.v1",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "maxLength": 65536,
+                "minLength": 1,
+                "type": "string"
+              },
+              "expected_result_hint": {
+                "oneOf": [
+                  {
+                    "maxLength": 4096,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "kind": {
+                "const": "execute_cell",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "expected_result_hint",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "artifact_stage_ids": {
+                "items": {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                  "type": "string"
+                },
+                "maxItems": 256,
+                "minItems": 0,
+                "type": "array"
+              },
+              "kind": {
+                "const": "finalize",
+                "type": "string"
+              },
+              "output": {}
+            },
+            "required": [
+              "artifact_stage_ids",
+              "kind",
+              "output"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "abstain",
+                "type": "string"
+              },
+              "reason": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "reason"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "schema_digest": "sha256:b53bee5f5ce8dfcaef97973a40bc21f0d8e57e907d87f607ac25c987fe76f621",
+      "schema_version": "aar.json-contract.v1"
+    },
+    "route_binding": {
+      "cache_policy": "disabled",
+      "catalog_digest": "sha256:f3f3bee35b569cfde7e687b597fbcbf4fd6c5faec3bab839ac6896ee8c220f0d",
+      "fallback_policy": "none",
+      "max_output_tokens": 32768,
+      "model": "gpt-5.6-luna",
+      "profile_digest": "sha256:44bfb42e7691720cfbafa9f54f7b1ef7a620470044f83e285e3cb12247c145a8",
+      "profile_id": "hermes-codex-luna-max",
+      "provider": "openai-codex",
+      "provider_driver": "openai-codex",
+      "reasoning_effort": "max",
+      "schema_version": "aar.model-route.v1"
+    }
+  },
+  "request_digest": "sha256:5e426054583d343699628e91af981b22f00d932cd9291df7e56f7c49eddd71dd",
+  "revision": 3,
+  "schema_version": "aar.caller-work-ticket.v1",
+  "settled_at_unix_ms": 2000000000010,
+  "settled_receipt_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+  "state": "cancelled_certain",
+  "suspension_revision": 1,
+  "ticket_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "ticket_id": "fixture-ticket"
+}

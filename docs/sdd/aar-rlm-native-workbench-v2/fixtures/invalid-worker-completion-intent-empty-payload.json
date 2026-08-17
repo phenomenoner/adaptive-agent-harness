@@ -1,0 +1,25 @@
+{
+  "attempt_fence": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+  "attempt_id": "fixture-attempt",
+  "broker_call_ordinal": null,
+  "cell_execution_id": "fixture-cell",
+  "committed": false,
+  "deadline_unix_ms": 2000000000000,
+  "direction": "worker_to_supervisor",
+  "frame_sequence": 8,
+  "kind": "completion_intent",
+  "operation": {
+    "type": "operation",
+    "value": "fixture-operation"
+  },
+  "payload": {},
+  "payload_bytes": 300,
+  "payload_digest": "sha256:007d7f2890e130b2b0741c9e83e850d1ce860c5f1a79cd9280e68191d53257c8",
+  "schema_version": "aar.workspace-broker-frame.v1",
+  "workspace": {
+    "type": "workspace",
+    "value": "fixture-workspace"
+  },
+  "workspace_generation": 1,
+  "workspace_revision": 0
+}

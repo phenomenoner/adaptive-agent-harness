@@ -1,0 +1,137 @@
+{
+  "attempt_fence": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+  "attempt_id": "fixture-attempt",
+  "broker_call_ordinal": 1,
+  "cell_execution_id": "fixture-cell",
+  "committed": false,
+  "deadline_unix_ms": 2000000000000,
+  "direction": "worker_to_supervisor",
+  "frame_sequence": 6,
+  "kind": "broker_intent",
+  "operation": {
+    "type": "operation",
+    "value": "fixture-operation"
+  },
+  "payload": {
+    "contract_id": "aar.broker-contract.model-request.v2",
+    "method": "model.request",
+    "request": {
+      "contract_id": "aar.broker-contract.model-request.v2",
+      "max_output_bytes": 4096,
+      "method": "model.request",
+      "prompt": "fixture",
+      "response_contract": {
+        "dialect": "https://json-schema.org/draft/2020-12/schema",
+        "max_instance_bytes": 262144,
+        "profile": "aar.json-schema-profile.v1",
+        "schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "maxLength": 65536,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "expected_result_hint": {
+                  "oneOf": [
+                    {
+                      "maxLength": 4096,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "kind": {
+                  "const": "execute_cell",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "expected_result_hint",
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "artifact_stage_ids": {
+                  "items": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                    "type": "string"
+                  },
+                  "maxItems": 256,
+                  "minItems": 0,
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "finalize",
+                  "type": "string"
+                },
+                "output": {}
+              },
+              "required": [
+                "artifact_stage_ids",
+                "kind",
+                "output"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "abstain",
+                  "type": "string"
+                },
+                "reason": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "reason"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "schema_digest": "sha256:b53bee5f5ce8dfcaef97973a40bc21f0d8e57e907d87f607ac25c987fe76f621",
+        "schema_version": "aar.json-contract.v1"
+      },
+      "route_binding": {
+        "cache_policy": "disabled",
+        "catalog_digest": "sha256:f3f3bee35b569cfde7e687b597fbcbf4fd6c5faec3bab839ac6896ee8c220f0d",
+        "fallback_policy": "none",
+        "max_output_tokens": 32768,
+        "model": "gpt-5.6-luna",
+        "profile_digest": "sha256:44bfb42e7691720cfbafa9f54f7b1ef7a620470044f83e285e3cb12247c145a8",
+        "profile_id": "hermes-codex-luna-max",
+        "provider": "openai-codex",
+        "provider_driver": "openai-codex",
+        "reasoning_effort": "max",
+        "schema_version": "aar.model-route.v1"
+      }
+    },
+    "request_digest": "sha256:5e426054583d343699628e91af981b22f00d932cd9291df7e56f7c49eddd71dd"
+  },
+  "payload_bytes": 2519,
+  "payload_digest": "sha256:918eedda61c011aaad433434789439c463c5f1e0dc125380355ecfa12f1cb543",
+  "schema_version": "aar.workspace-broker-frame.v1",
+  "workspace": {
+    "type": "workspace",
+    "value": "fixture-workspace"
+  },
+  "workspace_generation": 1,
+  "workspace_revision": 0
+}

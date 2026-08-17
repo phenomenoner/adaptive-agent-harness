@@ -1,0 +1,49 @@
+{
+  "attempt_fence": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+  "attempt_id": "fixture-attempt",
+  "broker_call_ordinal": null,
+  "cell_execution_id": "fixture-cell",
+  "committed": false,
+  "deadline_unix_ms": 2000000000000,
+  "direction": "worker_to_supervisor",
+  "frame_sequence": 7,
+  "kind": "artifact_stage_intent",
+  "operation": {
+    "type": "operation",
+    "value": "fixture-operation"
+  },
+  "payload": {
+    "binding": {
+      "cell_execution_id": "fixture-cell",
+      "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "logical_name": "reports/result.json",
+      "media_type": "application/json",
+      "operation": {
+        "type": "operation",
+        "value": "fixture-operation"
+      },
+      "role": "result",
+      "schema_version": "aar.artifact-binding.v1",
+      "size_bytes": 128,
+      "workspace": {
+        "type": "workspace",
+        "value": "fixture-workspace"
+      },
+      "workspace_generation": 1
+    },
+    "content_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "content_size_bytes": 128,
+    "promotion_policy": "cell_commit",
+    "unexpected": true,
+    "worker_buffer_id": "fixture-artifact-buffer"
+  },
+  "payload_bytes": 617,
+  "payload_digest": "sha256:0bf1bd62b3a76f0712723f86e1cdd35c557cf5682fe36c2efa2aaa673da7f10c",
+  "schema_version": "aar.workspace-broker-frame.v1",
+  "workspace": {
+    "type": "workspace",
+    "value": "fixture-workspace"
+  },
+  "workspace_generation": 1,
+  "workspace_revision": 0
+}

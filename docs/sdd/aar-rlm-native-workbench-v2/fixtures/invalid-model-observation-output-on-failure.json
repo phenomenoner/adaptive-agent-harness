@@ -1,0 +1,9 @@
+{
+  "host_receipt_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+  "kind": "model",
+  "outcome": "failed_certain",
+  "output_digest": null,
+  "output_text": "must-not-exist",
+  "route_receipt_digest": null,
+  "usage_receipt_digest": null
+}

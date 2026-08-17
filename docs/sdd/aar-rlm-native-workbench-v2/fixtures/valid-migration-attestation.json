@@ -1,0 +1,24 @@
+{
+  "attestation": {
+    "canonical_v5_row_set_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "completed_at_unix_ms": 2000000000001,
+    "contract_manifest_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+    "cutover_epoch": "cutover-fixture",
+    "external_authority_prepared_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+    "external_authority_store_id": "cutover-authority-fixture",
+    "foreign_key_violation_count": 0,
+    "integrity_result": "ok",
+    "migration_sql_digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "migration_version": 6,
+    "profile_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "schema_version": "aar.migration-v6-attestation-payload.v1",
+    "skill_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "snapshot_id": "snapshot-fixture",
+    "snapshot_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "snapshot_size_bytes": 4096,
+    "source_commit": "a585ac52bef6f95f9dcfb40dc69f83d6d92b3b90",
+    "started_at_unix_ms": 2000000000000,
+    "wheel_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+  },
+  "attestation_digest": "sha256:d9235d24e938ad5f883623994afed22d5204a76dfaa11361bf3d210b618bfad3"
+}

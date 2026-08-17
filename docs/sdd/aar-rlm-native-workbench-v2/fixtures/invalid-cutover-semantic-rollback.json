@@ -1,0 +1,72 @@
+{
+  "authority_store_id": "cutover-authority-fixture",
+  "cutover_epoch": "cutover-fixture",
+  "events": [
+    {
+      "event": {
+        "candidate_readback_digest": null,
+        "cutover_epoch": "cutover-fixture",
+        "decision_digest": null,
+        "migration_attestation_digest": null,
+        "occurred_at_unix_ms": 2000000000010,
+        "post_snapshot_barrier_digest": null,
+        "previous_event_digest": null,
+        "schema_version": "aar.migration-cutover-event-payload.v1",
+        "sequence": 0,
+        "state": "prepared"
+      },
+      "event_digest": "sha256:98afca05749dc89b96b864e2ea45ed2fca8697b70ad08899e7fbd7130f7a35cd"
+    },
+    {
+      "event": {
+        "candidate_readback_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cutover_epoch": "cutover-fixture",
+        "decision_digest": null,
+        "migration_attestation_digest": "sha256:d9235d24e938ad5f883623994afed22d5204a76dfaa11361bf3d210b618bfad3",
+        "occurred_at_unix_ms": 2000000000011,
+        "post_snapshot_barrier_digest": null,
+        "previous_event_digest": "sha256:98afca05749dc89b96b864e2ea45ed2fca8697b70ad08899e7fbd7130f7a35cd",
+        "schema_version": "aar.migration-cutover-event-payload.v1",
+        "sequence": 1,
+        "state": "candidate_active"
+      },
+      "event_digest": "sha256:2b5311ced4014eb543e3f328b2faed07a713019861b6336b2e3a444222725254"
+    },
+    {
+      "event": {
+        "candidate_readback_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cutover_epoch": "cutover-fixture",
+        "decision_digest": null,
+        "migration_attestation_digest": "sha256:d9235d24e938ad5f883623994afed22d5204a76dfaa11361bf3d210b618bfad3",
+        "occurred_at_unix_ms": 2000000000012,
+        "post_snapshot_barrier_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "previous_event_digest": "sha256:2b5311ced4014eb543e3f328b2faed07a713019861b6336b2e3a444222725254",
+        "schema_version": "aar.migration-cutover-event-payload.v1",
+        "sequence": 2,
+        "state": "post_snapshot_write"
+      },
+      "event_digest": "sha256:8785a11c108d2ffaf5703115b5ae50cfec4ae6521449e646fa27d9a784a5f7b5"
+    },
+    {
+      "event": {
+        "candidate_readback_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cutover_epoch": "cutover-fixture",
+        "decision_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "migration_attestation_digest": "sha256:d9235d24e938ad5f883623994afed22d5204a76dfaa11361bf3d210b618bfad3",
+        "occurred_at_unix_ms": 2000000000013,
+        "post_snapshot_barrier_digest": null,
+        "previous_event_digest": "sha256:8785a11c108d2ffaf5703115b5ae50cfec4ae6521449e646fa27d9a784a5f7b5",
+        "schema_version": "aar.migration-cutover-event-payload.v1",
+        "sequence": 3,
+        "state": "rolled_back_before_write"
+      },
+      "event_digest": "sha256:94f97117a97cebd9803ba3364b9b1d1a1899610798b298031e7c881e1bf9e643"
+    }
+  ],
+  "head_event_digest": "sha256:94f97117a97cebd9803ba3364b9b1d1a1899610798b298031e7c881e1bf9e643",
+  "schema_version": "aar.migration-cutover-authority.v1",
+  "snapshot_id": "snapshot-fixture",
+  "snapshot_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "source_commit": "a585ac52bef6f95f9dcfb40dc69f83d6d92b3b90",
+  "wheel_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+}

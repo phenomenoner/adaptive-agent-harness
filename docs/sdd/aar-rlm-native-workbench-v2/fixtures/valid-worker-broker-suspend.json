@@ -1,0 +1,37 @@
+{
+  "attempt_fence": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+  "attempt_id": "fixture-attempt",
+  "broker_call_ordinal": 1,
+  "cell_execution_id": "fixture-cell",
+  "committed": true,
+  "deadline_unix_ms": 2000000000000,
+  "direction": "supervisor_to_worker",
+  "frame_sequence": 11,
+  "kind": "broker_suspend",
+  "operation": {
+    "type": "operation",
+    "value": "fixture-operation"
+  },
+  "payload": {
+    "control_revision": 3,
+    "logical_owner_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+    "pre_checkpoint_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "request_digest": "sha256:5e426054583d343699628e91af981b22f00d932cd9291df7e56f7c49eddd71dd",
+    "suspension_revision": 1,
+    "ticket": {
+      "revision": 1,
+      "state": "pending",
+      "ticket_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "ticket_id": "fixture-ticket"
+    }
+  },
+  "payload_bytes": 493,
+  "payload_digest": "sha256:55c3beeb378ec22ac733c0d4721a9587fcb8868ab48149a4754c66c2a51ad4a7",
+  "schema_version": "aar.workspace-broker-frame.v1",
+  "workspace": {
+    "type": "workspace",
+    "value": "fixture-workspace"
+  },
+  "workspace_generation": 1,
+  "workspace_revision": 0
+}

@@ -1,0 +1,115 @@
+{
+  "fixtures": [
+    {
+      "path": "valid-route-catalog.json",
+      "profile_valid": true,
+      "schema_valid": true
+    },
+    {
+      "path": "valid-workbench-execute.json",
+      "profile_valid": true,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-caller-start-only-false.json",
+      "profile_valid": false,
+      "schema_valid": false
+    },
+    {
+      "path": "invalid-job-supplied-grants.json",
+      "profile_valid": false,
+      "schema_valid": false
+    },
+    {
+      "path": "invalid-route-missing-profile-digest.json",
+      "profile_valid": false,
+      "schema_valid": false
+    },
+    {
+      "path": "invalid-route-fallback-explicit.json",
+      "profile_valid": false,
+      "schema_valid": false
+    },
+    {
+      "path": "invalid-planner-schema-override.json",
+      "profile_valid": false,
+      "schema_valid": false
+    },
+    {
+      "path": "invalid-remote-schema-ref.json",
+      "profile_valid": false,
+      "schema_valid": true
+    },
+    {
+      "path": "valid-schema-portable-pattern.json",
+      "profile_valid": true,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-schema-format.json",
+      "profile_valid": false,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-schema-pattern-properties.json",
+      "profile_valid": false,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-schema-missing-local-ref.json",
+      "profile_valid": false,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-schema-lookbehind.json",
+      "profile_valid": false,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-schema-python-anchors.json",
+      "profile_valid": false,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-schema-nested-quantifier.json",
+      "profile_valid": false,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-schema-possessive-quantifier.json",
+      "profile_valid": false,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-schema-alternation.json",
+      "profile_valid": false,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-schema-overlapping-quantified-atoms.json",
+      "profile_valid": false,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-schema-trailing-end-anchor.json",
+      "profile_valid": false,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-schema-ecmascript-identity-escape.json",
+      "profile_valid": false,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-schema-depth.json",
+      "profile_valid": false,
+      "schema_valid": true
+    },
+    {
+      "path": "invalid-schema-instance-limit.json",
+      "profile_valid": false,
+      "schema_valid": false
+    }
+  ],
+  "schema_version": "aar.sdd-fixture-index.v1"
+}

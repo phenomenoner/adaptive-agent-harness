@@ -1,0 +1,10 @@
+{
+  "category": "internal",
+  "certainty": "certain",
+  "code": "UNKNOWN_EXTERNAL_CODE",
+  "details": [],
+  "message": "bounded failure fixture",
+  "operation": null,
+  "retryable": false,
+  "schema_version": "aar.envelope.v1"
+}

@@ -1,0 +1,659 @@
+{
+  "fixtures": [
+    {
+      "contract_file": "aar-caller-work-v1.schema.json",
+      "definition": "CallerWorkTicket",
+      "mutation_pointer": "/claimant",
+      "path": "invalid-ticket-send-reserved-unclaimed.json",
+      "valid_path": "valid-ticket-send-reserved.json"
+    },
+    {
+      "contract_file": "aar-caller-work-v1.schema.json",
+      "definition": "CallerWorkTicket",
+      "mutation_pointer": "/physical_attempt/sent_request_digest",
+      "path": "invalid-ticket-send-started-missing-request-digest.json",
+      "valid_path": "valid-ticket-send-started.json"
+    },
+    {
+      "contract_file": "aar-caller-work-v1.schema.json",
+      "definition": "CallerWorkTicket",
+      "mutation_pointer": "/physical_attempt/send_started_at_unix_ms",
+      "path": "invalid-ticket-cancelled-before-send-has-send-mark.json",
+      "valid_path": "valid-ticket-cancelled-before-send-reserved.json"
+    },
+    {
+      "contract_file": "aar-caller-work-v1.schema.json",
+      "definition": "CallerWorkTicket",
+      "mutation_pointer": "/settled_receipt_digest",
+      "path": "invalid-ticket-cancelled-certain-missing-settlement.json",
+      "valid_path": "valid-ticket-cancelled-certain.json"
+    },
+    {
+      "contract_file": "aar-rlm-workbench-v1.schema.json",
+      "definition": "RlmWorkbenchExecuteInput",
+      "mutation_op": "add",
+      "mutation_pointer": "/spec/model/planner_response_contract",
+      "path": "invalid-planner-schema-override.json",
+      "valid_path": "valid-workbench-execute.json"
+    },
+    {
+      "contract_file": "aar-rlm-workbench-v1.schema.json",
+      "definition": "PhaseProjection",
+      "mutation_pointer": "/legacy_operation_state",
+      "path": "invalid-phase-projection-mismatch.json",
+      "valid_path": "valid-phase-projection.json"
+    },
+    {
+      "contract_file": "aar-caller-work-v1.schema.json",
+      "definition": "ModelObservation",
+      "mutation_pointer": "/output_text",
+      "path": "invalid-model-observation-output-on-failure.json",
+      "valid_path": "valid-model-observation-failure.json"
+    },
+    {
+      "contract_file": "aar-rlm-workbench-v1.schema.json",
+      "definition": "Failure",
+      "mutation_pointer": "/code",
+      "path": "invalid-failure-unknown-code.json",
+      "valid_path": "valid-failure.json"
+    },
+    {
+      "contract_file": "aar-rlm-workbench-v1.schema.json",
+      "definition": "Failure",
+      "mutation_pointer": "/details",
+      "path": "invalid-failure-details-overflow.json",
+      "valid_path": "valid-failure.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-empty-broker-intent.json",
+      "valid_path": "valid-worker-broker-intent.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-execute-request-empty-payload.json",
+      "valid_path": "valid-worker-execute-request.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/source_utf8",
+      "path": "invalid-worker-execute-request-missing-payload-field.json",
+      "valid_path": "valid-worker-execute-request.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-execute-request-extra-payload-field.json",
+      "valid_path": "valid-worker-execute-request.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-execute-request-wrong-direction.json",
+      "valid_path": "valid-worker-execute-request.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-stdout-empty-payload.json",
+      "valid_path": "valid-worker-stdout.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/chunk_utf8",
+      "path": "invalid-worker-stdout-missing-payload-field.json",
+      "valid_path": "valid-worker-stdout.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-stdout-extra-payload-field.json",
+      "valid_path": "valid-worker-stdout.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-stdout-wrong-direction.json",
+      "valid_path": "valid-worker-stdout.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-stderr-empty-payload.json",
+      "valid_path": "valid-worker-stderr.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/chunk_utf8",
+      "path": "invalid-worker-stderr-missing-payload-field.json",
+      "valid_path": "valid-worker-stderr.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-stderr-extra-payload-field.json",
+      "valid_path": "valid-worker-stderr.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-stderr-wrong-direction.json",
+      "valid_path": "valid-worker-stderr.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-rich-display-empty-payload.json",
+      "valid_path": "valid-worker-rich-display.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/display_id",
+      "path": "invalid-worker-rich-display-missing-payload-field.json",
+      "valid_path": "valid-worker-rich-display.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-rich-display-extra-payload-field.json",
+      "valid_path": "valid-worker-rich-display.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-rich-display-wrong-direction.json",
+      "valid_path": "valid-worker-rich-display.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-progress-empty-payload.json",
+      "valid_path": "valid-worker-progress.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/completed_units",
+      "path": "invalid-worker-progress-missing-payload-field.json",
+      "valid_path": "valid-worker-progress.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-progress-extra-payload-field.json",
+      "valid_path": "valid-worker-progress.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-progress-wrong-direction.json",
+      "valid_path": "valid-worker-progress.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-broker-intent-typed-empty-payload.json",
+      "valid_path": "valid-worker-broker-intent-typed.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/context",
+      "path": "invalid-worker-broker-intent-typed-missing-payload-field.json",
+      "valid_path": "valid-worker-broker-intent-typed.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-broker-intent-typed-extra-payload-field.json",
+      "valid_path": "valid-worker-broker-intent-typed.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-broker-intent-typed-wrong-direction.json",
+      "valid_path": "valid-worker-broker-intent-typed.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-artifact-stage-intent-empty-payload.json",
+      "valid_path": "valid-worker-artifact-stage-intent.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/binding",
+      "path": "invalid-worker-artifact-stage-intent-missing-payload-field.json",
+      "valid_path": "valid-worker-artifact-stage-intent.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-artifact-stage-intent-extra-payload-field.json",
+      "valid_path": "valid-worker-artifact-stage-intent.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-artifact-stage-intent-wrong-direction.json",
+      "valid_path": "valid-worker-artifact-stage-intent.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-completion-intent-empty-payload.json",
+      "valid_path": "valid-worker-completion-intent.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/disposition",
+      "path": "invalid-worker-completion-intent-missing-payload-field.json",
+      "valid_path": "valid-worker-completion-intent.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-completion-intent-extra-payload-field.json",
+      "valid_path": "valid-worker-completion-intent.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-completion-intent-wrong-direction.json",
+      "valid_path": "valid-worker-completion-intent.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-execute-result-empty-payload.json",
+      "valid_path": "valid-worker-execute-result.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/status",
+      "path": "invalid-worker-execute-result-missing-payload-field.json",
+      "valid_path": "valid-worker-execute-result.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-execute-result-extra-payload-field.json",
+      "valid_path": "valid-worker-execute-result.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-execute-result-wrong-direction.json",
+      "valid_path": "valid-worker-execute-result.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-broker-receipt-empty-payload.json",
+      "valid_path": "valid-worker-broker-receipt.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/context",
+      "path": "invalid-worker-broker-receipt-missing-payload-field.json",
+      "valid_path": "valid-worker-broker-receipt.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-broker-receipt-extra-payload-field.json",
+      "valid_path": "valid-worker-broker-receipt.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-broker-receipt-wrong-direction.json",
+      "valid_path": "valid-worker-broker-receipt.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-broker-suspend-empty-payload.json",
+      "valid_path": "valid-worker-broker-suspend.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/ticket",
+      "path": "invalid-worker-broker-suspend-missing-payload-field.json",
+      "valid_path": "valid-worker-broker-suspend.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-broker-suspend-extra-payload-field.json",
+      "valid_path": "valid-worker-broker-suspend.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-broker-suspend-wrong-direction.json",
+      "valid_path": "valid-worker-broker-suspend.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-rebind-prepare-empty-payload.json",
+      "valid_path": "valid-worker-rebind-prepare.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/token",
+      "path": "invalid-worker-rebind-prepare-missing-payload-field.json",
+      "valid_path": "valid-worker-rebind-prepare.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-rebind-prepare-extra-payload-field.json",
+      "valid_path": "valid-worker-rebind-prepare.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-rebind-prepare-wrong-direction.json",
+      "valid_path": "valid-worker-rebind-prepare.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-rebind-commit-empty-payload.json",
+      "valid_path": "valid-worker-rebind-commit.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/token",
+      "path": "invalid-worker-rebind-commit-missing-payload-field.json",
+      "valid_path": "valid-worker-rebind-commit.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-rebind-commit-extra-payload-field.json",
+      "valid_path": "valid-worker-rebind-commit.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-rebind-commit-wrong-direction.json",
+      "valid_path": "valid-worker-rebind-commit.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-rebind-abort-empty-payload.json",
+      "valid_path": "valid-worker-rebind-abort.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/token",
+      "path": "invalid-worker-rebind-abort-missing-payload-field.json",
+      "valid_path": "valid-worker-rebind-abort.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-rebind-abort-extra-payload-field.json",
+      "valid_path": "valid-worker-rebind-abort.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-rebind-abort-wrong-direction.json",
+      "valid_path": "valid-worker-rebind-abort.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-rebind-ack-empty-payload.json",
+      "valid_path": "valid-worker-rebind-ack.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/token_digest",
+      "path": "invalid-worker-rebind-ack-missing-payload-field.json",
+      "valid_path": "valid-worker-rebind-ack.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-rebind-ack-extra-payload-field.json",
+      "valid_path": "valid-worker-rebind-ack.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-rebind-ack-wrong-direction.json",
+      "valid_path": "valid-worker-rebind-ack.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-cancel-empty-payload.json",
+      "valid_path": "valid-worker-cancel.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/reason",
+      "path": "invalid-worker-cancel-missing-payload-field.json",
+      "valid_path": "valid-worker-cancel.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-cancel-extra-payload-field.json",
+      "valid_path": "valid-worker-cancel.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-cancel-wrong-direction.json",
+      "valid_path": "valid-worker-cancel.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-protocol-error-worker-empty-payload.json",
+      "valid_path": "valid-worker-protocol-error-worker.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/code",
+      "path": "invalid-worker-protocol-error-worker-missing-payload-field.json",
+      "valid_path": "valid-worker-protocol-error-worker.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-protocol-error-worker-extra-payload-field.json",
+      "valid_path": "valid-worker-protocol-error-worker.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-protocol-error-worker-wrong-direction.json",
+      "valid_path": "valid-worker-protocol-error-worker.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/payload",
+      "path": "invalid-worker-protocol-error-supervisor-empty-payload.json",
+      "valid_path": "valid-worker-protocol-error-supervisor.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "remove",
+      "mutation_pointer": "/payload/code",
+      "path": "invalid-worker-protocol-error-supervisor-missing-payload-field.json",
+      "valid_path": "valid-worker-protocol-error-supervisor.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "add",
+      "mutation_pointer": "/payload/unexpected",
+      "path": "invalid-worker-protocol-error-supervisor-extra-payload-field.json",
+      "valid_path": "valid-worker-protocol-error-supervisor.json"
+    },
+    {
+      "contract_file": "aar-workspace-broker-frame-v1.schema.json",
+      "definition": "WorkspaceBrokerFrame",
+      "mutation_op": "replace",
+      "mutation_pointer": "/direction",
+      "path": "invalid-worker-protocol-error-supervisor-wrong-direction.json",
+      "valid_path": "valid-worker-protocol-error-supervisor.json"
+    },
+    {
+      "contract_file": "aar-migration-cutover-v1.schema.json",
+      "definition": "CutoverAuthorityLedger",
+      "mutation_pointer": "/events/3/event/state",
+      "path": "invalid-cutover-post-write-rollback.json",
+      "valid_path": "valid-cutover-forward-ledger.json"
+    }
+  ],
+  "schema_version": "aar.sdd-negative-contract-index.v1"
+}

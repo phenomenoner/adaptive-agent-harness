@@ -1,0 +1,143 @@
+{
+  "category": "internal",
+  "certainty": "certain",
+  "code": "INTERNAL_ERROR",
+  "details": [
+    {
+      "name": "detail-0",
+      "value": 0
+    },
+    {
+      "name": "detail-1",
+      "value": 1
+    },
+    {
+      "name": "detail-2",
+      "value": 2
+    },
+    {
+      "name": "detail-3",
+      "value": 3
+    },
+    {
+      "name": "detail-4",
+      "value": 4
+    },
+    {
+      "name": "detail-5",
+      "value": 5
+    },
+    {
+      "name": "detail-6",
+      "value": 6
+    },
+    {
+      "name": "detail-7",
+      "value": 7
+    },
+    {
+      "name": "detail-8",
+      "value": 8
+    },
+    {
+      "name": "detail-9",
+      "value": 9
+    },
+    {
+      "name": "detail-10",
+      "value": 10
+    },
+    {
+      "name": "detail-11",
+      "value": 11
+    },
+    {
+      "name": "detail-12",
+      "value": 12
+    },
+    {
+      "name": "detail-13",
+      "value": 13
+    },
+    {
+      "name": "detail-14",
+      "value": 14
+    },
+    {
+      "name": "detail-15",
+      "value": 15
+    },
+    {
+      "name": "detail-16",
+      "value": 16
+    },
+    {
+      "name": "detail-17",
+      "value": 17
+    },
+    {
+      "name": "detail-18",
+      "value": 18
+    },
+    {
+      "name": "detail-19",
+      "value": 19
+    },
+    {
+      "name": "detail-20",
+      "value": 20
+    },
+    {
+      "name": "detail-21",
+      "value": 21
+    },
+    {
+      "name": "detail-22",
+      "value": 22
+    },
+    {
+      "name": "detail-23",
+      "value": 23
+    },
+    {
+      "name": "detail-24",
+      "value": 24
+    },
+    {
+      "name": "detail-25",
+      "value": 25
+    },
+    {
+      "name": "detail-26",
+      "value": 26
+    },
+    {
+      "name": "detail-27",
+      "value": 27
+    },
+    {
+      "name": "detail-28",
+      "value": 28
+    },
+    {
+      "name": "detail-29",
+      "value": 29
+    },
+    {
+      "name": "detail-30",
+      "value": 30
+    },
+    {
+      "name": "detail-31",
+      "value": 31
+    },
+    {
+      "name": "detail-32",
+      "value": 32
+    }
+  ],
+  "message": "bounded failure fixture",
+  "operation": null,
+  "retryable": false,
+  "schema_version": "aar.envelope.v1"
+}
