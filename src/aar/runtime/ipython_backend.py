@@ -7,11 +7,16 @@ import contextlib
 import importlib.metadata
 import json
 import queue
+import sqlite3
 import subprocess
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Literal, TextIO
 
+from aar.canonical import canonical_json_bytes, canonical_sha256
+from aar.rlm_workbench_models import WorkspaceBrokerFrame
 from aar.runtime.process_identity import (
     ExactChild,
     ProcessIdentityMismatch,
@@ -25,6 +30,7 @@ from aar.runtime.programming import (
     WorkspaceOperationConflict,
 )
 from aar.runtime.python_child import exact_module_command
+from aar.runtime.sqlite_repository import SQLiteConnectionFactory
 from aar.runtime.worker_manager import ManagedWorker, WorkerManager
 from aar.runtime.workspace import (
     StaleWorkspaceGeneration,
@@ -942,3 +948,226 @@ class SupervisedIPythonWorkspaceBackend:
             raise WorkspaceWorkerLost(
                 "IPython worker exact child could not reach a verified terminal state"
             ) from error
+
+
+class WorkerFrameError(RuntimeError):
+    """Base class for a worker frame that cannot be safely handled."""
+
+
+class WorkerFrameConflict(WorkerFrameError):
+    """A durable sequence or broker identity was reused with different bytes."""
+
+
+class WorkerFrameIndeterminate(WorkerFrameError):
+    """A prior dispatch started but has no durable terminal receipt."""
+
+
+class WorkspaceBrokerSession:
+    """Persist typed worker intents and exact supervisor receipts around dispatch."""
+
+    def __init__(
+        self,
+        database_path: Path,
+        *,
+        operation_id: str,
+        attempt_id: str,
+        dispatch: Callable[[dict[str, Any]], dict[str, Any]],
+    ) -> None:
+        self._factory = SQLiteConnectionFactory(database_path)
+        self._operation_id = operation_id
+        self._attempt_id = attempt_id
+        self._attempt_identity = canonical_sha256(
+            {"operation_id": operation_id, "attempt_id": attempt_id}
+        )
+        self._dispatch = dispatch
+        with self._factory.transaction(write=True) as connection:
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS broker_calls (
+                    operation_id TEXT NOT NULL,
+                    sequence INTEGER NOT NULL,
+                    method TEXT NOT NULL,
+                    grant_id TEXT NOT NULL,
+                    idempotency_key TEXT NOT NULL,
+                    request_digest TEXT NOT NULL,
+                    request_json TEXT,
+                    state TEXT NOT NULL,
+                    response_digest TEXT,
+                    response_model TEXT NOT NULL,
+                    response_json TEXT,
+                    usage_json TEXT NOT NULL,
+                    failure_code TEXT,
+                    reconciliation_action TEXT,
+                    authority_digest TEXT,
+                    reconciliation_json TEXT,
+                    compensation_json TEXT,
+                    reconciled_at_unix_ms INTEGER,
+                    control_revision INTEGER,
+                    PRIMARY KEY(operation_id, sequence),
+                    UNIQUE(operation_id, idempotency_key)
+                )
+                """
+            )
+
+    def handle_frame(self, frame: WorkspaceBrokerFrame) -> WorkspaceBrokerFrame:
+        document = frame.model_dump(mode="json")
+        self._validate_identity(document)
+        sequence = document["frame_sequence"]
+        request_digest = canonical_sha256(document)
+        request_json = canonical_json_bytes(document).decode("utf-8")
+        payload = document["payload"]
+        context = payload["context"]
+
+        with self._factory.transaction(write=True) as connection:
+            existing = self._row(connection, sequence)
+            if existing is not None:
+                return self._replay(existing, request_digest)
+            duplicate_identity = connection.execute(
+                """
+                SELECT * FROM broker_calls
+                WHERE operation_id=? AND idempotency_key=?
+                """,
+                (self._operation_id, context["idempotency_key"]),
+            ).fetchone()
+            if duplicate_identity is not None:
+                raise WorkerFrameConflict(
+                    "broker identity already binds a different frame sequence"
+                )
+            connection.execute(
+                """
+                INSERT INTO broker_calls(
+                    operation_id, sequence, method, grant_id, idempotency_key,
+                    request_digest, request_json, state, response_digest,
+                    response_model, response_json, usage_json, failure_code,
+                    authority_digest
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'started', NULL,
+                          'aar.workspace-broker-frame.v1', NULL, '{}', NULL, ?)
+                """,
+                (
+                    self._operation_id,
+                    sequence,
+                    payload["method"],
+                    context["grant_id"],
+                    context["idempotency_key"],
+                    request_digest,
+                    request_json,
+                    self._attempt_identity,
+                ),
+            )
+
+        receipt_payload = self._dispatch(payload)
+        response = WorkspaceBrokerFrame.model_validate(
+            self._receipt_document(document, receipt_payload),
+            strict=True,
+        )
+        response_document = response.model_dump(mode="json")
+        response_json = canonical_json_bytes(response_document).decode("utf-8")
+        response_digest = canonical_sha256(response_document)
+
+        with self._factory.transaction(write=True) as connection:
+            current = self._row(connection, sequence)
+            if current is None or current["request_digest"] != request_digest:
+                raise WorkerFrameConflict("worker frame identity changed during dispatch")
+            if current["state"] == "succeeded":
+                return self._replay(current, request_digest)
+            if current["state"] != "started":
+                raise WorkerFrameIndeterminate(
+                    "worker frame has no authoritative terminal receipt"
+                )
+            connection.execute(
+                """
+                UPDATE broker_calls
+                SET state='succeeded', response_digest=?, response_json=?
+                WHERE operation_id=? AND sequence=? AND state='started'
+                """,
+                (response_digest, response_json, self._operation_id, sequence),
+            )
+        return response
+
+    @property
+    def broker_call_count(self) -> int:
+        with self._factory.transaction(write=False) as connection:
+            return int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*) FROM broker_calls
+                    WHERE operation_id=? AND authority_digest=?
+                    """,
+                    (self._operation_id, self._attempt_identity),
+                ).fetchone()[0]
+            )
+
+    @property
+    def event_count(self) -> int:
+        with self._factory.transaction(write=False) as connection:
+            return int(
+                connection.execute(
+                    """
+                    SELECT COUNT(*) FROM broker_calls
+                    WHERE operation_id=? AND authority_digest=? AND state='succeeded'
+                    """,
+                    (self._operation_id, self._attempt_identity),
+                ).fetchone()[0]
+            )
+
+    def close(self) -> None:
+        self._factory.close()
+
+    def _validate_identity(self, document: dict[str, Any]) -> None:
+        if document["operation"]["value"] != self._operation_id:
+            raise WorkerFrameConflict("worker frame operation identity mismatch")
+        if document["attempt_id"] != self._attempt_id:
+            raise WorkerFrameConflict("worker frame attempt identity mismatch")
+        if (
+            document["kind"] != "broker_intent"
+            or document["direction"] != "worker_to_supervisor"
+            or document["committed"] is not False
+        ):
+            raise WorkerFrameConflict("worker frame is not an uncommitted broker intent")
+
+    def _row(self, connection: sqlite3.Connection, sequence: int) -> sqlite3.Row | None:
+        return connection.execute(
+            "SELECT * FROM broker_calls WHERE operation_id=? AND sequence=?",
+            (self._operation_id, sequence),
+        ).fetchone()
+
+    @staticmethod
+    def _replay(row: sqlite3.Row, request_digest: str) -> WorkspaceBrokerFrame:
+        if row["request_digest"] != request_digest:
+            raise WorkerFrameConflict("worker frame sequence digest conflict")
+        if row["state"] != "succeeded" or row["response_json"] is None:
+            raise WorkerFrameIndeterminate(
+                "worker frame dispatch started without a terminal receipt"
+            )
+        response = WorkspaceBrokerFrame.model_validate_json(
+            str(row["response_json"]), strict=True
+        )
+        if row["response_digest"] != canonical_sha256(response.model_dump(mode="json")):
+            raise WorkerFrameConflict("stored worker receipt digest mismatch")
+        return response
+
+    @staticmethod
+    def _receipt_document(
+        intent: dict[str, Any],
+        receipt_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        payload_bytes = canonical_json_bytes(receipt_payload)
+        return {
+            "schema_version": "aar.workspace-broker-frame.v1",
+            "kind": "broker_receipt",
+            "direction": "supervisor_to_worker",
+            "committed": True,
+            "operation": intent["operation"],
+            "attempt_id": intent["attempt_id"],
+            "attempt_fence": intent["attempt_fence"],
+            "workspace": intent["workspace"],
+            "workspace_generation": intent["workspace_generation"],
+            "workspace_revision": intent["workspace_revision"],
+            "cell_execution_id": intent["cell_execution_id"],
+            "frame_sequence": intent["frame_sequence"] + 1,
+            "broker_call_ordinal": intent["broker_call_ordinal"],
+            "deadline_unix_ms": intent["deadline_unix_ms"],
+            "payload": receipt_payload,
+            "payload_digest": canonical_sha256(receipt_payload),
+            "payload_bytes": len(payload_bytes),
+        }

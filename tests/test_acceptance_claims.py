@@ -28,7 +28,7 @@ def test_implementation_verified_rejects_digest_only_matrix_claim() -> None:
         "acceptance_matrix_digest": digest_file(matrix_path),
         "fault_matrix_digest": digest_file(fault_path),
         "sdd_package_digest": json.loads(package_path.read_text(encoding="utf-8"))[
-            "package_digest"
+            "manifest_digest"
         ],
         "row_results": [],
         "fault_results": [],
