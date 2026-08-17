@@ -242,15 +242,32 @@ class ArtifactStage(ContractDocument):
     schema_file = "aar-artifact-publication-v1.schema.json"
     definition = "ArtifactStage"
 
+    @classmethod
+    def semantic_validate(cls, document: dict[str, Any]) -> None:
+        if document["content_digest"] != document["binding"]["digest"]:
+            raise ValueError("artifact stage content and binding digests differ")
+
 
 class CellCommitManifest(ContractDocument):
     schema_file = "aar-artifact-publication-v1.schema.json"
     definition = "CellCommitManifest"
 
+    @classmethod
+    def semantic_validate(cls, document: dict[str, Any]) -> None:
+        payload = {key: value for key, value in document.items() if key != "manifest_digest"}
+        if document["manifest_digest"] != canonical_sha256(payload):
+            raise ValueError("cell commit manifest digest mismatch")
+
 
 class FinalizationManifest(ContractDocument):
     schema_file = "aar-artifact-publication-v1.schema.json"
     definition = "FinalizationManifest"
+
+    @classmethod
+    def semantic_validate(cls, document: dict[str, Any]) -> None:
+        payload = {key: value for key, value in document.items() if key != "manifest_digest"}
+        if document["manifest_digest"] != canonical_sha256(payload):
+            raise ValueError("finalization manifest digest mismatch")
 
 
 def validate_contract_document(
