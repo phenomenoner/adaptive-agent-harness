@@ -115,6 +115,16 @@ def test_runtime_worker_frame_model_rejects_reviewed_invalid_frame(
         WorkspaceBrokerFrame.model_validate(fixture(fixture_name), strict=True)
 
 
+def test_frozen_rlm_v1_model_rejects_successor_workbench_job() -> None:
+    from aar.rlm_models import RlmJobSpec
+
+    payload = fixture("valid-workbench-execute.json")
+    assert isinstance(payload, dict)
+    successor_job = payload["spec"]
+    with pytest.raises(ValidationError):
+        RlmJobSpec.model_validate(successor_job, strict=True)
+
+
 def test_frozen_v7_manifest_bytes_and_v8_prefix_remain_exact() -> None:
     binding = json.loads(
         (CONTRACTS / "aar-mcp-tools-v7-binding.json").read_text(encoding="utf-8")
