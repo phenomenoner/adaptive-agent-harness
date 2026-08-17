@@ -51,6 +51,12 @@ VALID_WORKER_FIXTURES = tuple(
 INVALID_WORKER_FIXTURES = tuple(
     path.name for path in sorted(FIXTURES.glob("invalid-worker-*.json"))
 )
+VALID_TICKET_FIXTURES = tuple(
+    path.name for path in sorted(FIXTURES.glob("valid-ticket-*.json"))
+)
+INVALID_TICKET_FIXTURES = tuple(
+    path.name for path in sorted(FIXTURES.glob("invalid-ticket-*.json"))
+)
 
 
 def fixture(name: str) -> object:
@@ -113,6 +119,66 @@ def test_runtime_worker_frame_model_rejects_reviewed_invalid_frame(
 
     with pytest.raises(ValidationError):
         WorkspaceBrokerFrame.model_validate(fixture(fixture_name), strict=True)
+
+
+@pytest.mark.parametrize("fixture_name", VALID_TICKET_FIXTURES)
+def test_runtime_caller_ticket_model_accepts_reviewed_state(
+    fixture_name: str,
+) -> None:
+    from aar.rlm_workbench_models import CallerWorkTicket
+
+    model = CallerWorkTicket.model_validate(fixture(fixture_name), strict=True)
+    assert model.model_dump(mode="json", exclude_none=False) == fixture(fixture_name)
+
+
+@pytest.mark.parametrize("fixture_name", INVALID_TICKET_FIXTURES)
+def test_runtime_caller_ticket_model_rejects_reviewed_invalid_state(
+    fixture_name: str,
+) -> None:
+    from aar.rlm_workbench_models import CallerWorkTicket
+
+    with pytest.raises(ValidationError):
+        CallerWorkTicket.model_validate(fixture(fixture_name), strict=True)
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "model_name"),
+    (
+        ("valid-failure.json", "RlmWorkbenchFailure"),
+        ("valid-phase-projection.json", "RlmWorkbenchPhaseProjection"),
+    ),
+)
+def test_runtime_terminal_projection_models_accept_reviewed_documents(
+    fixture_name: str,
+    model_name: str,
+) -> None:
+    import aar.rlm_workbench_models as models
+
+    model_class = getattr(models, model_name)
+    model = model_class.model_validate(fixture(fixture_name), strict=True)
+    assert model.model_dump(mode="json", exclude_none=False) == fixture(fixture_name)
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "model_name"),
+    (
+        ("invalid-failure-unknown-code.json", "RlmWorkbenchFailure"),
+        ("invalid-failure-details-overflow.json", "RlmWorkbenchFailure"),
+        (
+            "invalid-phase-projection-mismatch.json",
+            "RlmWorkbenchPhaseProjection",
+        ),
+    ),
+)
+def test_runtime_terminal_projection_models_reject_reviewed_invalid_documents(
+    fixture_name: str,
+    model_name: str,
+) -> None:
+    import aar.rlm_workbench_models as models
+
+    model_class = getattr(models, model_name)
+    with pytest.raises(ValidationError):
+        model_class.model_validate(fixture(fixture_name), strict=True)
 
 
 def test_frozen_rlm_v1_model_rejects_successor_workbench_job() -> None:
