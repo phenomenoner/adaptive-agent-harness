@@ -1,0 +1,499 @@
+{
+  "$defs": {
+    "ArtifactBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "cell_execution_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "logical_name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "operation": {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "operation",
+              "type": "string"
+            },
+            "value": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        "role": {
+          "enum": [
+            "result",
+            "evidence",
+            "diagnostic",
+            "intermediate"
+          ],
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "aar.artifact-binding.v1",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "workspace": {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "workspace",
+              "type": "string"
+            },
+            "value": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        "workspace_generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "logical_name",
+        "media_type",
+        "digest",
+        "size_bytes",
+        "operation",
+        "workspace",
+        "workspace_generation",
+        "cell_execution_id",
+        "role"
+      ],
+      "type": "object"
+    },
+    "ArtifactStage": {
+      "additionalProperties": false,
+      "properties": {
+        "binding": {
+          "additionalProperties": false,
+          "properties": {
+            "cell_execution_id": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+              "type": "string"
+            },
+            "digest": {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            "logical_name": {
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][-A-Za-z0-9._/]*$",
+              "type": "string"
+            },
+            "media_type": {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            "operation": {
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "const": "operation",
+                  "type": "string"
+                },
+                "value": {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            },
+            "role": {
+              "enum": [
+                "result",
+                "evidence",
+                "diagnostic",
+                "intermediate"
+              ],
+              "type": "string"
+            },
+            "schema_version": {
+              "const": "aar.artifact-binding.v1",
+              "type": "string"
+            },
+            "size_bytes": {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "workspace": {
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "const": "workspace",
+                  "type": "string"
+                },
+                "value": {
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            },
+            "workspace_generation": {
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "schema_version",
+            "logical_name",
+            "media_type",
+            "digest",
+            "size_bytes",
+            "operation",
+            "workspace",
+            "workspace_generation",
+            "cell_execution_id",
+            "role"
+          ],
+          "type": "object"
+        },
+        "content_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "aar.artifact-stage.v1",
+          "type": "string"
+        },
+        "stage_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "staged",
+            "committed",
+            "discarded"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "stage_id",
+        "binding",
+        "content_digest",
+        "state"
+      ],
+      "type": "object"
+    },
+    "CellCommitManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_stage_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+            "type": "string"
+          },
+          "maxItems": 256,
+          "minItems": 0,
+          "type": "array"
+        },
+        "attempt_fence": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "attempt_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "cell_execution_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "checkpoint_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "operation": {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "operation",
+              "type": "string"
+            },
+            "value": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        "post_revision": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pre_revision": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "result_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "aar.cell-commit-manifest.v1",
+          "type": "string"
+        },
+        "source_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "workspace": {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "workspace",
+              "type": "string"
+            },
+            "value": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        "workspace_generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "attempt_id",
+        "attempt_fence",
+        "workspace",
+        "workspace_generation",
+        "pre_revision",
+        "post_revision",
+        "cell_execution_id",
+        "source_digest",
+        "result_digest",
+        "checkpoint_digest",
+        "artifact_stage_ids",
+        "manifest_digest"
+      ],
+      "type": "object"
+    },
+    "FinalizationManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_binding_digests": {
+          "items": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "maxItems": 256,
+          "minItems": 0,
+          "type": "array"
+        },
+        "child_policy_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "control_revision": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "expected_cancellation_revision": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "expected_deadline_unix_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "expected_prior_phase": {
+          "const": "finalizing",
+          "type": "string"
+        },
+        "finalizer_attempt_fence": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "finalizer_attempt_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+          "type": "string"
+        },
+        "manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "operation": {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "operation",
+              "type": "string"
+            },
+            "value": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        "result_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "aar.finalization-manifest.v1",
+          "type": "string"
+        },
+        "unresolved_required_ticket_count": {
+          "const": 0,
+          "type": "integer"
+        },
+        "usage_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "worker_owner_generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "workspace_disposition_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "finalizer_attempt_id",
+        "finalizer_attempt_fence",
+        "expected_prior_phase",
+        "control_revision",
+        "expected_cancellation_revision",
+        "expected_deadline_unix_ms",
+        "worker_owner_generation",
+        "unresolved_required_ticket_count",
+        "result_digest",
+        "artifact_binding_digests",
+        "usage_digest",
+        "child_policy_digest",
+        "workspace_disposition_digest",
+        "manifest_digest"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "aar-artifact-publication-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ArtifactBinding"
+    },
+    {
+      "$ref": "#/$defs/ArtifactStage"
+    },
+    {
+      "$ref": "#/$defs/CellCommitManifest"
+    },
+    {
+      "$ref": "#/$defs/FinalizationManifest"
+    }
+  ],
+  "title": "AAR staged artifact and finalization contracts v1"
+}

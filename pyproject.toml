@@ -23,6 +23,7 @@ classifiers = [
 ]
 dependencies = [
   "ipython>=9.16,<10",
+  "jsonschema>=4.26,<5",
   "mcp==2.0.0",
   "numpy>=2,<3",
   "pandas>=2.2,<4",
@@ -45,7 +46,6 @@ aar-rlm-benchmark = "aar.benchmark:main"
 
 [dependency-groups]
 dev = [
-  "jsonschema>=4.26,<5",
   "pytest>=9,<10",
   "ruff>=0.14,<1",
 ]

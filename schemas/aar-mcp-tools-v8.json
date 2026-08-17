@@ -1,0 +1,118 @@
+{
+  "schema_version": "aar.sdd-mcp-tool-surface.v1",
+  "surface_version": "aar.mcp-tools.v8",
+  "tools": [
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": true,
+        "readOnlyHint": false
+      },
+      "capability": "rlm.workbench.execute",
+      "description": "Admit or idempotently recover one bounded RLM-native IPython workbench operation.",
+      "input_schema": "aar-rlm-workbench-v1.schema.json#/$defs/RlmWorkbenchExecuteInput",
+      "name": "aar_rlm_workbench_execute",
+      "output_schema": "aar-rlm-workbench-v1.schema.json#/$defs/RlmWorkbenchExecuteOutcome",
+      "title": "Execute RLM-native workbench job"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "capability": "rlm.workbench.read",
+      "description": "Read v8 workbench and per-method backend availability without changing frozen aar_capabilities v7 response bytes.",
+      "input_schema": "aar-rlm-workbench-v1.schema.json#/$defs/RlmWorkbenchCapabilitiesInput",
+      "name": "aar_rlm_workbench_capabilities",
+      "output_schema": "aar-rlm-workbench-v1.schema.json#/$defs/RlmWorkbenchCapabilityOutcome",
+      "title": "Read RLM workbench capabilities"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "capability": "rlm.workbench.read",
+      "description": "Read the typed workbench phase, tickets, workspace binding and terminal result.",
+      "input_schema": "aar-rlm-workbench-v1.schema.json#/$defs/RlmWorkbenchStatusInput",
+      "name": "aar_rlm_workbench_status",
+      "output_schema": "aar-rlm-workbench-v1.schema.json#/$defs/RlmWorkbenchStatusOutcome",
+      "title": "Read RLM workbench status"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "capability": "broker.caller.claim",
+      "description": "Reserve a pre-send physical caller-work attempt under claimant and adapter fences.",
+      "input_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkClaimInput",
+      "name": "aar_broker_work_claim",
+      "output_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkOutcome",
+      "title": "Reserve caller work send"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "capability": "broker.caller.send",
+      "description": "Commit the conservative may-have-sent linearization point before physical dispatch.",
+      "input_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkMarkSendStartedInput",
+      "name": "aar_broker_work_mark_send_started",
+      "output_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkOutcome",
+      "title": "Mark caller work send started"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "capability": "broker.caller.cancel",
+      "description": "CAS a pending or send-reserved ticket to durable no-send cancellation.",
+      "input_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkCancelBeforeSendInput",
+      "name": "aar_broker_work_cancel_before_send",
+      "output_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkOutcome",
+      "title": "Cancel caller work before send"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "capability": "broker.caller.commit",
+      "description": "Append and reconcile one digest-bound model, subagent, evidence or effect observation.",
+      "input_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkCommitInput",
+      "name": "aar_broker_work_commit",
+      "output_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkOutcome",
+      "title": "Commit caller work observation"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "capability": "broker.caller.reconcile",
+      "description": "Apply lookup, cancellation or candidate-receipt evidence through the current reconciler.",
+      "input_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkReconcileInput",
+      "name": "aar_broker_work_reconcile",
+      "output_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkOutcome",
+      "title": "Reconcile caller work"
+    }
+  ]
+}

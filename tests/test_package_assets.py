@@ -19,6 +19,7 @@ def test_package_metadata_declares_portable_contract_and_evidence_assets() -> No
     )
     assert project["project"]["dependencies"] == [
         "ipython>=9.16,<10",
+        "jsonschema>=4.26,<5",
         "mcp==2.0.0",
         "numpy>=2,<3",
         "pandas>=2.2,<4",
@@ -39,6 +40,15 @@ def test_package_metadata_declares_portable_contract_and_evidence_assets() -> No
         ROOT / "schemas/aar-schemas-v1.json",
         ROOT / "schemas/aar-mcp-tools-v5.json",
         ROOT / "schemas/aar-mcp-tools-v7.json",
+        ROOT / "schemas/aar-mcp-tools-v8.json",
+        ROOT / "schemas/aar-mcp-tools-v8-combined.json",
+        ROOT / "schemas/aar-broker-catalog-v2.json",
+        ROOT / "schemas/aar-acceptance-evidence-v1.schema.json",
+        ROOT / "schemas/aar-artifact-publication-v1.schema.json",
+        ROOT / "schemas/aar-caller-work-v1.schema.json",
+        ROOT / "schemas/aar-migration-cutover-v1.schema.json",
+        ROOT / "schemas/aar-rlm-workbench-v1.schema.json",
+        ROOT / "schemas/aar-workspace-broker-frame-v1.schema.json",
         ROOT / "tests/fixtures/manifest.json",
         ROOT / "benchmarks/rlm-evidence-v1.json",
         ROOT / "docs/CODEX-INSTALL.md",
