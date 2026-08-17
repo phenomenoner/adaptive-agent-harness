@@ -41,7 +41,6 @@ INVALID_EXECUTE_FIXTURES = (
 
 INVALID_CAPABILITY_FIXTURES = (
     "invalid-capability-schema-digest.json",
-    "invalid-capability-reference-only.json",
     "invalid-capability-planner-digest.json",
 )
 
@@ -100,6 +99,20 @@ def test_runtime_capability_model_rejects_false_backend_or_schema_claim(
 
     with pytest.raises(ValidationError):
         RlmWorkbenchCapability.model_validate(fixture(fixture_name), strict=True)
+
+
+def test_reference_only_capability_is_truthful_but_not_admission_ready() -> None:
+    from aar.rlm_workbench_models import (
+        RlmWorkbenchCapability,
+        require_fully_configured_workbench_capability,
+    )
+
+    capability = RlmWorkbenchCapability.model_validate(
+        fixture("invalid-capability-reference-only.json"),
+        strict=True,
+    )
+    with pytest.raises(ValueError, match="qualified executable backend"):
+        require_fully_configured_workbench_capability(capability)
 
 
 @pytest.mark.parametrize("fixture_name", VALID_WORKER_FIXTURES)

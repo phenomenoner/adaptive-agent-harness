@@ -155,12 +155,23 @@ class RlmWorkbenchCapability(ContractDocument):
             for key in ("contract_id", "request_schema_digest", "response_schema_digest"):
                 if row[key] != expected[key]:
                     raise ValueError(f"capability {row['method']} {key} mismatch")
-            if (
-                not row["configured"]
-                or row["reference_only"]
-                or row["backend_kind"] in {"reference", "unconfigured"}
-            ):
-                raise ValueError(f"capability {row['method']} backend is not truthful")
+
+
+def require_fully_configured_workbench_capability(
+    capability: RlmWorkbenchCapability,
+) -> RlmWorkbenchCapability:
+    """Reject truthful partial/reference hosts at full-journey admission."""
+
+    for row in capability.root["methods"]:
+        if (
+            not row["configured"]
+            or row["reference_only"]
+            or row["backend_kind"] not in {"caller_driver", "native"}
+        ):
+            raise ValueError(
+                f"capability {row['method']} has no qualified executable backend"
+            )
+    return capability
 
 
 class WorkspaceBrokerFrame(ContractDocument):
@@ -360,5 +371,6 @@ __all__ = [
     "RlmWorkbenchFailure",
     "RlmWorkbenchPhaseProjection",
     "WorkspaceBrokerFrame",
+    "require_fully_configured_workbench_capability",
     "validate_contract_document",
 ]
