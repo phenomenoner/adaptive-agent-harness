@@ -47,8 +47,8 @@
     },
     {
       "path": "fault-matrix.json",
-      "sha256": "sha256:b9364f0171bdeec784f886243ddb23c0ff27e70b5cfc72182957bc517da0f8d2",
-      "size_bytes": 14707
+      "sha256": "sha256:08d9968a9dc8b03a8e9703941b9fa9cc970ed565c85e12771322864aea3f94af",
+      "size_bytes": 14779
     },
     {
       "path": "fixtures/fixture-index.json",
@@ -772,8 +772,8 @@
     }
   ],
   "generator": "generate_contracts.py",
-  "generator_sha256": "sha256:1c1ce04c79f0539ef2ca282e214a2438a5809499fa07f243a257a6c8e007ae3c",
+  "generator_sha256": "sha256:89ee77a60bd6e839603d9433cfd67899882bf736fa47e4e2c38841adc056c0cd",
   "json_schema_profile": "aar.json-schema-profile.v1",
-  "manifest_digest": "sha256:63ec88ac962f749e044edcb8255b448bedea1a84d9437e28dc52e296a7e59a7b",
+  "manifest_digest": "sha256:bab2300cdfe99fed20a3f15b114c9d57ccce4d1a40db953947cbe9382d7076c4",
   "schema_version": "aar.sdd-contract-manifest.v1"
 }

@@ -2309,7 +2309,7 @@ fault_cases = [
     ("FC-CALL-009", "AC-L04", "concurrent_claim", "two claimants race", "one reservation succeeds; one conflict"),
     ("FC-CALL-010", "AC-B04", "foreign_claimant_commit", "wrong principal/generation commits", "mutation rejected; ticket unchanged"),
     ("FC-CALL-011", "AC-B04", "wrong_ticket_digest", "commit with wrong digest", "mutation rejected before observation write"),
-    ("FC-CALL-012", "AC-L11", "same_key_changed_payload", "replay changed claim/commit payload", "idempotency conflict"),
+    ("FC-CALL-012", "AC-I04", "same_key_changed_payload", "replay changed claim/commit payload", "changed payload conflicts before observation/external mutation; ticket and attempt unchanged"),
     ("FC-CALL-013", "AC-L03", "cancel_before_send_start_cas", "cancellation/control revision wins", "ticket settles cancelled_before_send; physical sends=0"),
     ("FC-CALL-014", "AC-L03", "cancel_after_send_start_cas", "send-start commit wins", "pre-send cancellation conflicts; may-have-sent reconciliation applies"),
     ("FC-CALL-015", "AC-L03", "stale_send_start_cross_row_fence", "stale control/cancellation/suspension/deadline/claim input", "send-start rejected; physical sends=0"),

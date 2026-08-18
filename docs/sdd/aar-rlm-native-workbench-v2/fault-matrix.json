@@ -89,10 +89,10 @@
       "required": true
     },
     {
-      "acceptance_id": "AC-L11",
+      "acceptance_id": "AC-I04",
       "action": "replay changed claim/commit payload",
       "barrier": "same_key_changed_payload",
-      "expected": "idempotency conflict",
+      "expected": "changed payload conflicts before observation/external mutation; ticket and attempt unchanged",
       "id": "FC-CALL-012",
       "required": true
     },

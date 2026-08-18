@@ -9,7 +9,7 @@
     "tool_surface": "aar.mcp-tools.v7",
     "version": "0.4.0a6"
   },
-  "contract_manifest_digest": "sha256:63ec88ac962f749e044edcb8255b448bedea1a84d9437e28dc52e296a7e59a7b",
+  "contract_manifest_digest": "sha256:bab2300cdfe99fed20a3f15b114c9d57ccce4d1a40db953947cbe9382d7076c4",
   "files": [
     {
       "path": "CONTRACTS.md",
@@ -83,7 +83,7 @@
     },
     {
       "path": "contracts/contract-manifest.json",
-      "sha256": "sha256:c6a54f8eae34fab9e08b3040cde700b061ab57042ff10109a9266a5bb0da05ff",
+      "sha256": "sha256:1d4b713da67e031d2008a6d10db1026004cab2672dea27aae9b6a05326cfe336",
       "size_bytes": 30835
     },
     {
@@ -93,8 +93,8 @@
     },
     {
       "path": "fault-matrix.json",
-      "sha256": "sha256:b9364f0171bdeec784f886243ddb23c0ff27e70b5cfc72182957bc517da0f8d2",
-      "size_bytes": 14707
+      "sha256": "sha256:08d9968a9dc8b03a8e9703941b9fa9cc970ed565c85e12771322864aea3f94af",
+      "size_bytes": 14779
     },
     {
       "path": "fixtures/fixture-index.json",
@@ -638,7 +638,7 @@
     },
     {
       "path": "fixtures/registry-v5-migration-verification.json",
-      "sha256": "sha256:8050343d1ba37f4e25c7a186f8510a24d6c38cee823954173c27d1c4fcebeb4b",
+      "sha256": "sha256:5cc72466db3655dc76e14eae6237bd795abe51492b2562105fa4f0bd966f0e1d",
       "size_bytes": 2811
     },
     {
@@ -818,8 +818,8 @@
     },
     {
       "path": "generate_contracts.py",
-      "sha256": "sha256:1c1ce04c79f0539ef2ca282e214a2438a5809499fa07f243a257a6c8e007ae3c",
-      "size_bytes": 142861
+      "sha256": "sha256:89ee77a60bd6e839603d9433cfd67899882bf736fa47e4e2c38841adc056c0cd",
+      "size_bytes": 142933
     },
     {
       "path": "generate_package_manifest.py",
@@ -868,7 +868,7 @@
     }
   ],
   "implementation_status": "planned",
-  "manifest_digest": "sha256:99fa29954b81c1e39daf7b0a569251f11521d96f94acb041a6bc4d57d4d7124f",
+  "manifest_digest": "sha256:dd6ae541a8aca59d4bf6f9f8b93ff7ee1fd3439ace25d3339b4c491460cf1e2d",
   "normative_files": [
     "README.md",
     "CONTRACTS.md",
