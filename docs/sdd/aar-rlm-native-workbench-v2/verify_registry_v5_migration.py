@@ -312,6 +312,110 @@ def _verify_caller_ticket_constraints(connection: sqlite3.Connection) -> None:
             "updated_at_unix_ms": FIXED_NOW_MS,
         },
     )
+    result_ticket_json = json.dumps(
+        {
+            "operation": {"type": "operation", "value": "op-ticket-probe"},
+            "ticket_id": "ticket-probe",
+            "revision": 1,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    command_insert_sql = (
+        "INSERT INTO caller_work_command_receipts("
+        "operation_id, ticket_id, command_kind, idempotency_key, command_digest, "
+        "result_revision, result_ticket_json, result_digest, created_at_unix_ms) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    for offset, command_kind in enumerate(
+        ("claim", "mark_send_started", "cancel_before_send", "commit", "reconcile")
+    ):
+        connection.execute(
+            command_insert_sql,
+            (
+                "op-ticket-probe",
+                "ticket-probe",
+                command_kind,
+                f"{command_kind}-idem",
+                "sha256:" + "a" * 64,
+                1,
+                result_ticket_json,
+                "sha256:" + "b" * 64,
+                FIXED_NOW_MS + offset,
+            ),
+        )
+    expect_integrity_error(
+        connection,
+        command_insert_sql,
+        (
+            "op-ticket-probe",
+            "ticket-probe",
+            "commit",
+            "claim-idem",
+            "sha256:" + "c" * 64,
+            1,
+            result_ticket_json,
+            "sha256:" + "d" * 64,
+            FIXED_NOW_MS + 10,
+        ),
+    )
+    expect_integrity_error(
+        connection,
+        "UPDATE caller_work_command_receipts SET command_digest=? "
+        "WHERE operation_id=? AND idempotency_key=?",
+        ("sha256:" + "c" * 64, "op-ticket-probe", "claim-idem"),
+    )
+    expect_integrity_error(
+        connection,
+        "DELETE FROM caller_work_command_receipts "
+        "WHERE operation_id=? AND idempotency_key=?",
+        ("op-ticket-probe", "claim-idem"),
+    )
+    expect_integrity_error(
+        connection,
+        command_insert_sql,
+        (
+            "op-ticket-probe",
+            "ticket-probe",
+            "claim",
+            "invalid-json",
+            "sha256:" + "a" * 64,
+            1,
+            "not-json",
+            "sha256:" + "b" * 64,
+            FIXED_NOW_MS + 11,
+        ),
+    )
+    expect_integrity_error(
+        connection,
+        command_insert_sql,
+        (
+            "op-ticket-probe",
+            "ticket-probe",
+            "claim",
+            "revision-mismatch",
+            "sha256:" + "a" * 64,
+            2,
+            result_ticket_json,
+            "sha256:" + "b" * 64,
+            FIXED_NOW_MS + 12,
+        ),
+    )
+    expect_integrity_error(
+        connection,
+        command_insert_sql,
+        (
+            "op-ticket-probe",
+            "ticket-probe",
+            "claim",
+            "invalid-digest",
+            "not-a-digest",
+            1,
+            result_ticket_json,
+            "sha256:" + "b" * 64,
+            FIXED_NOW_MS + 13,
+        ),
+    )
     expect_integrity_error(
         connection,
         "UPDATE caller_work_tickets SET method='subagent.submit' "
@@ -981,6 +1085,7 @@ def main() -> int:
         "caller_ticket_state_constraints_enforced": True,
         "caller_ticket_pre_send_cancellation_enforced": True,
         "caller_ticket_suspension_binding_enforced": True,
+        "caller_command_storage_constraints_enforced": True,
         "rebind_prepare_abort_constraints_enforced": True,
         "rebind_commit_atomic_authority_verified": True,
         "rebind_post_commit_replay_classification_verified": True,

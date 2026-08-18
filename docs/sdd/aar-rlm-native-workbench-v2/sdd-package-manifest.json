@@ -9,7 +9,7 @@
     "tool_surface": "aar.mcp-tools.v7",
     "version": "0.4.0a6"
   },
-  "contract_manifest_digest": "sha256:bab2300cdfe99fed20a3f15b114c9d57ccce4d1a40db953947cbe9382d7076c4",
+  "contract_manifest_digest": "sha256:e32038ecadc5c3721a33d2bcb545d2bde0f2b6b8f64649da980bc26252c71d25",
   "files": [
     {
       "path": "CONTRACTS.md",
@@ -23,8 +23,8 @@
     },
     {
       "path": "MIGRATION.md",
-      "sha256": "sha256:eafac87bfe75aacae3d2c49a3e01f12a4637b7346a602084a72663896c39f775",
-      "size_bytes": 9501
+      "sha256": "sha256:5f1e1eab18d209bfa2f5d69d2777a5e1718b785e5e79f531652e15e2b59f0b79",
+      "size_bytes": 10453
     },
     {
       "path": "README.md",
@@ -83,7 +83,7 @@
     },
     {
       "path": "contracts/contract-manifest.json",
-      "sha256": "sha256:1d4b713da67e031d2008a6d10db1026004cab2672dea27aae9b6a05326cfe336",
+      "sha256": "sha256:42c98bf84fac61be96cc309a211b7f86ddd5ca193636d5adcde21feae582cd3b",
       "size_bytes": 30835
     },
     {
@@ -638,8 +638,8 @@
     },
     {
       "path": "fixtures/registry-v5-migration-verification.json",
-      "sha256": "sha256:5cc72466db3655dc76e14eae6237bd795abe51492b2562105fa4f0bd966f0e1d",
-      "size_bytes": 2811
+      "sha256": "sha256:6cc3965021ac8a362dee43e3bbfd5a0335efa70f3631ecca4b785db49cf82354",
+      "size_bytes": 2864
     },
     {
       "path": "fixtures/registry-v5.sql",
@@ -838,8 +838,8 @@
     },
     {
       "path": "migration-v6.sql",
-      "sha256": "sha256:797bf6e74f2d2a0791d287a1d8a76f9056c0c62c96d3db1adbd3412012503723",
-      "size_bytes": 21993
+      "sha256": "sha256:8e7080b319aadb4eb98b5e3b9e12efe8c189c0bd12a82dc8ba1eea7c7bfe29b7",
+      "size_bytes": 24048
     },
     {
       "path": "portable_regex.py",
@@ -858,17 +858,17 @@
     },
     {
       "path": "validate_sdd.py",
-      "sha256": "sha256:7f4976ec6a35f7d08b96ac56d90482d00ab2aceb7a719d8ec8a04542518ce00d",
-      "size_bytes": 90292
+      "sha256": "sha256:ceabc675e5eac334be1bacc479b566d61203055cb02ae61f31cf1aa6a8c95f30",
+      "size_bytes": 90391
     },
     {
       "path": "verify_registry_v5_migration.py",
-      "sha256": "sha256:d40f1269674bd1296cceaa0532488c3325343a9accd400905a4b8c38884ba429",
-      "size_bytes": 42885
+      "sha256": "sha256:6c1d002ab9bfbf758e00a4b2518139d9b3d8bdaacaf82d43b5de8a0cd162a723",
+      "size_bytes": 45909
     }
   ],
   "implementation_status": "planned",
-  "manifest_digest": "sha256:dd6ae541a8aca59d4bf6f9f8b93ff7ee1fd3439ace25d3339b4c491460cf1e2d",
+  "manifest_digest": "sha256:a23102390595b244df7999319786fce9fecb54570c5a19d46efb40d51830c2cc",
   "normative_files": [
     "README.md",
     "CONTRACTS.md",

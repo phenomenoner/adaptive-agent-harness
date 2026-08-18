@@ -767,13 +767,13 @@
     },
     {
       "path": "migration-v6.sql",
-      "sha256": "sha256:797bf6e74f2d2a0791d287a1d8a76f9056c0c62c96d3db1adbd3412012503723",
-      "size_bytes": 21993
+      "sha256": "sha256:8e7080b319aadb4eb98b5e3b9e12efe8c189c0bd12a82dc8ba1eea7c7bfe29b7",
+      "size_bytes": 24048
     }
   ],
   "generator": "generate_contracts.py",
   "generator_sha256": "sha256:89ee77a60bd6e839603d9433cfd67899882bf736fa47e4e2c38841adc056c0cd",
   "json_schema_profile": "aar.json-schema-profile.v1",
-  "manifest_digest": "sha256:bab2300cdfe99fed20a3f15b114c9d57ccce4d1a40db953947cbe9382d7076c4",
+  "manifest_digest": "sha256:e32038ecadc5c3721a33d2bcb545d2bde0f2b6b8f64649da980bc26252c71d25",
   "schema_version": "aar.sdd-contract-manifest.v1"
 }

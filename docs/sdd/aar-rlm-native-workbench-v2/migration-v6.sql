@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS caller_work_tickets (
     created_at_unix_ms INTEGER NOT NULL,
     updated_at_unix_ms INTEGER NOT NULL,
     UNIQUE (operation_id, suspension_revision),
+    UNIQUE (operation_id, ticket_id),
     UNIQUE (physical_attempt_id),
     UNIQUE (ticket_id, physical_attempt_id),
     FOREIGN KEY (operation_id, suspension_revision)
@@ -235,6 +236,52 @@ CREATE TABLE IF NOT EXISTS caller_work_candidate_receipts (
     FOREIGN KEY (ticket_id, physical_attempt_id)
         REFERENCES caller_work_tickets(ticket_id, physical_attempt_id)
 );
+
+CREATE TABLE IF NOT EXISTS caller_work_command_receipts (
+    operation_id TEXT NOT NULL,
+    ticket_id TEXT NOT NULL,
+    command_kind TEXT NOT NULL CHECK (command_kind IN (
+        'claim', 'mark_send_started', 'cancel_before_send', 'commit', 'reconcile'
+    )),
+    idempotency_key TEXT NOT NULL,
+    command_digest TEXT NOT NULL,
+    result_revision INTEGER NOT NULL CHECK (result_revision >= 0),
+    result_ticket_json TEXT NOT NULL,
+    result_digest TEXT NOT NULL,
+    created_at_unix_ms INTEGER NOT NULL,
+    PRIMARY KEY (operation_id, idempotency_key),
+    FOREIGN KEY (operation_id, ticket_id)
+        REFERENCES caller_work_tickets(operation_id, ticket_id),
+    CHECK (
+        length(command_digest) = 71
+        AND substr(command_digest, 1, 7) = 'sha256:'
+        AND substr(command_digest, 8) NOT GLOB '*[^0-9a-f]*'
+    ),
+    CHECK (
+        length(result_digest) = 71
+        AND substr(result_digest, 1, 7) = 'sha256:'
+        AND substr(result_digest, 8) NOT GLOB '*[^0-9a-f]*'
+    ),
+    CHECK (json_valid(result_ticket_json)),
+    CHECK (json_type(result_ticket_json, '$.operation.value') = 'text'),
+    CHECK (json_extract(result_ticket_json, '$.operation.value') = operation_id),
+    CHECK (json_type(result_ticket_json, '$.ticket_id') = 'text'),
+    CHECK (json_extract(result_ticket_json, '$.ticket_id') = ticket_id),
+    CHECK (json_type(result_ticket_json, '$.revision') = 'integer'),
+    CHECK (json_extract(result_ticket_json, '$.revision') = result_revision)
+);
+
+CREATE TRIGGER IF NOT EXISTS caller_work_command_receipts_no_update
+BEFORE UPDATE ON caller_work_command_receipts
+BEGIN
+    SELECT RAISE(ABORT, 'caller work command receipts are immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS caller_work_command_receipts_no_delete
+BEFORE DELETE ON caller_work_command_receipts
+BEGIN
+    SELECT RAISE(ABORT, 'caller work command receipts are immutable');
+END;
 
 CREATE TABLE IF NOT EXISTS rlm_workbench_successor_outbox (
     operation_id TEXT NOT NULL REFERENCES rlm_workbench_jobs(operation_id),
@@ -446,6 +493,8 @@ CREATE INDEX IF NOT EXISTS idx_caller_work_claim_expiry
     ON caller_work_tickets(state, claim_expires_at_unix_ms);
 CREATE INDEX IF NOT EXISTS idx_candidate_receipts_ticket
     ON caller_work_candidate_receipts(ticket_id, observed_at_unix_ms);
+CREATE INDEX IF NOT EXISTS idx_caller_command_receipts_ticket
+    ON caller_work_command_receipts(ticket_id, created_at_unix_ms);
 CREATE INDEX IF NOT EXISTS idx_artifact_stages_state
     ON rlm_workbench_artifact_stages(operation_id, state);
 CREATE INDEX IF NOT EXISTS idx_successor_outbox_state
