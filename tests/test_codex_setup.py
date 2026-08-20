@@ -65,7 +65,7 @@ class _FakeCodexState:
                 self.config.write_text("", encoding="utf-8")
             return
         self.config.write_text(
-            "[mcp_servers.aar]\n" f"command = {json.dumps(command)}\n", encoding="utf-8"
+            f"[mcp_servers.aar]\ncommand = {json.dumps(command)}\n", encoding="utf-8"
         )
 
     def restore_initial_global(self) -> None:
@@ -161,7 +161,8 @@ def _is_mutating_codex_call(call: tuple[str, ...]) -> bool:
     return (
         call[:3] == ("plugin", "marketplace", "add")
         or call == ("plugin", "marketplace", "remove", codex_setup.MARKETPLACE_NAME)
-        or call[:2] in {
+        or call[:2]
+        in {
             ("plugin", "add"),
             ("plugin", "disable"),
             ("plugin", "remove"),
@@ -176,13 +177,11 @@ def test_setup_preflight_uses_declared_codex_launcher_and_attached_supervisor(
 ) -> None:
     name = "aar-codex-mcp.exe" if os.name == "nt" else "aar-codex-mcp"
     command = Path(sys.executable).with_name(name)
-    report = asyncio.run(
-        run_setup_preflight(command, runtime_home=tmp_path / "runtime")
-    )
+    report = asyncio.run(run_setup_preflight(command, runtime_home=tmp_path / "runtime"))
     assert report["declared_command"] == os.fspath(command.resolve(strict=True))
     assert report["declared_args"] == []
     assert report["server_name"] == "aar-mcp"
-    assert report["tool_count"] == 30
+    assert report["tool_count"] == 38
     assert report["supervisor"]["mode"] == "attached-supervisor"
     assert report["supervisor"]["frontend_ephemeral"] is True
     assert report["supervisor"]["process_identity_digest"].startswith("sha256:")
@@ -194,9 +193,10 @@ def test_setup_preflight_uses_declared_codex_launcher_and_attached_supervisor(
     retained = SupervisorDiscoveryRecord.model_validate_json(
         discovery_path.read_bytes(), strict=True
     )
-    assert canonical_sha256(retained.process_identity) == report["supervisor"][
-        "process_identity_digest"
-    ]
+    assert (
+        canonical_sha256(retained.process_identity)
+        == report["supervisor"]["process_identity_digest"]
+    )
     assert not process_identity_matches(retained.process_identity)
 
 
@@ -257,9 +257,7 @@ def test_configure_codex_reuses_existing_aar_marketplace_in_manual_plan(
 ) -> None:
     marketplace = ROOT / "profiles" / "codex"
     aar_mcp = Path("/tools/aar-mcp")
-    state = _FakeCodexState(
-        tmp_path / "config.toml", marketplace, marketplace_root=marketplace
-    )
+    state = _FakeCodexState(tmp_path / "config.toml", marketplace, marketplace_root=marketplace)
 
     report = _manual_report(state, marketplace, aar_mcp, state.config)
 
@@ -300,9 +298,7 @@ def test_configure_codex_does_not_enter_marketplace_failure_or_rollback(
     marketplace = ROOT / "profiles" / "codex"
     stale = tmp_path / "stale-marketplace"
     stale.mkdir()
-    state = _FakeCodexState(
-        tmp_path / "config.toml", marketplace, marketplace_root=stale
-    )
+    state = _FakeCodexState(tmp_path / "config.toml", marketplace, marketplace_root=stale)
     state.marketplace_add_error = RuntimeError("must remain unreachable")
 
     report = _manual_report(state, marketplace, Path("/tools/aar-mcp"), state.config)
@@ -426,9 +422,7 @@ def test_configure_codex_never_runs_mutation_hook_that_would_publish_drift(
         nonlocal hook_ran
         hook_ran = True
 
-    state.set_hook(
-        ("plugin", "add", codex_setup.PLUGIN_SELECTOR, "--json"), publish_drift
-    )
+    state.set_hook(("plugin", "add", codex_setup.PLUGIN_SELECTOR, "--json"), publish_drift)
 
     _manual_report(state, marketplace, Path("/tools/aar-mcp"), state.config)
 
@@ -589,17 +583,14 @@ def test_manual_plan_receipt_preserves_restart_handoff_without_persistent_state(
 def test_configure_codex_rejects_conflicting_global_mcp_override(tmp_path: Path) -> None:
     marketplace = ROOT / "profiles" / "codex"
     version = json.loads(
-        (
-            marketplace
-            / "plugins/adaptive-agent-runtime/.codex-plugin/plugin.json"
-        ).read_text(encoding="utf-8")
+        (marketplace / "plugins/adaptive-agent-runtime/.codex-plugin/plugin.json").read_text(
+            encoding="utf-8"
+        )
     )["version"]
 
     def invoke(arguments: tuple[str, ...]) -> str:
         if arguments == ("plugin", "marketplace", "list", "--json"):
-            return json.dumps(
-                {"marketplaces": [{"name": "aar-local", "root": str(marketplace)}]}
-            )
+            return json.dumps({"marketplaces": [{"name": "aar-local", "root": str(marketplace)}]})
         if arguments == ("plugin", "list", "--json"):
             return json.dumps(
                 {
@@ -661,9 +652,7 @@ def test_main_requests_restart_only_when_configuration_changed(
         )
 
     monkeypatch.setattr(codex_setup, "default_runtime_home", lambda: runtime_home)
-    monkeypatch.setattr(
-        codex_setup, "ensure_codex_supervisor", ensure, raising=False
-    )
+    monkeypatch.setattr(codex_setup, "ensure_codex_supervisor", ensure, raising=False)
 
     assert codex_setup.main(["--skip-preflight"]) == 0
     report = json.loads(capsys.readouterr().out)
@@ -733,10 +722,7 @@ def test_main_stop_runtime_uses_exact_selected_runtime_home(
     monkeypatch.setattr(codex_setup, "stop_codex_supervisor", stop)
 
     assert (
-        codex_setup.main(
-            ["--stop-runtime", "--codex-runtime-home", os.fspath(runtime_home)]
-        )
-        == 0
+        codex_setup.main(["--stop-runtime", "--codex-runtime-home", os.fspath(runtime_home)]) == 0
     )
     report = json.loads(capsys.readouterr().out)
     assert observed == [runtime_home.resolve(strict=False)]
@@ -885,23 +871,29 @@ def _provider_revision_red_case(
     fake = RevisionedFake()
     before = fake.snapshot()
     commands = {
-        "marketplace-add": (
-            "plugin", "marketplace", "add", os.fspath(marketplace), "--json"
-        ),
+        "marketplace-add": ("plugin", "marketplace", "add", os.fspath(marketplace), "--json"),
         "marketplace-remove-prior": (
-            "plugin", "marketplace", "remove", codex_setup.MARKETPLACE_NAME
+            "plugin",
+            "marketplace",
+            "remove",
+            codex_setup.MARKETPLACE_NAME,
         ),
         "marketplace-add-target": (
-            "plugin", "marketplace", "add", os.fspath(marketplace), "--json"
+            "plugin",
+            "marketplace",
+            "add",
+            os.fspath(marketplace),
+            "--json",
         ),
         "plugin-add": ("plugin", "add", codex_setup.PLUGIN_SELECTOR, "--json"),
         "global-mcp-remove": ("mcp", "remove", "aar"),
         "restore-global-mcp": ("mcp", "add", "aar", "--", os.fspath(aar_mcp)),
-        "remove-transaction-plugin": (
-            "plugin", "remove", codex_setup.PLUGIN_SELECTOR
-        ),
+        "remove-transaction-plugin": ("plugin", "remove", codex_setup.PLUGIN_SELECTOR),
         "remove-transaction-marketplace": (
-            "plugin", "marketplace", "remove", codex_setup.MARKETPLACE_NAME
+            "plugin",
+            "marketplace",
+            "remove",
+            codex_setup.MARKETPLACE_NAME,
         ),
         "restore-prior-marketplace": (
             "plugin",
@@ -910,12 +902,8 @@ def _provider_revision_red_case(
             os.path.normcase(os.fspath(stale_marketplace.resolve(strict=False))),
             "--json",
         ),
-        "restore-prior-plugin": (
-            "plugin", "add", codex_setup.PLUGIN_SELECTOR, "--json"
-        ),
-        "restore-prior-plugin-disabled-state": (
-            "plugin", "disable", codex_setup.PLUGIN_SELECTOR
-        ),
+        "restore-prior-plugin": ("plugin", "add", codex_setup.PLUGIN_SELECTOR, "--json"),
+        "restore-prior-plugin-disabled-state": ("plugin", "disable", codex_setup.PLUGIN_SELECTOR),
     }
     target_command = commands[stage]
     expected_revision = fake.provider_revision
@@ -936,6 +924,7 @@ def _provider_revision_red_case(
                 state._write_global("/foreign/aar-mcp")
 
     if stage == "restore-prior-plugin":
+
         def delayed_conflict(state: RevisionedFake) -> None:
             if state.marketplace_root == stale_marketplace.resolve(strict=False):
                 conflict_at_final_seam(state)

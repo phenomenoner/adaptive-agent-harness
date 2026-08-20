@@ -7,10 +7,10 @@
     "2025-03-26",
     "2024-11-05"
   ],
-  "schema_bundle_digest": "sha256:abe284f3a19d13bfd45332a7a21db797da4ef7ff988f81cbcf3c24867a868e02",
-  "skill_digest": "sha256:a5a281ae308d1c8bfc8f426b4161dc9dcd44b4ec09c0202ddd4a8224b43dcaf6",
+  "schema_bundle_digest": "sha256:159f31737e958cc2835af3be414a6a531fe6729de05db393672ba57910cdf2d2",
+  "skill_digest": "sha256:708ce77448844f2745944fd1b783fce4eabe16beaf92ed1332cd8ec6cee5baa7",
   "skill_name": "aar-operations",
-  "skill_version": "0.9.6",
-  "tool_surface_digest": "sha256:2253510244f7e42ae6a46b3e68c04cc4643150429c11dbffb1c56d79d5df3c84",
-  "tool_surface_version": "aar.mcp-tools.v7"
+  "skill_version": "0.10.0",
+  "tool_surface_digest": "sha256:6a483f15a7805f49128590a280724766216074aa07f29cbbfe8d5a74d49a8d01",
+  "tool_surface_version": "aar.mcp-tools.v8"
 }

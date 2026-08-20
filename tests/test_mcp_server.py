@@ -69,6 +69,7 @@ def test_fixed_hermes_sampling_cli_warns_and_names_caller_delegated_replacement(
             == 0
         )
 
+
 ROOT = Path(__file__).resolve().parents[1]
 NOW_MS = 1_700_000_000_000
 EXPECTED_TOOLS = (
@@ -102,7 +103,16 @@ EXPECTED_TOOLS = (
     "aar_operation_reconcile",
     "aar_checkpoint_describe",
     "aar_artifact_resolve",
+    "aar_rlm_workbench_execute",
+    "aar_rlm_workbench_capabilities",
+    "aar_rlm_workbench_status",
+    "aar_broker_work_claim",
+    "aar_broker_work_mark_send_started",
+    "aar_broker_work_cancel_before_send",
+    "aar_broker_work_commit",
+    "aar_broker_work_reconcile",
 )
+FROZEN_V7_TOOLS = EXPECTED_TOOLS[:30]
 
 
 def _structured(result) -> dict[str, Any]:
@@ -244,7 +254,7 @@ def test_in_process_discovery_and_capability_fallback_are_deterministic(
                 assert capabilities["server_name"] == "aar-mcp"
                 assert capabilities["sdk_version"] == "2.0.0"
                 assert capabilities["negotiated_protocol_version"] == "2026-07-28"
-                assert tuple(capabilities["tool_names"]) == EXPECTED_TOOLS
+                assert tuple(capabilities["tool_names"]) == FROZEN_V7_TOOLS
                 assert capabilities["operation_skill_digest"] != f"sha256:{'0' * 64}"
                 assert capabilities["authority_statement"] == (
                     "AAR computes and proposes. The host authorizes and delivers."
@@ -619,8 +629,7 @@ def test_brokered_rlm_mcp_slice_is_progressive_bounded_and_cancellable(
                     "model.request",
                 ]
                 assert all(
-                    "request_schema_json" not in method
-                    for method in catalog["catalog"]["methods"]
+                    "request_schema_json" not in method for method in catalog["catalog"]["methods"]
                 )
 
                 described = _structured(
@@ -736,11 +745,7 @@ def test_program_workspace_mcp_plain_lifecycle_is_complete(tmp_path: Path) -> No
                                 capability="workspace.program.execute",
                             ),
                             "handle": created_handle,
-                            "code": (
-                                "answer = 6 * 7\n"
-                                "aar_display({'answer': answer})\n"
-                                "answer"
-                            ),
+                            "code": ("answer = 6 * 7\naar_display({'answer': answer})\nanswer"),
                             "wall_time_ms": 1_000,
                         },
                     )
@@ -761,9 +766,7 @@ def test_program_workspace_mcp_plain_lifecycle_is_complete(tmp_path: Path) -> No
                         },
                     )
                 )
-                variables = {
-                    item["name"]: item for item in inspected["snapshot"]["variables"]
-                }
+                variables = {item["name"]: item for item in inspected["snapshot"]["variables"]}
                 assert variables["answer"]["preview"] == "42"
 
                 reconciled = _structured(
@@ -1104,12 +1107,10 @@ def test_program_workspace_mcp_reaches_real_ipython_worker(tmp_path: Path) -> No
                         },
                     )
                 )
-                assert [
-                    item["name"] for item in checkpointed["manifest"]["values"]
-                ] == ["answer"]
-                assert [
-                    item["name"] for item in checkpointed["manifest"]["exclusions"]
-                ] == ["IPython"]
+                assert [item["name"] for item in checkpointed["manifest"]["values"]] == ["answer"]
+                assert [item["name"] for item in checkpointed["manifest"]["exclusions"]] == [
+                    "IPython"
+                ]
         finally:
             application.close()
 
@@ -1359,9 +1360,7 @@ def test_program_restart_keeps_missing_worker_receipt_indeterminate(tmp_path: Pa
                     capabilities,
                     workspace_id="workspace-program-restart",
                 )
-                handle = ProgrammableWorkspaceHandle.model_validate(
-                    created["handle"], strict=True
-                )
+                handle = ProgrammableWorkspaceHandle.model_validate(created["handle"], strict=True)
                 context = McpMutationContext.model_validate(
                     _mutation_context(
                         capabilities,
@@ -1433,10 +1432,7 @@ def test_program_restart_keeps_missing_worker_receipt_indeterminate(tmp_path: Pa
                 assert generic["state"] == "indeterminate"
                 assert generic["certainty"] == "indeterminate"
                 assert generic["reconciliation_required"] is True
-                assert (
-                    generic["failure"]["code"]
-                    == "PROGRAM_RECEIPT_UNAVAILABLE_AFTER_RESTART"
-                )
+                assert generic["failure"]["code"] == "PROGRAM_RECEIPT_UNAVAILABLE_AFTER_RESTART"
 
                 wrong_handle = {**handle, "revision": 1}
                 denied = _structured(
@@ -1462,10 +1458,7 @@ def test_program_restart_keeps_missing_worker_receipt_indeterminate(tmp_path: Pa
                     )
                 )
                 assert program["result"]["state"] == "lost"
-                assert (
-                    program["failure"]["code"]
-                    == "PROGRAM_RECEIPT_UNAVAILABLE_AFTER_RESTART"
-                )
+                assert program["failure"]["code"] == "PROGRAM_RECEIPT_UNAVAILABLE_AFTER_RESTART"
                 assert program["failure"]["certainty"] == "indeterminate"
 
                 final_status = _structured(
@@ -1786,9 +1779,7 @@ def test_compensation_admission_rechecks_durable_control_revision(
         traces = application.host.brokers.bind(envelope, accepted.operation).traces()
         assert [trace.method for trace in traces] == ["model.request"]
         assert traces[0].compensation_digest is None
-        control = application.host.registry.continuity_snapshot(
-            accepted.operation
-        ).control
+        control = application.host.registry.continuity_snapshot(accepted.operation).control
         assert control.cancellation_requested is True
         assert control.control_revision == 1
     finally:

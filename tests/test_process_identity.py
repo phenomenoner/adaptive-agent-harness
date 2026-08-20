@@ -251,6 +251,76 @@ def test_exact_child_contains_unavailable_signal_without_popen_fallback() -> Non
     assert child.state is ExactChildState.UNRESOLVED
 
 
+def test_linux_pidfd_uses_named_libc_when_stdlib_wrappers_are_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not sys.platform.startswith("linux"):
+        pytest.skip("named libc pidfd fallback is Linux-only")
+
+    identity = current_process_identity()
+    read_fd, write_fd = os.pipe()
+    calls: list[tuple[object, ...]] = []
+
+    class FakeCFunction:
+        def __init__(self, result: int) -> None:
+            self.result = result
+            self.argtypes: object = None
+            self.restype: object = None
+
+        def __call__(self, *args: object) -> int:
+            calls.append(args)
+            return self.result
+
+    class FakeLibc:
+        pidfd_open = FakeCFunction(read_fd)
+        pidfd_send_signal = FakeCFunction(0)
+
+    monkeypatch.delattr(process_identity_module.os, "pidfd_open", raising=False)
+    monkeypatch.delattr(process_identity_module.signal, "pidfd_send_signal", raising=False)
+    monkeypatch.setattr(
+        process_identity_module.ctypes,
+        "CDLL",
+        lambda *_args, **_kwargs: FakeLibc(),
+    )
+    monkeypatch.setattr(
+        process_identity_module.os,
+        "kill",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("PID-only os.kill fallback is forbidden")
+        ),
+    )
+
+    try:
+        with process_identity_module.open_exact_process(identity, terminate=True) as target:
+            assert target.kind == "linux-pidfd"
+            assert target.send_signal(signal.SIGTERM) is True
+            assert target.wait(0) is False
+    finally:
+        os.close(write_fd)
+
+    assert calls[0] == (identity.pid, 0)
+    assert calls[1][0:2] == (read_fd, signal.SIGTERM)
+
+
+def test_linux_pidfd_fails_closed_when_stdlib_and_libc_symbols_are_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not sys.platform.startswith("linux"):
+        pytest.skip("named libc pidfd fallback is Linux-only")
+
+    identity = current_process_identity()
+    monkeypatch.delattr(process_identity_module.os, "pidfd_open", raising=False)
+    monkeypatch.delattr(process_identity_module.signal, "pidfd_send_signal", raising=False)
+    monkeypatch.setattr(
+        process_identity_module.ctypes,
+        "CDLL",
+        lambda *_args, **_kwargs: object(),
+    )
+
+    with pytest.raises(ProcessIdentityUnavailable, match="pidfd"):
+        process_identity_module.open_exact_process(identity, terminate=True)
+
+
 def test_unsupported_platform_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(process_identity_module.os, "name", "posix")
     monkeypatch.setattr(sys, "platform", "plan9")
@@ -287,9 +357,7 @@ def test_discovery_record_round_trip_and_self_digest() -> None:
         protocol_version=DEFAULT_PROTOCOL_VERSION,
     )
 
-    restored = SupervisorDiscoveryRecord.model_validate_json(
-        record.model_dump_json(), strict=True
-    )
+    restored = SupervisorDiscoveryRecord.model_validate_json(record.model_dump_json(), strict=True)
     assert restored == record
     assert restored.validate_discovery_digest() == record
     assert restored.pid == identity.pid

@@ -59,6 +59,10 @@ from aar.runtime.workspace_models import (
 )
 from aar.schemas import OperationRef, SessionRef, WorkspaceRef
 
+BrokerRequestHandler = Callable[
+    [OperationRef, ProgrammableWorkspaceHandle, dict[str, Any]], dict[str, Any]
+]
+
 
 class WorkspaceWorkerLost(WorkspaceClosed):
     pass
@@ -66,6 +70,15 @@ class WorkspaceWorkerLost(WorkspaceClosed):
 
 class WorkspaceWorkerProtocolError(WorkspaceClosed):
     pass
+
+
+class WorkspaceBrokerSuspended(RuntimeError):
+    """A broker intent durably released its predecessor attempt for caller work."""
+
+    def __init__(self, *, ticket_id: str, suspension_revision: int) -> None:
+        super().__init__(f"caller work suspended as {ticket_id}")
+        self.ticket_id = ticket_id
+        self.suspension_revision = suspension_revision
 
 
 class _WorkerTimeout(TimeoutError):
@@ -86,9 +99,16 @@ class _WorkerState:
     lost: bool = False
     lost_reason: str | None = None
     running_operation: OperationRef | None = None
+    suspended_operation: OperationRef | None = None
     cancel_requested: threading.Event = field(default_factory=threading.Event)
     lock: threading.RLock = field(default_factory=threading.RLock)
     io_lock: threading.Lock = field(default_factory=threading.Lock)
+
+
+@dataclass(frozen=True)
+class WorkspaceWorkerBinding:
+    owner_generation: int
+    process_identity_digest: str
 
 
 class SupervisedIPythonWorkspaceBackend:
@@ -98,10 +118,12 @@ class SupervisedIPythonWorkspaceBackend:
         self,
         *,
         artifact_sink: ArtifactSink | None = None,
+        broker_handler: BrokerRequestHandler | None = None,
         startup_timeout_s: float = 15.0,
         worker_manager: WorkerManager | None = None,
     ) -> None:
         self._artifact_sink = artifact_sink
+        self._broker_handler = broker_handler
         self._startup_timeout_s = startup_timeout_s
         self._worker_manager = worker_manager
         ipython_version = importlib.metadata.version("ipython")
@@ -110,6 +132,7 @@ class SupervisedIPythonWorkspaceBackend:
             version=ipython_version,
             checkpoint_formats=("aar.workspace-checkpoint.v1",),
             features=(
+                "broker.caller-delegated",
                 "checkpoint.json-subset",
                 "events.rich-display",
                 "events.structured",
@@ -124,6 +147,7 @@ class SupervisedIPythonWorkspaceBackend:
         )
         self._states: dict[str, _WorkerState] = {}
         self._receipts: dict[str, WorkspaceProgramResult] = {}
+        self._rebind_receipts: dict[str, tuple[WorkspaceProgramResult, WorkspaceBrokerFrame]] = {}
         self._lock = threading.RLock()
 
     @property
@@ -134,9 +158,30 @@ class SupervisedIPythonWorkspaceBackend:
     def environment(self) -> WorkspaceEnvironmentFingerprint:
         return self._environment
 
-    def create(
-        self, workspace: WorkspaceRef, session: SessionRef
-    ) -> ProgrammableWorkspaceHandle:
+    def bind_broker_handler(self, handler: BrokerRequestHandler) -> None:
+        with self._lock:
+            if self._broker_handler is not None and self._broker_handler is not handler:
+                raise WorkspaceOperationConflict("workspace broker handler is already bound")
+            self._broker_handler = handler
+
+    def worker_binding(self, handle: ProgrammableWorkspaceHandle) -> WorkspaceWorkerBinding:
+        state = self._state(handle.workspace)
+        with state.lock:
+            self._check_handle(state, handle)
+            self._assert_available(state)
+            owner_generation = (
+                self._worker_manager.runtime_generation
+                if self._worker_manager is not None
+                else handle.generation
+            )
+            return WorkspaceWorkerBinding(
+                owner_generation=owner_generation,
+                process_identity_digest=canonical_sha256(
+                    state.exact_child.identity.model_dump(mode="json")
+                ),
+            )
+
+    def create(self, workspace: WorkspaceRef, session: SessionRef) -> ProgrammableWorkspaceHandle:
         with self._lock:
             state = self._states.get(workspace.value)
             if state is None:
@@ -185,7 +230,7 @@ class SupervisedIPythonWorkspaceBackend:
         with state.lock:
             self._check_handle(state, handle)
             self._assert_available(state)
-            if state.running_operation is not None:
+            if state.running_operation is not None or state.suspended_operation is not None:
                 raise WorkspaceOperationConflict("another operation is already running")
             state.running_operation = operation
             state.cancel_requested.clear()
@@ -199,8 +244,11 @@ class SupervisedIPythonWorkspaceBackend:
                         "max_output_chars": spec.max_output_chars,
                         "max_events": spec.max_events,
                         "artifact_enabled": self._artifact_sink is not None,
+                        "broker_enabled": self._broker_handler is not None,
                     },
                     timeout_s=(spec.wall_time_ms / 1_000) + 0.25,
+                    broker_operation=operation,
+                    broker_handle=handle,
                 )
                 try:
                     result = self._result_from_response(operation, handle, spec, response)
@@ -210,9 +258,14 @@ class SupervisedIPythonWorkspaceBackend:
                     raise WorkspaceWorkerProtocolError(
                         "worker execution response failed validation"
                     ) from error
+            except WorkspaceBrokerSuspended:
+                state.suspended_operation = operation
+                raise
             except (_WorkerTimeout, WorkspaceWorkerLost, WorkspaceWorkerProtocolError) as error:
-                status = "interrupted" if state.cancel_requested.is_set() else (
-                    "timed_out" if isinstance(error, _WorkerTimeout) else "failed"
+                status = (
+                    "interrupted"
+                    if state.cancel_requested.is_set()
+                    else ("timed_out" if isinstance(error, _WorkerTimeout) else "failed")
                 )
                 self._mark_lost(state, str(error))
                 result = self._lost_result(operation, handle, status, str(error), spec.max_events)
@@ -225,6 +278,133 @@ class SupervisedIPythonWorkspaceBackend:
             with self._lock:
                 self._receipts[operation.value] = result
             return result
+
+    def send_rebind_prepare(
+        self,
+        operation: OperationRef,
+        handle: ProgrammableWorkspaceHandle,
+        frame: WorkspaceBrokerFrame,
+    ) -> None:
+        document = frame.model_dump(mode="json")
+        if document["kind"] != "rebind_prepare":
+            raise WorkspaceWorkerProtocolError("expected a rebind_prepare frame")
+        state = self._state(handle.workspace)
+        with state.lock:
+            self._check_handle(state, handle)
+            self._assert_available(state)
+            if state.suspended_operation != operation or state.running_operation is not None:
+                raise WorkspaceOperationConflict("operation does not own a suspended worker stack")
+            with state.io_lock:
+                self._write_worker_message(state, {"rebind_prepare": document})
+
+    def resume_rebind_commit(
+        self,
+        operation: OperationRef,
+        handle: ProgrammableWorkspaceHandle,
+        spec: WorkspaceProgramSpec,
+        receipt_frame: WorkspaceBrokerFrame,
+        commit_frame: WorkspaceBrokerFrame,
+    ) -> tuple[WorkspaceProgramResult, WorkspaceBrokerFrame]:
+        receipt_document = receipt_frame.model_dump(mode="json")
+        commit_document = commit_frame.model_dump(mode="json")
+        if receipt_document["kind"] != "broker_receipt":
+            raise WorkspaceWorkerProtocolError("expected a broker_receipt frame")
+        if commit_document["kind"] != "rebind_commit":
+            raise WorkspaceWorkerProtocolError("expected a rebind_commit frame")
+        state = self._state(handle.workspace)
+        with state.lock:
+            self._check_handle(state, handle)
+            self._assert_available(state)
+            if state.suspended_operation != operation or state.running_operation is not None:
+                raise WorkspaceOperationConflict("operation does not own a suspended worker stack")
+            state.running_operation = operation
+            timeout_s = (spec.wall_time_ms / 1_000) + 0.25
+            try:
+                with state.io_lock:
+                    self._write_worker_message(state, {"broker_receipt": receipt_document})
+                    self._write_worker_message(state, {"rebind_commit": commit_document})
+                    ack_envelope = self._read_response(state, timeout_s=timeout_s)
+                    if set(ack_envelope) != {"rebind_ack"}:
+                        raise WorkspaceWorkerProtocolError(
+                            "worker did not emit one rebind acknowledgement"
+                        )
+                    acknowledgement = WorkspaceBrokerFrame.model_validate(
+                        ack_envelope["rebind_ack"], strict=True
+                    )
+                    if acknowledgement.root["kind"] != "rebind_ack":
+                        raise WorkspaceWorkerProtocolError(
+                            "worker rebind acknowledgement kind changed"
+                        )
+                    response = self._read_response(state, timeout_s=timeout_s)
+                if not response.get("ok"):
+                    raise WorkspaceWorkerProtocolError(
+                        f"worker rejected resumed command: {response.get('error_type')}: "
+                        f"{response.get('message')}"
+                    )
+                result = self._result_from_response(operation, handle, spec, response)
+            except (_WorkerTimeout, WorkspaceWorkerLost, WorkspaceWorkerProtocolError) as error:
+                self._mark_lost(state, str(error))
+                raise
+            finally:
+                state.running_operation = None
+            state.suspended_operation = None
+            state.managed_event_sequence += len(result.events)
+            self._managed_heartbeat(state)
+            state.revision = result.revision_after
+            with self._lock:
+                self._receipts[operation.value] = result
+                self._rebind_receipts[operation.value] = (result, acknowledgement)
+            return result, acknowledgement
+
+    def reconcile_rebind_commit(
+        self,
+        operation: OperationRef,
+        handle: ProgrammableWorkspaceHandle,
+    ) -> tuple[WorkspaceWorkerBinding, WorkspaceProgramResult, WorkspaceBrokerFrame] | None:
+        """Return one applied live-rebind result without redelivering its commit."""
+
+        state = self._state(handle.workspace)
+        with state.lock:
+            if handle.backend != self.descriptor:
+                raise WorkspaceRevisionConflict(
+                    "workspace backend capability identity does not match this backend"
+                )
+            if state.generation != handle.generation:
+                raise StaleWorkspaceGeneration(
+                    f"workspace generation is {state.generation}, not {handle.generation}"
+                )
+            self._assert_available(state)
+            with self._lock:
+                applied = self._rebind_receipts.get(operation.value)
+            if applied is None:
+                if state.revision != handle.revision:
+                    raise WorkspaceRevisionConflict(
+                        "workspace advanced without a retained rebind receipt"
+                    )
+                return None
+            result, acknowledgement = applied
+            if (
+                result.workspace != handle.workspace
+                or result.generation != handle.generation
+                or result.revision_before != handle.revision
+                or result.revision_after != handle.revision + 1
+                or state.revision != result.revision_after
+            ):
+                raise WorkspaceOperationConflict(
+                    "retained rebind receipt does not match the predecessor workspace boundary"
+                )
+            owner_generation = (
+                self._worker_manager.runtime_generation
+                if self._worker_manager is not None
+                else handle.generation
+            )
+            binding = WorkspaceWorkerBinding(
+                owner_generation=owner_generation,
+                process_identity_digest=canonical_sha256(
+                    state.exact_child.identity.model_dump(mode="json")
+                ),
+            )
+            return binding, result, acknowledgement
 
     def inspect(self, handle: ProgrammableWorkspaceHandle) -> ProgrammableWorkspaceSnapshot:
         state = self._state(handle.workspace)
@@ -249,7 +429,10 @@ class SupervisedIPythonWorkspaceBackend:
     ) -> WorkspaceInterruptResult:
         state = self._state(handle.workspace)
         self._check_handle(state, handle)
-        if state.running_operation != operation or state.process.poll() is not None:
+        if (
+            operation not in {state.running_operation, state.suspended_operation}
+            or state.process.poll() is not None
+        ):
             return WorkspaceInterruptResult(
                 operation=operation,
                 accepted=False,
@@ -372,9 +555,7 @@ class SupervisedIPythonWorkspaceBackend:
                     self._register_managed(spec.workspace, state)
                 with self._lock:
                     if self._states.get(spec.workspace.value) is not current_state:
-                        raise WorkspaceOperationConflict(
-                            "workspace changed during restore handoff"
-                        )
+                        raise WorkspaceOperationConflict("workspace changed during restore handoff")
                     self._states[spec.workspace.value] = state
             except BaseException:
                 self._terminate(state)
@@ -389,9 +570,7 @@ class SupervisedIPythonWorkspaceBackend:
             if spec.expected_handle is not None and not spec.recover_lost_generation:
                 raise WorkspaceNotFound(spec.workspace.value)
             state = restored_state(
-                spec.expected_handle.generation + 1
-                if spec.expected_handle is not None
-                else 1
+                spec.expected_handle.generation + 1 if spec.expected_handle is not None else 1
             )
             with self._lock:
                 if self._states.get(spec.workspace.value) is not None:
@@ -505,8 +684,18 @@ class SupervisedIPythonWorkspaceBackend:
                 disposition="lost",
                 reason=state.lost_reason,
             )
-        status = "lost" if state.lost else (
-            "closed" if state.closed else ("busy" if state.running_operation else "ready")
+        status = (
+            "lost"
+            if state.lost
+            else (
+                "closed"
+                if state.closed
+                else (
+                    "busy"
+                    if state.running_operation is not None or state.suspended_operation is not None
+                    else "ready"
+                )
+            )
         )
         return WorkspaceHealth(
             workspace=handle.workspace,
@@ -561,13 +750,11 @@ class SupervisedIPythonWorkspaceBackend:
                 raise WorkspaceOperationConflict("only a lost workspace receipt may be retired")
             del self._receipts[operation.value]
 
-    def close(
-        self, handle: ProgrammableWorkspaceHandle, *, reason: str
-    ) -> WorkspaceCloseResult:
+    def close(self, handle: ProgrammableWorkspaceHandle, *, reason: str) -> WorkspaceCloseResult:
         state = self._state(handle.workspace)
         with state.lock:
             self._check_handle(state, handle)
-            if state.running_operation is not None:
+            if state.running_operation is not None or state.suspended_operation is not None:
                 raise WorkspaceOperationConflict("cannot close while an operation is running")
             result = WorkspaceCloseResult(
                 handle=self._handle(handle.workspace, state),
@@ -665,8 +852,25 @@ class SupervisedIPythonWorkspaceBackend:
             environment_digest=self._environment.digest,
         )
 
+    @staticmethod
+    def _write_worker_message(state: _WorkerState, payload: dict[str, Any]) -> None:
+        stream = state.process.stdin
+        if stream is None:
+            raise WorkspaceWorkerLost("worker stdin is unavailable")
+        try:
+            stream.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
+            stream.flush()
+        except (BrokenPipeError, OSError) as error:
+            raise WorkspaceWorkerLost(f"worker input failed: {error}") from error
+
     def _request(
-        self, state: _WorkerState, payload: dict[str, Any], *, timeout_s: float
+        self,
+        state: _WorkerState,
+        payload: dict[str, Any],
+        *,
+        timeout_s: float,
+        broker_operation: OperationRef | None = None,
+        broker_handle: ProgrammableWorkspaceHandle | None = None,
     ) -> dict[str, Any]:
         self._assert_available(state)
         with state.io_lock:
@@ -678,7 +882,51 @@ class SupervisedIPythonWorkspaceBackend:
                 stream.flush()
             except (BrokenPipeError, OSError) as error:
                 raise WorkspaceWorkerLost(f"worker input failed: {error}") from error
-            response = self._read_response(state, timeout_s=timeout_s)
+            while True:
+                response = self._read_response(state, timeout_s=timeout_s)
+                if "broker_request" not in response:
+                    break
+                request = response["broker_request"]
+                if (
+                    self._broker_handler is None
+                    or broker_operation is None
+                    or broker_handle is None
+                    or not isinstance(request, dict)
+                ):
+                    broker_reply = {
+                        "broker_error": {
+                            "type": "WorkspaceWorkerProtocolError",
+                            "message": "worker broker request has no bound supervisor handler",
+                        }
+                    }
+                else:
+                    try:
+                        broker_reply = {
+                            "broker_response": self._broker_handler(
+                                broker_operation, broker_handle, request
+                            )
+                        }
+                    except WorkspaceBrokerSuspended:
+                        raise
+                    except BaseException as error:
+                        broker_reply = {
+                            "broker_error": {
+                                "type": type(error).__name__[:128],
+                                "message": (str(error) or type(error).__name__)[:512],
+                            }
+                        }
+                try:
+                    stream.write(
+                        json.dumps(
+                            broker_reply,
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                        )
+                        + "\n"
+                    )
+                    stream.flush()
+                except (BrokenPipeError, OSError) as error:
+                    raise WorkspaceWorkerLost(f"worker broker reply failed: {error}") from error
         if not response.get("ok"):
             raise WorkspaceWorkerProtocolError(
                 f"worker rejected command: {response.get('error_type')}: {response.get('message')}"
@@ -832,9 +1080,7 @@ class SupervisedIPythonWorkspaceBackend:
             raise WorkspaceNotFound(workspace.value)
         return state
 
-    def _check_handle(
-        self, state: _WorkerState, handle: ProgrammableWorkspaceHandle
-    ) -> None:
+    def _check_handle(self, state: _WorkerState, handle: ProgrammableWorkspaceHandle) -> None:
         if handle.backend != self.descriptor:
             raise WorkspaceRevisionConflict(
                 "workspace backend capability identity does not match this backend"
@@ -848,9 +1094,7 @@ class SupervisedIPythonWorkspaceBackend:
                 f"workspace revision is {state.revision}, not {handle.revision}"
             )
 
-    def _handle(
-        self, workspace: WorkspaceRef, state: _WorkerState
-    ) -> ProgrammableWorkspaceHandle:
+    def _handle(self, workspace: WorkspaceRef, state: _WorkerState) -> ProgrammableWorkspaceHandle:
         return ProgrammableWorkspaceHandle(
             workspace=workspace,
             backend=self.descriptor,
@@ -1071,9 +1315,7 @@ class WorkspaceBrokerSession:
             if current["state"] == "succeeded":
                 return self._replay(current, request_digest)
             if current["state"] != "started":
-                raise WorkerFrameIndeterminate(
-                    "worker frame has no authoritative terminal receipt"
-                )
+                raise WorkerFrameIndeterminate("worker frame has no authoritative terminal receipt")
             connection.execute(
                 """
                 UPDATE broker_calls
@@ -1139,9 +1381,7 @@ class WorkspaceBrokerSession:
             raise WorkerFrameIndeterminate(
                 "worker frame dispatch started without a terminal receipt"
             )
-        response = WorkspaceBrokerFrame.model_validate_json(
-            str(row["response_json"]), strict=True
-        )
+        response = WorkspaceBrokerFrame.model_validate_json(str(row["response_json"]), strict=True)
         if row["response_digest"] != canonical_sha256(response.model_dump(mode="json")):
             raise WorkerFrameConflict("stored worker receipt digest mismatch")
         return response

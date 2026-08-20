@@ -1,5 +1,7 @@
 <div align="center">
 
+> **`0.5.0a0`** public alpha · [`phenomenoner/adaptive-agent-harness@v0.5.0a0`](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0)
+
 # Adaptive Agent Harness
 
 ### 给智能体一张工作台——而不只是更大的提示词。
@@ -7,8 +9,8 @@
 **由 host 组合的 RLM + persistent IPython + durable operations + host-owned authority**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.4.0a6-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6)
+[![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
+[![Release](https://img.shields.io/badge/release-v0.5.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#项目状态)
 
@@ -190,7 +192,7 @@ Adaptive Agent Harness 很适合：
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a6"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.5.0a0"
 ```
 
 ### Codex App 设置
@@ -257,24 +259,24 @@ MCP frontend 刻意可以替换。它不拥有 continuity database 或 worker li
 
 ## 项目状态
 
-当前公开 alpha：**`0.4.0a6`**。
+当前公开 alpha：**`0.5.0a0`**。
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.4.0a6` receipt-backed model routing, current verification, and exact release
-> boundaries, read the canonical English [release notes](../RELEASE-v0.4.0a6.md) and
+> context. For `v0.5.0a0` receipt-backed model routing, current verification, and exact release
+> boundaries, read the canonical English [release notes](../RELEASE-v0.5.0a0.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
 
-从这个公开 candidate 中重现的结果：
+Current `v0.5.0a0` public release evidence:
 
 - Python 3.11 至 3.14 覆盖范围；
-- 30-tool MCP v7 surface；
+- 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - 直到 v5 的 additive SQLite schema；
-- 完整 repository 运行：**249 passed, 1 platform-gated skip**；
+- full repository run: **743 passed, 5 platform-gated skips, 1 existing MCP Sampling deprecation warning**;
 - 在 Linux/WSL 上通过 clean exact-wheel supervisor/frontend probe；
 - durable supervisor、frontend replacement、process-loss、stale-writer、receipt-reuse 和 policy-bound RLM successor 场景。
 
-较早的 native-Windows 和 installed-Hermes compatibility rows 保留为 **maintainer-reported historical context**。支持这些 rows 的 host receipts 未包含在这个公开 repository 中，因此这些 rows 无法从这个 tree 独立审计，也不属于 public source candidate 的 release criteria。
+较早的 native-Windows 和 installed-Hermes compatibility rows 保留为 **maintainer-reported historical context**。支持这些 rows 的 host receipts 未包含在这个公开 repository 中，因此这些 rows 无法从这个 tree 独立审计，也不属于 public source release 的 release criteria。
 
 仍待完成：
 

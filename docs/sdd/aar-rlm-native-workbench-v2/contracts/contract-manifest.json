@@ -22,8 +22,8 @@
     },
     {
       "path": "contracts/aar-mcp-tools-v8-combined.json",
-      "sha256": "sha256:f7242315c55867918c524e528ad6ecf6631a04b843dfa8e03f340b371b03a642",
-      "size_bytes": 1006709
+      "sha256": "sha256:b4dc4988d081131bff451e740a29e8df55844c3e160a2142368e2bf77dfb5a6d",
+      "size_bytes": 1006917
     },
     {
       "path": "contracts/aar-mcp-tools-v8.json",
@@ -62,17 +62,17 @@
     },
     {
       "path": "fixtures/invalid-capability-planner-digest.json",
-      "sha256": "sha256:dea162a0c12fb04e235b8258a5af1c73d872cbb6526fe4f07c833c08e93dcf16",
+      "sha256": "sha256:c0a342852b531d0a8a9286eabb26e8b44f718fe0a29e5e97b792a3ceb368c056",
       "size_bytes": 3750
     },
     {
       "path": "fixtures/invalid-capability-reference-only.json",
-      "sha256": "sha256:295d08a5625e80d9201be5389b15521d8355281579de4e69ae06f9744ad3bd91",
+      "sha256": "sha256:094ac2eb8d57049014eba384814cc0b77dcdec89f3e6921fa0f14fd13f477a46",
       "size_bytes": 3718
     },
     {
       "path": "fixtures/invalid-capability-schema-digest.json",
-      "sha256": "sha256:0a3d52ee7fd3ff7960210e2a19a649ec6880291e497e169397e652d4d9ea3c3e",
+      "sha256": "sha256:8211cba59b2fc82d1ec709a23c9b1cc02ae9dfa6660179d0ec73e3f5f287363c",
       "size_bytes": 3750
     },
     {
@@ -662,7 +662,7 @@
     },
     {
       "path": "fixtures/valid-workbench-capabilities.json",
-      "sha256": "sha256:6a0c3f20d47b3a4e2c4ad0c0b93a0a3ed9293b8afb51e1101f862d968bd3cd33",
+      "sha256": "sha256:3ff732ceadcbfa520bb742b1301c4440fc1d808b647b217a02fa07e2779d7a2c",
       "size_bytes": 3750
     },
     {
@@ -772,8 +772,8 @@
     }
   ],
   "generator": "generate_contracts.py",
-  "generator_sha256": "sha256:89ee77a60bd6e839603d9433cfd67899882bf736fa47e4e2c38841adc056c0cd",
+  "generator_sha256": "sha256:f274725b9ddac5a3d69fa24a0b43be7141465e12590b1a99ca953c4173e79f77",
   "json_schema_profile": "aar.json-schema-profile.v1",
-  "manifest_digest": "sha256:e32038ecadc5c3721a33d2bcb545d2bde0f2b6b8f64649da980bc26252c71d25",
+  "manifest_digest": "sha256:4868218f1684f50a6a9dde3afe0f1d6f8661ad0500a8a2249f0a3037a17fa2c5",
   "schema_version": "aar.sdd-contract-manifest.v1"
 }

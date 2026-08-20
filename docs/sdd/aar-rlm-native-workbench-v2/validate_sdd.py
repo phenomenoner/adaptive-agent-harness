@@ -207,7 +207,9 @@ def require_text(record: dict[str, Any], key: str, owner: str) -> None:
 
 
 def validate_defects(document: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], set[str]]:
-    require(document.get("schema_version") == "aar.sdd.defect-register.v1", "unexpected defect schema")
+    require(
+        document.get("schema_version") == "aar.sdd.defect-register.v1", "unexpected defect schema"
+    )
     defects = document.get("defects")
     if not isinstance(defects, list) or not defects:
         raise ValueError("defects must be a non-empty list")
@@ -229,9 +231,14 @@ def validate_defects(document: dict[str, Any]) -> tuple[dict[str, dict[str, Any]
             "repair_boundary",
         ):
             require_text(defect, key, defect_id)
-        require(defect.get("classification") in VALID_CLASSIFICATIONS, f"{defect_id}: invalid classification")
+        require(
+            defect.get("classification") in VALID_CLASSIFICATIONS,
+            f"{defect_id}: invalid classification",
+        )
         require(defect.get("severity") in VALID_SEVERITIES, f"{defect_id}: invalid severity")
-        require(isinstance(defect.get("core_journey_required"), bool), f"{defect_id}: invalid core flag")
+        require(
+            isinstance(defect.get("core_journey_required"), bool), f"{defect_id}: invalid core flag"
+        )
         evidence = defect.get("evidence")
         if not isinstance(evidence, list) or not evidence:
             raise ValueError(f"{defect_id}: evidence must be non-empty")
@@ -246,7 +253,10 @@ def validate_defects(document: dict[str, Any]) -> tuple[dict[str, dict[str, Any]
         if defect["core_journey_required"]:
             require(bool(refs), f"{defect_id}: core defect/boundary requires acceptance coverage")
         for ref in refs:
-            require(isinstance(ref, str) and re.fullmatch(r"AC-[A-Z0-9-]+", ref) is not None, f"{defect_id}: invalid acceptance ref {ref!r}")
+            require(
+                isinstance(ref, str) and re.fullmatch(r"AC-[A-Z0-9-]+", ref) is not None,
+                f"{defect_id}: invalid acceptance ref {ref!r}",
+            )
             acceptance_refs.add(ref)
     return by_id, acceptance_refs
 
@@ -254,7 +264,10 @@ def validate_defects(document: dict[str, Any]) -> tuple[dict[str, dict[str, Any]
 def validate_acceptance(
     document: dict[str, Any], defects: dict[str, dict[str, Any]]
 ) -> dict[str, dict[str, Any]]:
-    require(document.get("schema_version") == "aar.sdd.acceptance-matrix.v1", "unexpected acceptance schema")
+    require(
+        document.get("schema_version") == "aar.sdd.acceptance-matrix.v1",
+        "unexpected acceptance schema",
+    )
     require_text(document, "claim_rule", "acceptance matrix")
     rows = document.get("rows")
     if not isinstance(rows, list) or not rows:
@@ -278,9 +291,16 @@ def validate_acceptance(
             raise ValueError(f"{row_id}: invalid implementation flag")
         if not isinstance(live_required, bool):
             raise ValueError(f"{row_id}: invalid live flag")
-        require(not implementation_required or live_required, f"{row_id}: implementation-required row must be live-required")
+        require(
+            not implementation_required or live_required,
+            f"{row_id}: implementation-required row must be live-required",
+        )
         owners = row.get("source_owners")
-        if not isinstance(owners, list) or not owners or not all(isinstance(item, str) and item for item in owners):
+        if (
+            not isinstance(owners, list)
+            or not owners
+            or not all(isinstance(item, str) and item for item in owners)
+        ):
             raise ValueError(f"{row_id}: source_owners must be non-empty strings")
         defect_refs = row.get("defect_ids")
         if not isinstance(defect_refs, list):
@@ -288,10 +308,18 @@ def validate_acceptance(
         for defect_id in defect_refs:
             require(defect_id in defects, f"{row_id}: unknown defect id {defect_id}")
         if row["altitude"] == "T4":
-            require(not implementation_required and live_required, f"{row_id}: T4 claim flags invalid")
-            require(row.get("authorization") == "separate_explicit_authorization_required", f"{row_id}: missing authorization rule")
+            require(
+                not implementation_required and live_required, f"{row_id}: T4 claim flags invalid"
+            )
+            require(
+                row.get("authorization") == "separate_explicit_authorization_required",
+                f"{row_id}: missing authorization rule",
+            )
         else:
-            require(implementation_required and live_required, f"{row_id}: T0-T3 must be required for both claims")
+            require(
+                implementation_required and live_required,
+                f"{row_id}: T0-T3 must be required for both claims",
+            )
     return by_id
 
 
@@ -315,10 +343,14 @@ def validate_cross_links(
         for row_id in acceptance_refs
         if not rows[row_id]["required_for_implementation_verified"]
     )
-    require(not non_implementation, f"core defect repair cannot depend only on T4: {non_implementation}")
+    require(
+        not non_implementation, f"core defect repair cannot depend only on T4: {non_implementation}"
+    )
 
 
-def validate_fault_matrix(document: dict[str, Any], rows: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+def validate_fault_matrix(
+    document: dict[str, Any], rows: dict[str, dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
     require(document.get("schema_version") == "aar.sdd-fault-matrix.v1", "unexpected fault schema")
     cases = document.get("cases")
     if not isinstance(cases, list) or not cases:
@@ -362,14 +394,23 @@ def validate_fault_matrix(document: dict[str, Any], rows: dict[str, dict[str, An
         for case in cases
         if isinstance(case, dict) and isinstance((parent := case.get("acceptance_id")), str)
     }
-    require(not (required_fault_parents - covered), f"fault matrix missing required parents: {sorted(required_fault_parents - covered)}")
+    require(
+        not (required_fault_parents - covered),
+        f"fault matrix missing required parents: {sorted(required_fault_parents - covered)}",
+    )
     return by_id
 
 
 def validate_contract_manifest() -> dict[str, Any]:
     manifest = load_json(CONTRACT_MANIFEST_PATH)
-    require(manifest.get("schema_version") == "aar.sdd-contract-manifest.v1", "unexpected contract manifest schema")
-    require(manifest.get("generator_sha256") == digest_file(ROOT / "generate_contracts.py"), "generator digest drift")
+    require(
+        manifest.get("schema_version") == "aar.sdd-contract-manifest.v1",
+        "unexpected contract manifest schema",
+    )
+    require(
+        manifest.get("generator_sha256") == digest_file(ROOT / "generate_contracts.py"),
+        "generator digest drift",
+    )
     files = manifest.get("files")
     if not isinstance(files, list) or not files:
         raise ValueError("contract manifest files missing")
@@ -390,24 +431,38 @@ def validate_contract_manifest() -> dict[str, Any]:
     }
     require(
         seen >= required_contract_generated,
-        "manifest missing required generated files: "
-        f"{sorted(required_contract_generated - seen)}",
+        f"manifest missing required generated files: {sorted(required_contract_generated - seen)}",
     )
     payload = {key: value for key, value in manifest.items() if key != "manifest_digest"}
-    require(manifest.get("manifest_digest") == digest_value(payload), "contract manifest self digest drift")
+    require(
+        manifest.get("manifest_digest") == digest_value(payload),
+        "contract manifest self digest drift",
+    )
     return manifest
 
 
 def validate_package_manifest(contract_manifest_digest: str) -> dict[str, Any]:
     manifest = load_json(PACKAGE_MANIFEST_PATH)
-    require(manifest.get("schema_version") == "aar.sdd-package-manifest.v1", "package manifest schema mismatch")
-    require(manifest.get("contract_manifest_digest") == contract_manifest_digest, "package/contract manifest mismatch")
+    require(
+        manifest.get("schema_version") == "aar.sdd-package-manifest.v1",
+        "package manifest schema mismatch",
+    )
+    require(
+        manifest.get("contract_manifest_digest") == contract_manifest_digest,
+        "package/contract manifest mismatch",
+    )
     baseline = manifest.get("baseline")
     if not isinstance(baseline, dict):
         raise ValueError("package baseline missing")
-    require(baseline.get("source_commit") == "a585ac52bef6f95f9dcfb40dc69f83d6d92b3b90", "package source baseline mismatch")
+    require(
+        baseline.get("source_commit") == "a585ac52bef6f95f9dcfb40dc69f83d6d92b3b90",
+        "package source baseline mismatch",
+    )
     require(baseline.get("runtime_schema") == "aar.runtime.v1", "runtime contract version mismatch")
-    require(baseline.get("operation_continuity_schema") == "aar.operation-continuity.v1", "continuity contract version mismatch")
+    require(
+        baseline.get("operation_continuity_schema") == "aar.operation-continuity.v1",
+        "continuity contract version mismatch",
+    )
     require(baseline.get("registry_schema_version") == 5, "registry storage baseline mismatch")
     files = manifest.get("files")
     if not isinstance(files, list):
@@ -433,11 +488,19 @@ def validate_package_manifest(contract_manifest_digest: str) -> dict[str, Any]:
         and path.suffix != ".pyc"
         and path.name != "test-results.json"
     }
-    require(seen == expected, f"package file set drift: missing={sorted(expected - seen)} extra={sorted(seen - expected)}")
+    require(
+        seen == expected,
+        f"package file set drift: missing={sorted(expected - seen)} extra={sorted(seen - expected)}",
+    )
     normative = manifest.get("normative_files")
-    require(isinstance(normative, list) and set(normative) <= seen, "package normative file set invalid")
+    require(
+        isinstance(normative, list) and set(normative) <= seen, "package normative file set invalid"
+    )
     payload = {key: value for key, value in manifest.items() if key != "manifest_digest"}
-    require(manifest.get("manifest_digest") == digest_value(payload), "package manifest self-digest mismatch")
+    require(
+        manifest.get("manifest_digest") == digest_value(payload),
+        "package manifest self-digest mismatch",
+    )
     return manifest
 
 
@@ -451,9 +514,15 @@ def validate_schema_profile() -> None:
         for external_ref in iter_external_refs(document):
             filename, fragment = external_ref.split("#", 1)
             require(filename in contracts, f"{owner}: external schema missing: {filename}")
-            require(fragment.startswith("/$defs/"), f"{owner}: external fragment forbidden: {external_ref}")
+            require(
+                fragment.startswith("/$defs/"),
+                f"{owner}: external fragment forbidden: {external_ref}",
+            )
             def_name = fragment.removeprefix("/$defs/")
-            require(def_name in contracts[filename].get("$defs", {}), f"{owner}: external def missing: {external_ref}")
+            require(
+                def_name in contracts[filename].get("$defs", {}),
+                f"{owner}: external def missing: {external_ref}",
+            )
     workbench = contracts["aar-rlm-workbench-v1.schema.json"]
     execute_schema = workbench["$defs"]["RlmWorkbenchExecuteInput"]
     execute_validator = Draft202012Validator(execute_schema)
@@ -464,7 +533,9 @@ def validate_schema_profile() -> None:
         if item["path"] == "valid-route-catalog.json":
             continue
         structural_valid = not list(execute_validator.iter_errors(value))
-        require(structural_valid is item["schema_valid"], f"fixture structural mismatch: {item['path']}")
+        require(
+            structural_valid is item["schema_valid"], f"fixture structural mismatch: {item['path']}"
+        )
         if item["profile_valid"]:
             validate_embedded_contracts(value)
         elif structural_valid:
@@ -520,21 +591,26 @@ def validate_embedded_contracts(execute_request: dict[str, Any]) -> None:
         ),
         "route profile not present in catalog",
     )
-    runtime_planner_schema = load_json(
-        CONTRACT_DIR / "aar-rlm-workbench-v1.schema.json"
-    )["$defs"]["RlmDirective"]
+    runtime_planner_schema = load_json(CONTRACT_DIR / "aar-rlm-workbench-v1.schema.json")["$defs"][
+        "RlmDirective"
+    ]
     require(
         len(canonical_bytes(runtime_planner_schema)) <= 65_536,
         "runtime planner schema exceeds 64 KiB",
     )
     Draft202012Validator.check_schema(runtime_planner_schema)
     for contract in (spec["completion"]["output_contract"],):
-        require(contract["dialect"] == "https://json-schema.org/draft/2020-12/schema", "schema dialect mismatch")
+        require(
+            contract["dialect"] == "https://json-schema.org/draft/2020-12/schema",
+            "schema dialect mismatch",
+        )
         require(contract["profile"] == "aar.json-schema-profile.v1", "schema profile mismatch")
         schema = contract["schema"]
         require(len(canonical_bytes(schema)) <= 65_536, "embedded schema exceeds 64 KiB")
         require(1 <= contract["max_instance_bytes"] <= 1_048_576, "embedded instance limit invalid")
-        require(contract["schema_digest"] == digest_value(schema), "embedded schema digest mismatch")
+        require(
+            contract["schema_digest"] == digest_value(schema), "embedded schema digest mismatch"
+        )
         validate_schema_profile_contract(schema)
 
 
@@ -556,23 +632,44 @@ def validate_schema_profile_contract(schema: dict[str, Any]) -> None:
         require(not unknown, f"schema keywords forbidden: {sorted(unknown)}")
         ref_value = node.get("$ref")
         if ref_value is not None:
-            require(isinstance(ref_value, str) and ref_value.startswith("#/$defs/"), f"schema ref forbidden: {ref_value!r}")
+            require(
+                isinstance(ref_value, str) and ref_value.startswith("#/$defs/"),
+                f"schema ref forbidden: {ref_value!r}",
+            )
             target_name = ref_value.removeprefix("#/$defs/")
-            require("/" not in target_name and target_name in root_defs, f"schema local ref unresolved: {ref_value}")
+            require(
+                "/" not in target_name and target_name in root_defs,
+                f"schema local ref unresolved: {ref_value}",
+            )
         type_value = node.get("type")
         if type_value is not None:
-            require(type_value in {"object", "array", "string", "integer", "number", "boolean", "null"}, "schema type invalid")
+            require(
+                type_value in {"object", "array", "string", "integer", "number", "boolean", "null"},
+                "schema type invalid",
+            )
         properties = node.get("properties")
         if properties is not None:
-            require(isinstance(properties, dict) and len(properties) <= 256, "schema properties invalid")
+            require(
+                isinstance(properties, dict) and len(properties) <= 256, "schema properties invalid"
+            )
             for property_name, child in properties.items():
-                require(isinstance(property_name, str) and 0 < len(property_name) <= 128, "schema property name invalid")
+                require(
+                    isinstance(property_name, str) and 0 < len(property_name) <= 128,
+                    "schema property name invalid",
+                )
                 validate_node(child)
         definitions = node.get("$defs")
         if definitions is not None:
-            require(isinstance(definitions, dict) and len(definitions) <= 256, "schema defs invalid")
+            require(
+                isinstance(definitions, dict) and len(definitions) <= 256, "schema defs invalid"
+            )
             for definition_name, child in definitions.items():
-                require(isinstance(definition_name, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]{0,127}", definition_name) is not None, "schema def name invalid")
+                require(
+                    isinstance(definition_name, str)
+                    and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]{0,127}", definition_name)
+                    is not None,
+                    "schema def name invalid",
+                )
                 validate_node(child)
         required = node.get("required")
         if required is not None:
@@ -592,7 +689,10 @@ def validate_schema_profile_contract(schema: dict[str, Any]) -> None:
         for keyword in ("oneOf", "allOf"):
             branches = node.get(keyword)
             if branches is not None:
-                require(isinstance(branches, list) and 1 <= len(branches) <= 32, f"schema {keyword} invalid")
+                require(
+                    isinstance(branches, list) and 1 <= len(branches) <= 32,
+                    f"schema {keyword} invalid",
+                )
                 for branch in branches:
                     validate_node(branch)
         for keyword in ("if", "then", "else", "not", "propertyNames"):
@@ -604,14 +704,30 @@ def validate_schema_profile_contract(schema: dict[str, Any]) -> None:
             validate_pattern(pattern)
         enum_values = node.get("enum")
         if enum_values is not None:
-            require(isinstance(enum_values, list) and 1 <= len(enum_values) <= 128, "schema enum invalid")
+            require(
+                isinstance(enum_values, list) and 1 <= len(enum_values) <= 128,
+                "schema enum invalid",
+            )
             _check_json_tree(enum_values, max_depth=4, max_nodes=512)
-        for key in ("minItems", "maxItems", "minLength", "maxLength", "minProperties", "maxProperties"):
+        for key in (
+            "minItems",
+            "maxItems",
+            "minLength",
+            "maxLength",
+            "minProperties",
+            "maxProperties",
+        ):
             if key in node:
-                require(isinstance(node[key], int) and 0 <= node[key] <= 1_048_576, f"schema {key} invalid")
+                require(
+                    isinstance(node[key], int) and 0 <= node[key] <= 1_048_576,
+                    f"schema {key} invalid",
+                )
         for key in ("minimum", "maximum"):
             if key in node:
-                require(isinstance(node[key], (int, float)) and not isinstance(node[key], bool), f"schema {key} invalid")
+                require(
+                    isinstance(node[key], (int, float)) and not isinstance(node[key], bool),
+                    f"schema {key} invalid",
+                )
 
     # Candidate-selected patterns must pass the portable profile before the
     # Draft meta-validator is allowed to invoke its host regex engine.
@@ -620,9 +736,7 @@ def validate_schema_profile_contract(schema: dict[str, Any]) -> None:
 
 
 def validate_negative_contract_fixtures() -> None:
-    contract_files = tuple(
-        path.name for path in sorted(CONTRACT_DIR.glob("*.schema.json"))
-    )
+    contract_files = tuple(path.name for path in sorted(CONTRACT_DIR.glob("*.schema.json")))
     require(bool(contract_files), "no contract schemas found")
     registry = Registry()
     for filename in contract_files:
@@ -647,7 +761,11 @@ def validate_negative_contract_fixtures() -> None:
         return parent, tokens[-1]
 
     def pointer_has(parent: dict[str, Any] | list[Any], token: str) -> bool:
-        return token in parent if isinstance(parent, dict) else token.isdigit() and int(token) < len(parent)
+        return (
+            token in parent
+            if isinstance(parent, dict)
+            else token.isdigit() and int(token) < len(parent)
+        )
 
     def pointer_get(parent: dict[str, Any] | list[Any], token: str) -> Any:
         return parent[token] if isinstance(parent, dict) else parent[int(token)]
@@ -688,8 +806,7 @@ def validate_negative_contract_fixtures() -> None:
         invalid_parent, invalid_key = pointer_parent(invalid_value, mutation_pointer)
         if mutation_op == "replace":
             require(
-                pointer_has(valid_parent, valid_key)
-                and pointer_has(invalid_parent, invalid_key),
+                pointer_has(valid_parent, valid_key) and pointer_has(invalid_parent, invalid_key),
                 f"replace mutation target missing: {mutation_pointer}",
             )
             pointer_set(
@@ -726,15 +843,13 @@ def validate_negative_contract_fixtures() -> None:
 def validate_broker_capabilities() -> None:
     catalog = load_json(FIXTURE_DIR / "valid-broker-catalog.json")
     catalog_core = {"schema_version": catalog["schema_version"], "contracts": catalog["contracts"]}
-    require(catalog["catalog_digest"] == digest_value(catalog_core), "broker catalog digest mismatch")
+    require(
+        catalog["catalog_digest"] == digest_value(catalog_core), "broker catalog digest mismatch"
+    )
     contracts = catalog["contracts"]
     require(isinstance(contracts, list), "broker catalog contracts missing")
-    methods = [
-        row.get("method") if isinstance(row, dict) else None for row in contracts
-    ]
-    contract_ids = [
-        row.get("contract_id") if isinstance(row, dict) else None for row in contracts
-    ]
+    methods = [row.get("method") if isinstance(row, dict) else None for row in contracts]
+    contract_ids = [row.get("contract_id") if isinstance(row, dict) else None for row in contracts]
     require(all(isinstance(value, str) for value in methods), "broker method missing")
     require(
         all(isinstance(value, str) for value in contract_ids),
@@ -748,21 +863,49 @@ def validate_broker_capabilities() -> None:
     expected_contracts = {row["method"]: row for row in contracts}
     require(len(expected_contracts) == 6, "broker catalog must contain six unique methods")
     definition_map = {
-        "model.request": ("aar-caller-work-v1.schema.json", "ModelRequestV2", "aar-caller-work-v1.schema.json", "ModelObservation"),
-        "subagent.submit": ("aar-caller-work-v1.schema.json", "SubagentSubmitV2", "aar-caller-work-v1.schema.json", "ChildObservation"),
-        "subagent.result": ("aar-caller-work-v1.schema.json", "SubagentResultV2", "aar-caller-work-v1.schema.json", "ChildObservation"),
-        "evidence.query": ("aar-caller-work-v1.schema.json", "EvidenceQueryV2", "aar-caller-work-v1.schema.json", "EvidenceObservation"),
-        "artifact.put": ("aar-artifact-publication-v1.schema.json", "ArtifactStage", "aar-artifact-publication-v1.schema.json", "ArtifactBinding"),
-        "effect.propose": ("aar-caller-work-v1.schema.json", "EffectProposeV2", "aar-caller-work-v1.schema.json", "EffectObservation"),
+        "model.request": (
+            "aar-caller-work-v1.schema.json",
+            "ModelRequestV2",
+            "aar-caller-work-v1.schema.json",
+            "ModelObservation",
+        ),
+        "subagent.submit": (
+            "aar-caller-work-v1.schema.json",
+            "SubagentSubmitV2",
+            "aar-caller-work-v1.schema.json",
+            "ChildObservation",
+        ),
+        "subagent.result": (
+            "aar-caller-work-v1.schema.json",
+            "SubagentResultV2",
+            "aar-caller-work-v1.schema.json",
+            "ChildObservation",
+        ),
+        "evidence.query": (
+            "aar-caller-work-v1.schema.json",
+            "EvidenceQueryV2",
+            "aar-caller-work-v1.schema.json",
+            "EvidenceObservation",
+        ),
+        "artifact.put": (
+            "aar-artifact-publication-v1.schema.json",
+            "ArtifactStage",
+            "aar-artifact-publication-v1.schema.json",
+            "ArtifactBinding",
+        ),
+        "effect.propose": (
+            "aar-caller-work-v1.schema.json",
+            "EffectProposeV2",
+            "aar-caller-work-v1.schema.json",
+            "EffectObservation",
+        ),
     }
     for method, (request_file, request_def, response_file, response_def) in definition_map.items():
         request_schema = load_json(CONTRACT_DIR / request_file)["$defs"][request_def]
         response_schema = load_json(CONTRACT_DIR / response_file)["$defs"][response_def]
         request_properties = request_schema.get("properties", {})
         identity_property = (
-            request_properties.get("contract_id")
-            or request_properties.get("schema_version")
-            or {}
+            request_properties.get("contract_id") or request_properties.get("schema_version") or {}
         )
         require(
             identity_property.get("const") == expected_contracts[method]["contract_id"],
@@ -773,8 +916,14 @@ def validate_broker_capabilities() -> None:
                 request_properties["method"].get("const") == method,
                 f"{method}: request method const mismatch",
             )
-        require(expected_contracts[method]["request_schema_digest"] == digest_value(request_schema), f"{method}: request schema digest mismatch")
-        require(expected_contracts[method]["response_schema_digest"] == digest_value(response_schema), f"{method}: response schema digest mismatch")
+        require(
+            expected_contracts[method]["request_schema_digest"] == digest_value(request_schema),
+            f"{method}: request schema digest mismatch",
+        )
+        require(
+            expected_contracts[method]["response_schema_digest"] == digest_value(response_schema),
+            f"{method}: response schema digest mismatch",
+        )
 
     workbench_contract = load_json(CONTRACT_DIR / "aar-rlm-workbench-v1.schema.json")
     capability_schema = workbench_contract["$defs"]["RlmWorkbenchCapability"]
@@ -807,14 +956,30 @@ def validate_broker_capabilities() -> None:
             for key in ("contract_id", "request_schema_digest", "response_schema_digest"):
                 if row[key] != expected[key]:
                     return False
-            if not row["configured"] or row["reference_only"] or row["backend_kind"] in {"reference", "unconfigured"}:
+            if (
+                not row["configured"]
+                or row["reference_only"]
+                or row["backend_kind"] in {"reference", "unconfigured"}
+            ):
                 return False
         return True
 
-    require(admitted(load_json(FIXTURE_DIR / "valid-workbench-capabilities.json")), "valid workbench capability not admitted")
-    require(not admitted(load_json(FIXTURE_DIR / "invalid-capability-schema-digest.json")), "schema-digest capability mutant admitted")
-    require(not admitted(load_json(FIXTURE_DIR / "invalid-capability-planner-digest.json")), "planner-digest capability mutant admitted")
-    require(not admitted(load_json(FIXTURE_DIR / "invalid-capability-reference-only.json")), "reference-only capability mutant admitted")
+    require(
+        admitted(load_json(FIXTURE_DIR / "valid-workbench-capabilities.json")),
+        "valid workbench capability not admitted",
+    )
+    require(
+        not admitted(load_json(FIXTURE_DIR / "invalid-capability-schema-digest.json")),
+        "schema-digest capability mutant admitted",
+    )
+    require(
+        not admitted(load_json(FIXTURE_DIR / "invalid-capability-planner-digest.json")),
+        "planner-digest capability mutant admitted",
+    )
+    require(
+        not admitted(load_json(FIXTURE_DIR / "invalid-capability-reference-only.json")),
+        "reference-only capability mutant admitted",
+    )
 
 
 def validate_tool_surface() -> None:
@@ -844,19 +1009,37 @@ def validate_tool_surface() -> None:
             "openWorldHint",
         }:
             raise ValueError(f"tool {tool['name']}: invalid annotations")
-        require(all(isinstance(value, bool) for value in annotations.values()), f"tool {tool['name']}: annotation values must be boolean")
+        require(
+            all(isinstance(value, bool) for value in annotations.values()),
+            f"tool {tool['name']}: annotation values must be boolean",
+        )
         for schema_ref in (tool["input_schema"], tool["output_schema"]):
             filename, fragment = schema_ref.split("#", 1)
             schema = load_json(CONTRACT_DIR / filename)
             def_name = fragment.removeprefix("/$defs/")
-            require(fragment.startswith("/$defs/") and def_name in schema.get("$defs", {}), f"tool {tool['name']}: unresolved schema ref {schema_ref}")
+            require(
+                fragment.startswith("/$defs/") and def_name in schema.get("$defs", {}),
+                f"tool {tool['name']}: unresolved schema ref {schema_ref}",
+            )
 
     binding = load_json(CONTRACT_DIR / "aar-mcp-tools-v7-binding.json")
-    require(binding["source_commit"] == "a585ac52bef6f95f9dcfb40dc69f83d6d92b3b90", "baseline tool binding commit mismatch")
-    require(binding["sha256"] == "sha256:6ebf848eee74795771af23dfaaeb70fd5030cb88878327f76ffc10d1c4639ab8", "baseline tool manifest byte mismatch")
-    require(binding["tool_count"] == 30 and len(binding["tool_names"]) == 30, "baseline tool count mismatch")
+    require(
+        binding["source_commit"] == "a585ac52bef6f95f9dcfb40dc69f83d6d92b3b90",
+        "baseline tool binding commit mismatch",
+    )
+    require(
+        binding["sha256"]
+        == "sha256:6ebf848eee74795771af23dfaaeb70fd5030cb88878327f76ffc10d1c4639ab8",
+        "baseline tool manifest byte mismatch",
+    )
+    require(
+        binding["tool_count"] == 30 and len(binding["tool_names"]) == 30,
+        "baseline tool count mismatch",
+    )
     combined = load_json(CONTRACT_DIR / "aar-mcp-tools-v8-combined.json")
-    require(combined["tool_surface_version"] == "aar.mcp-tools.v8", "combined surface version mismatch")
+    require(
+        combined["tool_surface_version"] == "aar.mcp-tools.v8", "combined surface version mismatch"
+    )
     require(combined["server_version"] == "0.5.0a0", "combined target package version mismatch")
     combined_tools = combined["tools"]
     expected_combined_count = 30 + len(tools)
@@ -869,7 +1052,9 @@ def validate_tool_surface() -> None:
         len(combined_names) == len(set(combined_names)),
         "combined surface contains duplicate tool names",
     )
-    require(combined_names[:30] == binding["tool_names"], "combined surface changed v7 prefix order")
+    require(
+        combined_names[:30] == binding["tool_names"], "combined surface changed v7 prefix order"
+    )
     require(combined_names[30:] == names, "combined surface additive tool order mismatch")
 
     schema_prefix = {
@@ -914,9 +1099,7 @@ def validate_tool_surface() -> None:
                 f"unresolved bundled contract ref: {key}",
             )
             in_progress.add(key)
-            collected[key] = rewrite(
-                deepcopy(published_contracts[key[0]]["$defs"][key[1]]), key[0]
-            )
+            collected[key] = rewrite(deepcopy(published_contracts[key[0]]["$defs"][key[1]]), key[0])
             in_progress.remove(key)
 
         def rewrite(value: Any, current_file: str) -> Any:
@@ -964,7 +1147,10 @@ def validate_tool_surface() -> None:
                 "icons": None,
                 "inputSchema": bundled_schema(tool["input_schema"]),
                 "name": tool["name"],
-                "outputSchema": bundled_schema(tool["output_schema"]),
+                "outputSchema": {
+                    "type": "object",
+                    **bundled_schema(tool["output_schema"]),
+                },
                 "title": None,
             }
         )
@@ -981,13 +1167,31 @@ def validate_tool_surface() -> None:
         "tool_surface_version": combined["tool_surface_version"],
         "tools": combined_tools,
     }
-    require(combined["tool_surface_digest"] == digest_value(core), "combined tool surface digest mismatch")
-    descriptor_keys = {"_meta", "annotations", "description", "execution", "icons", "inputSchema", "name", "outputSchema", "title"}
+    require(
+        combined["tool_surface_digest"] == digest_value(core),
+        "combined tool surface digest mismatch",
+    )
+    descriptor_keys = {
+        "_meta",
+        "annotations",
+        "description",
+        "execution",
+        "icons",
+        "inputSchema",
+        "name",
+        "outputSchema",
+        "title",
+    }
     for descriptor in combined_tools:
-        require(isinstance(descriptor, dict) and set(descriptor) == descriptor_keys, f"invalid combined descriptor: {descriptor.get('name') if isinstance(descriptor, dict) else descriptor!r}")
+        require(
+            isinstance(descriptor, dict) and set(descriptor) == descriptor_keys,
+            f"invalid combined descriptor: {descriptor.get('name') if isinstance(descriptor, dict) else descriptor!r}",
+        )
         for key in ("inputSchema", "outputSchema"):
             schema = descriptor[key]
-            require(isinstance(schema, dict), f"combined descriptor {descriptor['name']} lacks {key}")
+            require(
+                isinstance(schema, dict), f"combined descriptor {descriptor['name']} lacks {key}"
+            )
             Draft202012Validator.check_schema(schema)
 
 
@@ -997,10 +1201,15 @@ def validate_migration_sql() -> None:
     fixture_path = FIXTURE_DIR / "registry-v5.sql"
     binding = load_json(FIXTURE_DIR / "registry-v5-binding.json")
     require(binding["package_version"] == "0.4.0a6", "v5 fixture package mismatch")
-    require(binding["source_commit"] == "a585ac52bef6f95f9dcfb40dc69f83d6d92b3b90", "v5 fixture source mismatch")
+    require(
+        binding["source_commit"] == "a585ac52bef6f95f9dcfb40dc69f83d6d92b3b90",
+        "v5 fixture source mismatch",
+    )
     require(binding["schema_versions"] == [1, 2, 3, 4, 5], "v5 fixture migration history mismatch")
     require(binding["sql_dump_sha256"] == digest_file(fixture_path), "v5 fixture digest mismatch")
-    require(binding["sql_dump_size_bytes"] == fixture_path.stat().st_size, "v5 fixture size mismatch")
+    require(
+        binding["sql_dump_size_bytes"] == fixture_path.stat().st_size, "v5 fixture size mismatch"
+    )
     require(binding.get("foreign_key_violation_count") == 0, "v5 fixture FK violations")
     populated_tables = set(binding.get("populated_tables", []))
     required_populated_tables = {
@@ -1024,9 +1233,7 @@ def validate_migration_sql() -> None:
         isinstance(binding.get("canonical_data_row_set_digest"), str),
         "v5 fixture canonical data row-set digest missing",
     )
-    verifier_source = (ROOT / "verify_registry_v5_migration.py").read_text(
-        encoding="utf-8"
-    )
+    verifier_source = (ROOT / "verify_registry_v5_migration.py").read_text(encoding="utf-8")
     require(
         "source.backup(destination)" in verifier_source
         and "shutil.copyfile" not in verifier_source,
@@ -1052,14 +1259,12 @@ def validate_migration_sql() -> None:
     )
     verification = load_json(FIXTURE_DIR / "registry-v5-migration-verification.json")
     require(
-        verification.get("schema_version")
-        == "aar.sdd-registry-v5-migration-verification.v1",
+        verification.get("schema_version") == "aar.sdd-registry-v5-migration-verification.v1",
         "migration verification receipt schema mismatch",
     )
     require(verification.get("package_version") == "0.4.0a6", "migration receipt package mismatch")
     require(
-        verification.get("source_commit")
-        == "a585ac52bef6f95f9dcfb40dc69f83d6d92b3b90"
+        verification.get("source_commit") == "a585ac52bef6f95f9dcfb40dc69f83d6d92b3b90"
         and verification.get("requested_revision") == "v0.4.0a6",
         "migration receipt installed source mismatch",
     )
@@ -1070,7 +1275,10 @@ def validate_migration_sql() -> None:
         and verification["installed_distribution_file_count"] > 0,
         "migration receipt installed distribution binding invalid",
     )
-    require(verification.get("baseline_sql_digest") == digest_file(fixture_path), "migration receipt baseline SQL mismatch")
+    require(
+        verification.get("baseline_sql_digest") == digest_file(fixture_path),
+        "migration receipt baseline SQL mismatch",
+    )
     require(
         verification.get("baseline_binding_file_digest")
         == digest_file(FIXTURE_DIR / "registry-v5-binding.json"),
@@ -1097,7 +1305,10 @@ def validate_migration_sql() -> None:
         == verification.get("post_migration_v5_data_row_set_digest"),
         "migration receipt frozen v5 row-set mismatch",
     )
-    require(verification["migration_digest"] == digest_file(MIGRATION_SQL_PATH), "migration verification receipt digest mismatch")
+    require(
+        verification["migration_digest"] == digest_file(MIGRATION_SQL_PATH),
+        "migration verification receipt digest mismatch",
+    )
     for key in (
         "mid_transaction_rollback_reopened_by_v5",
         "committed_v6_rejected_by_v5",
@@ -1129,7 +1340,10 @@ def validate_migration_sql() -> None:
         connection.executescript(fixture_path.read_text(encoding="utf-8"))
         connection.executescript(sql)
         connection.executescript(sql)
-        require(not connection.execute("PRAGMA foreign_key_check").fetchall(), "migration FK check failed")
+        require(
+            not connection.execute("PRAGMA foreign_key_check").fetchall(),
+            "migration FK check failed",
+        )
         require(
             connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok",
             "migration integrity check failed",
@@ -1157,8 +1371,7 @@ def validate_migration_sql() -> None:
         }
         require(tables >= expected, f"migration missing tables: {sorted(expected - tables)}")
         ticket_columns = {
-            str(row[1])
-            for row in connection.execute("PRAGMA table_info(caller_work_tickets)")
+            str(row[1]) for row in connection.execute("PRAGMA table_info(caller_work_tickets)")
         }
         required_ticket_columns = {
             "send_started_at_unix_ms",
@@ -1176,9 +1389,7 @@ def validate_migration_sql() -> None:
         for row in connection.execute("PRAGMA foreign_key_list(caller_work_tickets)"):
             if str(row[2]) != "rlm_workbench_suspensions":
                 continue
-            foreign_key_groups.setdefault(int(row[0]), set()).add(
-                (str(row[3]), str(row[4]))
-            )
+            foreign_key_groups.setdefault(int(row[0]), set()).add((str(row[3]), str(row[4])))
         semantic_binding = {
             ("operation_id", "operation_id"),
             ("suspension_revision", "suspension_revision"),
@@ -1221,12 +1432,10 @@ def validate_migration_sql() -> None:
             "cancelled_certain settlement constraint missing",
         )
         job_columns = {
-            str(row[1])
-            for row in connection.execute("PRAGMA table_info(rlm_workbench_jobs)")
+            str(row[1]) for row in connection.execute("PRAGMA table_info(rlm_workbench_jobs)")
         }
         require(
-            {"control_revision", "cancellation_revision", "cancellation_requested"}
-            <= job_columns,
+            {"control_revision", "cancellation_revision", "cancellation_requested"} <= job_columns,
             "workbench control/cancellation projection missing",
         )
         outbox_sql_row = connection.execute(
@@ -1274,9 +1483,7 @@ def validate_migration_sql() -> None:
         )
         transfer_fks = {
             str(row[2])
-            for row in connection.execute(
-                "PRAGMA foreign_key_list(rlm_workbench_rebind_transfers)"
-            )
+            for row in connection.execute("PRAGMA foreign_key_list(rlm_workbench_rebind_transfers)")
         }
         authority_fks = {
             str(row[2])
@@ -1346,13 +1553,10 @@ def validate_cutover_authority_fixtures() -> None:
         ("CutoverAuthorityLedger", ledger),
         ("CutoverAuthorityLedger", semantic_invalid),
     ):
-        errors = list(
-            Draft202012Validator(schema["$defs"][definition]).iter_errors(value)
-        )
+        errors = list(Draft202012Validator(schema["$defs"][definition]).iter_errors(value))
         require(
             not errors,
-            f"cutover fixture schema invalid: {definition}: "
-            f"{errors[0].message if errors else ''}",
+            f"cutover fixture schema invalid: {definition}: {errors[0].message if errors else ''}",
         )
     require(
         attestation["attestation_digest"] == digest_value(attestation["attestation"]),
@@ -1412,7 +1616,10 @@ def validate_documents() -> None:
     ):
         require(token.lower() in joined.lower(), f"SDD missing normative token: {token}")
     require("no partial" in joined.lower(), "SDD must forbid partial product claims")
-    require("installed" in texts[-1].lower() and "read-only" in texts[-1].lower(), "handoff must protect installed source")
+    require(
+        "installed" in texts[-1].lower() and "read-only" in texts[-1].lower(),
+        "handoff must protect installed source",
+    )
     public_text = "\n".join(
         [
             joined,
@@ -1445,9 +1652,7 @@ def validate_results(
         raise ValueError("acceptance results require --review-trust")
     review_trust = load_json(review_trust_path)
     trust_errors = list(
-        Draft202012Validator(
-            evidence_schema["$defs"]["ReviewTrustStore"]
-        ).iter_errors(review_trust)
+        Draft202012Validator(evidence_schema["$defs"]["ReviewTrustStore"]).iter_errors(review_trust)
     )
     require(
         not trust_errors,
@@ -1462,7 +1667,9 @@ def validate_results(
     require(candidate["package_version"] == "0.5.0a0", "candidate package version mismatch")
     require(
         candidate["manifest_digest"]
-        == digest_value({key: value for key, value in candidate.items() if key != "manifest_digest"}),
+        == digest_value(
+            {key: value for key, value in candidate.items() if key != "manifest_digest"}
+        ),
         "candidate manifest digest mismatch",
     )
     require(
@@ -1474,14 +1681,17 @@ def validate_results(
         candidate["tool_surface_digest"] == combined_surface["tool_surface_digest"],
         "candidate tool surface digest mismatch",
     )
-    version_lines = {
-        ".".join(version.split(".")[:2])
-        for version in candidate["python_versions"]
-    }
+    version_lines = {".".join(version.split(".")[:2]) for version in candidate["python_versions"]}
     require(version_lines == {"3.11", "3.12", "3.13", "3.14"}, "candidate Python matrix incomplete")
-    require("linux-x86_64" in candidate["platforms"], "candidate lacks Linux x86_64 reference platform")
-    require(results["matrix_digest"] == digest_file(ACCEPTANCE_PATH), "results matrix digest mismatch")
-    require(results["fault_matrix_digest"] == digest_file(FAULT_PATH), "results fault digest mismatch")
+    require(
+        "linux-x86_64" in candidate["platforms"], "candidate lacks Linux x86_64 reference platform"
+    )
+    require(
+        results["matrix_digest"] == digest_file(ACCEPTANCE_PATH), "results matrix digest mismatch"
+    )
+    require(
+        results["fault_matrix_digest"] == digest_file(FAULT_PATH), "results fault digest mismatch"
+    )
 
     results_root = results_path.resolve().parent
     validated_files: dict[tuple[str, int, str], Path] = {}
@@ -1502,7 +1712,10 @@ def validate_results(
             f"{owner}: unsafe evidence path",
         )
         path = (results_root / relative_path).resolve()
-        require(path == results_root or results_root in path.parents, f"{owner}: evidence path escapes root")
+        require(
+            path == results_root or results_root in path.parents,
+            f"{owner}: evidence path escapes root",
+        )
         require(path.is_file(), f"{owner}: evidence file missing: {relative_path.as_posix()}")
         require(binding["size_bytes"] == path.stat().st_size, f"{owner}: evidence size mismatch")
         require(binding["sha256"] == digest_file(path), f"{owner}: evidence digest mismatch")
@@ -1549,9 +1762,7 @@ def validate_results(
             f"review key is not trusted: {identity}",
         )
         try:
-            review_public_keys[identity] = Ed25519PublicKey.from_public_bytes(
-                public_key_bytes
-            )
+            review_public_keys[identity] = Ed25519PublicKey.from_public_bytes(public_key_bytes)
         except ValueError as error:
             raise ValueError(f"review public key invalid: {identity}") from error
 
@@ -1646,9 +1857,7 @@ def validate_results(
     require(archive_entries == source_entries, "source archive inventory mismatch")
     require(
         source_document["source_tree_digest"]
-        == digest_value(
-            {"schema_version": "aar.source-tree.v1", "entries": source_entries}
-        ),
+        == digest_value({"schema_version": "aar.source-tree.v1", "entries": source_entries}),
         "source tree digest mismatch",
     )
     _, wheel_build_document = validate_semantic_document(
@@ -1668,10 +1877,8 @@ def validate_results(
         "wheel build candidate mismatch",
     )
     require(
-        wheel_build_document["source_manifest_file_digest"]
-        == source_manifest_binding["sha256"]
-        and wheel_build_document["source_manifest_digest"]
-        == source_document["manifest_digest"],
+        wheel_build_document["source_manifest_file_digest"] == source_manifest_binding["sha256"]
+        and wheel_build_document["source_manifest_digest"] == source_document["manifest_digest"],
         "wheel build source manifest binding mismatch",
     )
     for field in ("source_commit", "source_tree_digest", "source_archive_digest"):
@@ -1680,7 +1887,8 @@ def validate_results(
             f"wheel build source provenance mismatch: {field}",
         )
     require(
-        wheel_build_document["wheel_digest"] == wheel_binding["sha256"]
+        wheel_build_document["wheel_digest"]
+        == wheel_binding["sha256"]
         == candidate["wheel_digest"],
         "wheel digest not provenance-bound",
     )
@@ -1695,8 +1903,15 @@ def validate_results(
         == candidate["tool_surface_digest"],
         "tool surface digest not bound to candidate file",
     )
-    require(set(candidate["profile_digests"]) <= {item["sha256"] for item in artifacts_by_kind["profile"]}, "profile digests not file-bound")
-    require(set(candidate["skill_digests"]) <= {item["sha256"] for item in artifacts_by_kind["skill"]}, "skill digests not file-bound")
+    require(
+        set(candidate["profile_digests"])
+        <= {item["sha256"] for item in artifacts_by_kind["profile"]},
+        "profile digests not file-bound",
+    )
+    require(
+        set(candidate["skill_digests"]) <= {item["sha256"] for item in artifacts_by_kind["skill"]},
+        "skill digests not file-bound",
+    )
 
     evidence = results["evidence"]
     evidence_ids = [item["evidence_id"] for item in evidence]
@@ -1712,21 +1927,30 @@ def validate_results(
     semantic_authorizations: set[str] = set()
     for item in evidence:
         acceptance_id = item["acceptance_id"]
-        require(acceptance_id in rows, f"evidence references unknown acceptance row: {acceptance_id}")
-        require(item["candidate_id"] == candidate["candidate_id"], f"evidence candidate mismatch: {item['evidence_id']}")
+        require(
+            acceptance_id in rows, f"evidence references unknown acceptance row: {acceptance_id}"
+        )
+        require(
+            item["candidate_id"] == candidate["candidate_id"],
+            f"evidence candidate mismatch: {item['evidence_id']}",
+        )
         require(
             altitude_rank[item["tier"]] >= altitude_rank[rows[acceptance_id]["altitude"]],
             f"evidence tier too low: {item['evidence_id']}",
         )
         fault_case_id = item.get("fault_case_id")
         if fault_case_id is not None:
-            require(fault_case_id in faults, f"evidence references unknown fault case: {fault_case_id}")
+            require(
+                fault_case_id in faults, f"evidence references unknown fault case: {fault_case_id}"
+            )
             require(
                 faults[fault_case_id]["acceptance_id"] == acceptance_id,
                 f"fault/acceptance mismatch: {item['evidence_id']}",
             )
         if item["observed_outcome"] == "pass":
-            require(item["exit_code"] == 0, f"passing evidence has non-zero exit: {item['evidence_id']}")
+            require(
+                item["exit_code"] == 0, f"passing evidence has non-zero exit: {item['evidence_id']}"
+            )
         files_by_kind: dict[str, list[dict[str, Any]]] = {}
         for binding in item["files"]:
             validate_file(binding, item["evidence_id"])
@@ -1789,11 +2013,7 @@ def validate_results(
         require(
             fixture_bundle["bundle_digest"]
             == digest_value(
-                {
-                    key: value
-                    for key, value in fixture_bundle.items()
-                    if key != "bundle_digest"
-                }
+                {key: value for key, value in fixture_bundle.items() if key != "bundle_digest"}
             ),
             f"{item['evidence_id']}: fixture bundle digest mismatch",
         )
@@ -1820,7 +2040,10 @@ def validate_results(
                 "SemanticReceiptDocument",
                 item["evidence_id"],
             )
-            require(receipt["receipt_digest"] == digest_file(receipt_path), f"semantic receipt digest mismatch: {item['evidence_id']}")
+            require(
+                receipt["receipt_digest"] == digest_file(receipt_path),
+                f"semantic receipt digest mismatch: {item['evidence_id']}",
+            )
             require(
                 receipt_document["kind"] == receipt["kind"]
                 and receipt_document["candidate_id"] == candidate["candidate_id"],
@@ -1835,8 +2058,14 @@ def validate_results(
             and sorted(item["receipt_digests"]) == sorted(semantic_receipt_digests),
             f"semantic receipt list mismatch: {item['evidence_id']}",
         )
-        if item["observed_outcome"] == "pass" and altitude_rank[item["tier"]] >= altitude_rank["T3"]:
-            require(bool(receipt_kinds & {"host", "reconciler"}), f"T3+ evidence lacks host/reconciler receipt: {item['evidence_id']}")
+        if (
+            item["observed_outcome"] == "pass"
+            and altitude_rank[item["tier"]] >= altitude_rank["T3"]
+        ):
+            require(
+                bool(receipt_kinds & {"host", "reconciler"}),
+                f"T3+ evidence lacks host/reconciler receipt: {item['evidence_id']}",
+            )
         if item["observed_outcome"] == "pass" and item["tier"] == "T4":
             require(
                 {"host", "model_route", "subagent", "authorization"} <= receipt_kinds,
@@ -1875,9 +2104,7 @@ def validate_results(
         try:
             review_public_key.verify(signature_bytes, signature_payload)
         except InvalidSignature as error:
-            raise ValueError(
-                f"review signature invalid: {item['evidence_id']}"
-            ) from error
+            raise ValueError(f"review signature invalid: {item['evidence_id']}") from error
 
     accepted_rows = {
         item["acceptance_id"]
@@ -1907,7 +2134,9 @@ def validate_results(
         for case_id, case in faults.items()
         if rows[case["acceptance_id"]]["required_for_live_qualified"]
     }
-    implementation_ok = implementation_rows <= accepted_rows and implementation_faults <= accepted_faults
+    implementation_ok = (
+        implementation_rows <= accepted_rows and implementation_faults <= accepted_faults
+    )
     live_ok = implementation_ok and live_rows <= accepted_rows and live_faults <= accepted_faults
     if results["claim_status"] in {"implementation_verified", "live_qualified"}:
         missing_rows = sorted(implementation_rows - accepted_rows)
@@ -1921,14 +2150,30 @@ def validate_results(
             f"implementation claim lacks required fault evidence: {missing_faults}",
         )
     if live_ok:
-        require(bool(results["authorization_receipt_digests"]), "live qualification lacks authorization receipt")
+        require(
+            bool(results["authorization_receipt_digests"]),
+            "live qualification lacks authorization receipt",
+        )
         require(
             set(results["authorization_receipt_digests"]) <= semantic_authorizations,
             "authorization digests lack file-bound semantic receipts",
         )
-    expected = "live_qualified" if live_ok else "implementation_verified" if implementation_ok else "not_verified"
-    require(results["claim_status"] == expected, f"claim status {results['claim_status']} must be {expected}")
-    require(results["results_digest"] == digest_value({key: value for key, value in results.items() if key != "results_digest"}), "results digest mismatch")
+    expected = (
+        "live_qualified"
+        if live_ok
+        else "implementation_verified"
+        if implementation_ok
+        else "not_verified"
+    )
+    require(
+        results["claim_status"] == expected,
+        f"claim status {results['claim_status']} must be {expected}",
+    )
+    require(
+        results["results_digest"]
+        == digest_value({key: value for key, value in results.items() if key != "results_digest"}),
+        "results digest mismatch",
+    )
     return expected.upper()
 
 
@@ -1950,7 +2195,9 @@ def main() -> int:
     validate_migration_sql()
     validate_cutover_authority_fixtures()
     validate_documents()
-    implementation_rows = sum(1 for row in rows.values() if row["required_for_implementation_verified"])
+    implementation_rows = sum(
+        1 for row in rows.values() if row["required_for_implementation_verified"]
+    )
     live_rows = sum(1 for row in rows.values() if row["required_for_live_qualified"])
     status = (
         validate_results(args.results, args.review_trust, rows, faults, manifest)

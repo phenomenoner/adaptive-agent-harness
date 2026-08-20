@@ -122,6 +122,31 @@ class RlmWorkbenchExecuteInput(ContractDocument):
         _validate_json_contract(spec["completion"]["output_contract"])
 
 
+class RlmWorkbenchJobSpec(ContractDocument):
+    schema_file = "aar-rlm-workbench-v1.schema.json"
+    definition = "RlmWorkbenchJobSpec"
+
+
+class RlmDirective(ContractDocument):
+    schema_file = "aar-rlm-workbench-v1.schema.json"
+    definition = "RlmDirective"
+
+
+class RlmWorkbenchSnapshot(ContractDocument):
+    schema_file = "aar-rlm-workbench-v1.schema.json"
+    definition = "RlmWorkbenchSnapshot"
+
+
+class RlmWorkbenchResult(ContractDocument):
+    schema_file = "aar-rlm-workbench-v1.schema.json"
+    definition = "RlmWorkbenchResult"
+
+
+class RecoveryPlannerInput(ContractDocument):
+    schema_file = "aar-rlm-workbench-v1.schema.json"
+    definition = "RecoveryPlannerInput"
+
+
 class RlmWorkbenchCapability(ContractDocument):
     schema_file = "aar-rlm-workbench-v1.schema.json"
     definition = "RlmWorkbenchCapability"
@@ -157,6 +182,53 @@ class RlmWorkbenchCapability(ContractDocument):
                     raise ValueError(f"capability {row['method']} {key} mismatch")
 
 
+def build_workbench_capability(
+    availability: Mapping[str, Mapping[str, Any]],
+    *,
+    security_profiles: tuple[str, ...] = ("trusted_local",),
+) -> RlmWorkbenchCapability:
+    """Build the truthful v8 projection from reviewed contracts plus runtime availability."""
+
+    combined = _load_projection("aar-mcp-tools-v8-combined.json")
+    catalog = _load_projection("aar-broker-catalog-v2.json")
+    workbench = _contract_documents()["aar-rlm-workbench-v1.schema.json"]
+    unknown = sorted(set(availability) - {row["method"] for row in catalog["contracts"]})
+    if unknown:
+        raise ValueError("unknown workbench backend methods: " + ", ".join(unknown))
+    methods: list[dict[str, Any]] = []
+    for contract in catalog["contracts"]:
+        backend = dict(
+            availability.get(
+                contract["method"],
+                {
+                    "backend_kind": "unconfigured",
+                    "configured": False,
+                    "reference_only": False,
+                    "adapter_id": None,
+                    "adapter_generation": None,
+                    "evidence_tier": "unknown",
+                },
+            )
+        )
+        methods.append({**copy.deepcopy(contract), **backend})
+    document = {
+        "schema_version": "aar.rlm-workbench-capability.v1",
+        "surface_version": combined["tool_surface_version"],
+        "tool_surface_digest": combined["tool_surface_digest"],
+        "broker_catalog_digest": canonical_sha256(
+            {
+                "schema_version": catalog["schema_version"],
+                "contracts": catalog["contracts"],
+            }
+        ),
+        "planner_directive_schema_version": "aar.rlm-directive.v1",
+        "planner_directive_schema_digest": canonical_sha256(workbench["$defs"]["RlmDirective"]),
+        "security_profiles": list(security_profiles),
+        "methods": methods,
+    }
+    return RlmWorkbenchCapability.model_validate(document, strict=True)
+
+
 def require_fully_configured_workbench_capability(
     capability: RlmWorkbenchCapability,
 ) -> RlmWorkbenchCapability:
@@ -168,9 +240,7 @@ def require_fully_configured_workbench_capability(
             or row["reference_only"]
             or row["backend_kind"] not in {"caller_driver", "native"}
         ):
-            raise ValueError(
-                f"capability {row['method']} has no qualified executable backend"
-            )
+            raise ValueError(f"capability {row['method']} has no qualified executable backend")
     return capability
 
 
@@ -366,11 +436,17 @@ __all__ = [
     "CellCommitManifest",
     "ContractDocument",
     "FinalizationManifest",
+    "RecoveryPlannerInput",
+    "RlmDirective",
     "RlmWorkbenchCapability",
     "RlmWorkbenchExecuteInput",
     "RlmWorkbenchFailure",
+    "RlmWorkbenchJobSpec",
     "RlmWorkbenchPhaseProjection",
+    "RlmWorkbenchResult",
+    "RlmWorkbenchSnapshot",
     "WorkspaceBrokerFrame",
+    "build_workbench_capability",
     "require_fully_configured_workbench_capability",
     "validate_contract_document",
 ]

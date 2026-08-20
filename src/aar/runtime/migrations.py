@@ -158,13 +158,9 @@ def apply_registry_v6(
             for index, statement in enumerate(statements, start=1):
                 connection.execute(statement)
                 if fail_after_statement == index:
-                    raise SimulatedMigrationCrash(
-                        f"simulated crash after v6 DDL statement {index}"
-                    )
+                    raise SimulatedMigrationCrash(f"simulated crash after v6 DDL statement {index}")
 
-            integrity_result = str(
-                connection.execute("PRAGMA integrity_check").fetchone()[0]
-            )
+            integrity_result = str(connection.execute("PRAGMA integrity_check").fetchone()[0])
             foreign_key_violation_count = len(
                 connection.execute("PRAGMA foreign_key_check").fetchall()
             )
@@ -174,8 +170,7 @@ def apply_registry_v6(
                 )
             if (
                 payload["integrity_result"] != integrity_result
-                or payload["foreign_key_violation_count"]
-                != foreign_key_violation_count
+                or payload["foreign_key_violation_count"] != foreign_key_violation_count
             ):
                 raise MigrationIdentityMismatch(
                     "attestation integrity evidence does not match candidate database"
@@ -278,6 +273,9 @@ def _migration_statements(sql: str) -> tuple[str, ...]:
         if not (
             normalized.startswith("CREATE TABLE IF NOT EXISTS ")
             or normalized.startswith("CREATE INDEX IF NOT EXISTS ")
+            or normalized.startswith(
+                "CREATE TRIGGER IF NOT EXISTS CALLER_WORK_COMMAND_RECEIPTS_NO_"
+            )
         ):
             raise MigrationIdentityMismatch(
                 "migration SQL contains a statement outside the reviewed DDL allowlist"

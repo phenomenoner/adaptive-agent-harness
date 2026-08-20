@@ -13,7 +13,8 @@ from typing import Any
 import IPython
 from IPython.core.interactiveshell import InteractiveShell
 
-from aar.canonical import canonical_json_bytes
+from aar.canonical import canonical_json_bytes, canonical_sha256
+from aar.rlm_workbench_models import WorkspaceBrokerFrame
 from aar.runtime.programming import (
     PlainPythonWorkspaceBackend,
     _portable_value,
@@ -24,7 +25,6 @@ from aar.runtime.programming import (
 def _write(payload: dict[str, Any]) -> None:
     sys.stdout.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
     sys.stdout.flush()
-
 
 
 class _BoundedStream(io.TextIOBase):
@@ -89,6 +89,9 @@ class _Worker:
         max_events = int(request["max_events"])
         max_output_chars = int(request["max_output_chars"])
         artifact_enabled = bool(request["artifact_enabled"])
+        broker_enabled = bool(request.get("broker_enabled", False))
+        wire_stdin = sys.stdin
+        wire_stdout = sys.stdout
         events: list[dict[str, Any]] = []
         artifacts: list[dict[str, str]] = []
         dropped = False
@@ -146,6 +149,144 @@ class _Worker:
             add({"kind": "artifact", "artifact_index": index})
             return {"artifact_index": index}
 
+        def broker(value: Any) -> Any:
+            if not broker_enabled:
+                raise RuntimeError("no host broker is configured")
+            payload = _portable_value(value)
+            encoded = canonical_json_bytes(payload)
+            if len(encoded) > 65_536:
+                raise RuntimeError("broker request exceeds 65536 bytes")
+            wire_stdout.write(
+                json.dumps(
+                    {"broker_request": payload},
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+                + "\n"
+            )
+            wire_stdout.flush()
+            prepared_token: dict[str, Any] | None = None
+            committed_receipt: dict[str, Any] | None = None
+            while True:
+                line = wire_stdin.readline()
+                if not line:
+                    raise RuntimeError("host broker response stream closed")
+                response = json.loads(line)
+                if not isinstance(response, dict):
+                    raise RuntimeError("host broker response is not an object")
+                if "rebind_prepare" in response:
+                    frame = WorkspaceBrokerFrame.model_validate(
+                        response["rebind_prepare"], strict=True
+                    )
+                    document = dict(frame.root)
+                    if document["kind"] != "rebind_prepare":
+                        raise RuntimeError("host rebind prepare frame kind changed")
+                    token = dict(document["payload"]["token"])
+                    if prepared_token is not None and prepared_token != token:
+                        raise RuntimeError("host rebind prepare token changed")
+                    prepared_token = token
+                    add({"kind": "progress", "data": {"phase": "rebind_prepared"}})
+                    continue
+                if "broker_receipt" in response:
+                    frame = WorkspaceBrokerFrame.model_validate(
+                        response["broker_receipt"], strict=True
+                    )
+                    document = dict(frame.root)
+                    if document["kind"] != "broker_receipt" or prepared_token is None:
+                        raise RuntimeError("host broker receipt arrived before rebind prepare")
+                    if (
+                        document["attempt_id"] != prepared_token["successor_attempt_id"]
+                        or document["attempt_fence"] != prepared_token["successor_attempt_fence"]
+                        or document["cell_execution_id"] != prepared_token["cell_execution_id"]
+                    ):
+                        raise RuntimeError("host broker receipt authority changed")
+                    receipt = dict(document["payload"])
+                    if receipt["receipt_digest"] != prepared_token["settled_receipt_digest"]:
+                        raise RuntimeError("host broker receipt settlement digest changed")
+                    committed_receipt = receipt
+                    continue
+                if "rebind_commit" in response:
+                    frame = WorkspaceBrokerFrame.model_validate(
+                        response["rebind_commit"], strict=True
+                    )
+                    document = dict(frame.root)
+                    if (
+                        document["kind"] != "rebind_commit"
+                        or prepared_token is None
+                        or committed_receipt is None
+                    ):
+                        raise RuntimeError("host rebind commit has no prepared receipt")
+                    token = dict(document["payload"]["token"])
+                    if token != prepared_token:
+                        raise RuntimeError("host rebind commit token changed")
+                    ack_material = {
+                        "token_digest": token["token_digest"],
+                        "acknowledged_phase": "committed",
+                        "worker_process_identity_digest": token["worker_process_identity_digest"],
+                        "observed_workspace_revision": token["workspace_revision"],
+                        "live_stack_resumed": True,
+                    }
+                    ack_payload = {
+                        **ack_material,
+                        "ack_digest": canonical_sha256(ack_material),
+                    }
+                    ack_document = {
+                        "schema_version": "aar.workspace-broker-frame.v1",
+                        "kind": "rebind_ack",
+                        "direction": "worker_to_supervisor",
+                        "committed": False,
+                        "operation": document["operation"],
+                        "attempt_id": document["attempt_id"],
+                        "attempt_fence": document["attempt_fence"],
+                        "workspace": document["workspace"],
+                        "workspace_generation": document["workspace_generation"],
+                        "workspace_revision": document["workspace_revision"],
+                        "cell_execution_id": document["cell_execution_id"],
+                        "frame_sequence": int(document["frame_sequence"]) + 1,
+                        "broker_call_ordinal": None,
+                        "deadline_unix_ms": document["deadline_unix_ms"],
+                        "payload": ack_payload,
+                        "payload_digest": canonical_sha256(ack_payload),
+                        "payload_bytes": len(canonical_json_bytes(ack_payload)),
+                    }
+                    acknowledgement = WorkspaceBrokerFrame.model_validate(ack_document, strict=True)
+                    wire_stdout.write(
+                        json.dumps(
+                            {"rebind_ack": dict(acknowledgement.root)},
+                            ensure_ascii=False,
+                            separators=(",", ":"),
+                        )
+                        + "\n"
+                    )
+                    wire_stdout.flush()
+                    observation = dict(committed_receipt["observation"])
+                    outcome = observation.get("outcome")
+                    ticket_state = (
+                        "settled_success"
+                        if outcome == "succeeded"
+                        else (
+                            "cancelled_certain"
+                            if outcome in {"cancelled", "canceled"}
+                            else "settled_failure"
+                        )
+                    )
+                    add({"kind": "progress", "data": {"phase": "broker_resumed"}})
+                    return {
+                        "ticket_id": token["ticket_id"],
+                        "ticket_state": ticket_state,
+                        "observation": observation,
+                        "receipt_digest": committed_receipt["receipt_digest"],
+                    }
+                if "broker_error" in response:
+                    error = response["broker_error"]
+                    raise RuntimeError(
+                        f"host broker failed: {error.get('type')}: {error.get('message')}"
+                    )
+                if "broker_response" not in response:
+                    raise RuntimeError("host broker response payload is missing")
+                add({"kind": "progress", "data": {"phase": "broker_resumed"}})
+                return response["broker_response"]
+
         def publish(data: Any = None, **_kwargs: Any) -> None:
             add(
                 {
@@ -156,6 +297,7 @@ class _Worker:
 
         reserved = {
             "aar_artifact": artifact,
+            "aar_broker": broker,
             "aar_display": display,
             "aar_progress": progress,
         }

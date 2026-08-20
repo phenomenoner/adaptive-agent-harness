@@ -7,6 +7,7 @@ native start identity needed to distinguish a live owner from a recycled PID.
 from __future__ import annotations
 
 import ctypes
+import errno
 import os
 import select
 import signal
@@ -14,6 +15,7 @@ import subprocess
 import sys
 import threading
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -329,9 +331,7 @@ def _windows_process_start_time(pid: int) -> int:
         value = (int(creation.dwHighDateTime) << 32) | int(creation.dwLowDateTime)
         exit_value = (int(exit_time.dwHighDateTime) << 32) | int(exit_time.dwLowDateTime)
         if exit_value:
-            raise ProcessIdentityNotFound(
-                f"native Windows process PID {pid} has terminated"
-            )
+            raise ProcessIdentityNotFound(f"native Windows process PID {pid} has terminated")
         if value <= 0:
             raise ProcessIdentityUnavailable(
                 f"GetProcessTimes returned no creation time for PID {pid}"
@@ -390,9 +390,7 @@ def observe_process_identity(identity: ProcessStartIdentity) -> ProcessIdentityO
         )
     return ProcessIdentityObservation(
         state=(
-            ProcessIdentityState.MATCH
-            if observed == identity
-            else ProcessIdentityState.MISMATCH
+            ProcessIdentityState.MATCH if observed == identity else ProcessIdentityState.MISMATCH
         ),
         observed=observed,
     )
@@ -429,10 +427,83 @@ def _windows_start_time_from_handle(kernel32: object, handle: int, pid: int) -> 
     if exit_value:
         raise ProcessIdentityNotFound(f"native Windows process PID {pid} has terminated")
     if value <= 0:
-        raise ProcessIdentityUnavailable(
-            f"GetProcessTimes returned no creation time for PID {pid}"
-        )
+        raise ProcessIdentityUnavailable(f"GetProcessTimes returned no creation time for PID {pid}")
     return value
+
+
+@dataclass(frozen=True)
+class _LinuxPidfdOps:
+    """One fully qualified pidfd backend retained for the handle lifetime."""
+
+    backend: Literal["stdlib", "libc"]
+    open: Callable[[int], int]
+    send_signal: Callable[[int, int], None]
+
+
+def _stdlib_linux_pidfd_ops() -> _LinuxPidfdOps | None:
+    opener = getattr(os, "pidfd_open", None)
+    sender = getattr(signal, "pidfd_send_signal", None)
+    if opener is None or sender is None:
+        return None
+
+    def open_pidfd(pid: int) -> int:
+        return int(opener(pid, 0))
+
+    def send_pidfd_signal(descriptor: int, signum: int) -> None:
+        sender(descriptor, signum)
+
+    return _LinuxPidfdOps(
+        backend="stdlib",
+        open=open_pidfd,
+        send_signal=send_pidfd_signal,
+    )
+
+
+def _libc_linux_pidfd_ops() -> _LinuxPidfdOps:
+    """Resolve named glibc pidfd entry points without raw syscall numbers."""
+
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        opener = libc.pidfd_open
+        sender = libc.pidfd_send_signal
+    except (AttributeError, OSError) as error:
+        raise ProcessIdentityUnavailable(
+            "Linux pidfd signalling support is unavailable through stdlib or libc"
+        ) from error
+
+    opener.argtypes = [ctypes.c_int, ctypes.c_uint]
+    opener.restype = ctypes.c_int
+    sender.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_uint]
+    sender.restype = ctypes.c_int
+
+    def open_pidfd(pid: int) -> int:
+        ctypes.set_errno(0)
+        descriptor = int(opener(pid, 0))
+        if descriptor >= 0:
+            return descriptor
+        error_code = ctypes.get_errno() or errno.EIO
+        if error_code == errno.ESRCH:
+            raise ProcessLookupError(error_code, os.strerror(error_code))
+        raise OSError(error_code, os.strerror(error_code))
+
+    def send_pidfd_signal(descriptor: int, signum: int) -> None:
+        ctypes.set_errno(0)
+        if int(sender(descriptor, signum, None, 0)) == 0:
+            return
+        error_code = ctypes.get_errno() or errno.EIO
+        if error_code == errno.ESRCH:
+            raise ProcessLookupError(error_code, os.strerror(error_code))
+        raise OSError(error_code, os.strerror(error_code))
+
+    return _LinuxPidfdOps(
+        backend="libc",
+        open=open_pidfd,
+        send_signal=send_pidfd_signal,
+    )
+
+
+def _linux_pidfd_ops() -> _LinuxPidfdOps:
+    return _stdlib_linux_pidfd_ops() or _libc_linux_pidfd_ops()
 
 
 class ExactProcessHandle:
@@ -445,11 +516,13 @@ class ExactProcessHandle:
         kind: Literal["linux-pidfd", "windows-handle"],
         handle: int,
         kernel32: object | None = None,
+        linux_pidfd_ops: _LinuxPidfdOps | None = None,
     ) -> None:
         self.identity = identity
         self.kind = kind
         self.handle = handle
         self._kernel32 = kernel32
+        self._linux_pidfd_ops = linux_pidfd_ops
         self.last_error: int | None = None
         self._closed = False
 
@@ -465,11 +538,10 @@ class ExactProcessHandle:
         if self._closed:
             raise ProcessIdentityUnavailable("exact process handle is closed")
         if self.kind == "linux-pidfd":
-            sender = getattr(signal, "pidfd_send_signal", None)
-            if sender is None:
-                raise ProcessIdentityUnavailable("pidfd_send_signal is unavailable")
+            if self._linux_pidfd_ops is None:
+                raise ProcessIdentityUnavailable("pidfd signal backend is unavailable")
             try:
-                sender(self.handle, signum)
+                self._linux_pidfd_ops.send_signal(self.handle, signum)
             except ProcessLookupError:
                 return False
             except OSError as error:
@@ -508,8 +580,7 @@ class ExactProcessHandle:
             return False
         error_code = ctypes.get_last_error()
         raise ProcessIdentityUnavailable(
-            f"WaitForSingleObject failed for PID {self.identity.pid} "
-            f"(winerror={error_code})"
+            f"WaitForSingleObject failed for PID {self.identity.pid} (winerror={error_code})"
         )
 
     def close(self) -> None:
@@ -814,9 +885,7 @@ def open_exact_process(
         if not handle:
             error_code = ctypes.get_last_error()
             if error_code in {87, 1168}:
-                raise ProcessIdentityMismatch(
-                    f"recorded process PID {identity.pid} is absent"
-                )
+                raise ProcessIdentityMismatch(f"recorded process PID {identity.pid} is absent")
             raise ProcessIdentityUnavailable(
                 f"could not open exact process PID {identity.pid} (winerror={error_code})"
             )
@@ -843,19 +912,13 @@ def open_exact_process(
 
     if not sys.platform.startswith("linux") or identity.platform != "linux":
         raise ProcessIdentityUnavailable("exact process handles require Linux/WSL or Windows")
-    opener = getattr(os, "pidfd_open", None)
-    if opener is None or getattr(signal, "pidfd_send_signal", None) is None:
-        raise ProcessIdentityUnavailable("Linux pidfd signalling support is unavailable")
+    pidfd_ops = _linux_pidfd_ops()
     try:
-        descriptor = opener(identity.pid, 0)
+        descriptor = pidfd_ops.open(identity.pid)
     except ProcessLookupError as error:
-        raise ProcessIdentityMismatch(
-            f"recorded process PID {identity.pid} is absent"
-        ) from error
+        raise ProcessIdentityMismatch(f"recorded process PID {identity.pid} is absent") from error
     except OSError as error:
-        raise ProcessIdentityUnavailable(
-            f"could not open pidfd for PID {identity.pid}"
-        ) from error
+        raise ProcessIdentityUnavailable(f"could not open pidfd for PID {identity.pid}") from error
     try:
         observation = observe_process_identity(identity)
         if observation.state is ProcessIdentityState.MISMATCH:
@@ -865,7 +928,12 @@ def open_exact_process(
         if observation.state is ProcessIdentityState.UNAVAILABLE:
             assert observation.error is not None
             raise observation.error
-        return ExactProcessHandle(identity, kind="linux-pidfd", handle=descriptor)
+        return ExactProcessHandle(
+            identity,
+            kind="linux-pidfd",
+            handle=descriptor,
+            linux_pidfd_ops=pidfd_ops,
+        )
     except BaseException:
         os.close(descriptor)
         raise

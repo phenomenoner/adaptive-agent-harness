@@ -1,5 +1,7 @@
 <div align="center">
 
+> **`0.5.0a0`** public alpha · [`phenomenoner/adaptive-agent-harness@v0.5.0a0`](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0)
+
 # Adaptive Agent Harness
 
 ### มอบโต๊ะทำงานให้เอเจนต์ — ไม่ใช่แค่พรอมป์ที่ใหญ่ขึ้น
@@ -7,8 +9,8 @@
 **RLM ที่โฮสต์ประกอบเข้าด้วยกัน + IPython แบบคงสถานะ + การดำเนินการที่คงทน + อำนาจที่โฮสต์เป็นผู้ถือครอง**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.4.0a6-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6)
+[![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
+[![Release](https://img.shields.io/badge/release-v0.5.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#สถานะโครงการ)
 
@@ -190,7 +192,7 @@ Adaptive Agent Harness เหมาะอย่างยิ่งกับ:
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a6"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.5.0a0"
 ```
 
 ### ตั้งค่า Codex App
@@ -257,20 +259,20 @@ Plain Python / IPython workers and host-authorized brokers
 
 ## สถานะโครงการ
 
-อัลฟาสาธารณะปัจจุบัน: **`0.4.0a6`**
+อัลฟาสาธารณะปัจจุบัน: **`0.5.0a0`**
 
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.4.0a6` receipt-backed model routing, current verification, and exact release
-> boundaries, read the canonical English [release notes](../RELEASE-v0.4.0a6.md) and
+> context. For `v0.5.0a0` receipt-backed model routing, current verification, and exact release
+> boundaries, read the canonical English [release notes](../RELEASE-v0.5.0a0.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
-ทำซ้ำได้จาก candidate สาธารณะนี้:
+Current `v0.5.0a0` public release evidence:
 
 - รองรับ Python 3.11 ถึง 3.14;
-- พื้นผิว MCP v7 จำนวน 30 เครื่องมือ;
+- 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - schema SQLite แบบเพิ่มต่อเนื่องจนถึง v5;
-- การรันรีโพซิทอรีทั้งหมด: **ผ่าน 249 รายการ ข้าม 1 รายการตามเงื่อนไขแพลตฟอร์ม**;
+- full repository run: **743 passed, 5 platform-gated skips, 1 existing MCP Sampling deprecation warning**;
 - การตรวจสอบ supervisor/frontend แบบ exact-wheel ที่สะอาดบน Linux/WSL;
 - สถานการณ์ supervisor ที่คงทน การแทนที่ frontend การสูญเสียกระบวนการ writer ที่ล้าสมัย การนำใบเสร็จ (receipt) กลับมาใช้ซ้ำ และ successor ของ RLM ที่ผูกกับ policy
 

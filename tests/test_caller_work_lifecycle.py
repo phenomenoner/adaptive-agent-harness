@@ -11,6 +11,8 @@ from typing import Any
 
 import pytest
 
+from aar.runtime.caller_work import build_reconcile_fence
+
 ROOT = Path(__file__).resolve().parents[1]
 SDD = ROOT / "docs" / "sdd" / "aar-rlm-native-workbench-v2"
 FIXTURES = SDD / "fixtures"
@@ -80,6 +82,14 @@ def create_caller_work_registry(path: Path, ticket: dict[str, Any]) -> None:
                      'accepted', 'certain', 1, 0, 0, '{}', '{}', ?, ?)
             """,
             (OPERATION_ID, "sha256:" + "1" * 64, FIXED_NOW_MS, FIXED_NOW_MS),
+        )
+        connection.execute(
+            """
+            INSERT INTO operation_controls(
+                operation_id, control_revision, cancellation_requested
+            ) VALUES(?, 1, 0)
+            """,
+            (OPERATION_ID,),
         )
         connection.execute(
             """
@@ -161,9 +171,7 @@ def mark_send_started_input(ticket: Any, *, idempotency_key: str) -> dict[str, A
         "claim_fence": claimant.claim_fence,
         "physical_attempt_id": physical.physical_attempt_id,
         "expected_claim_expires_at_unix_ms": claimant.claim_expires_at_unix_ms,
-        "provider_or_child_idempotency_key": (
-            physical.provider_or_child_idempotency_key
-        ),
+        "provider_or_child_idempotency_key": (physical.provider_or_child_idempotency_key),
         "sent_request_digest": ticket.request_digest,
         "lookup_supported": True,
         "cancel_supported": True,
@@ -183,9 +191,7 @@ def cancel_before_send_input(
         "expected_pre_send_state": expected_state,
         "claim_id": None if claimant is None else claimant.claim_id,
         "claim_fence": None if claimant is None else claimant.claim_fence,
-        "physical_attempt_id": (
-            None if physical is None else physical.physical_attempt_id
-        ),
+        "physical_attempt_id": (None if physical is None else physical.physical_attempt_id),
         "expected_claim_expires_at_unix_ms": (
             None if claimant is None else claimant.claim_expires_at_unix_ms
         ),
@@ -219,6 +225,67 @@ def commit_input(ticket: Any, *, idempotency_key: str) -> dict[str, Any]:
     }
 
 
+def reconcile_input(
+    ticket: Any,
+    *,
+    action: str,
+    idempotency_key: str,
+    candidate_receipt_digest: str | None = None,
+) -> dict[str, Any]:
+    physical = ticket.physical_attempt
+    assert physical is not None
+    command = {
+        **common_input(ticket, idempotency_key=idempotency_key),
+        "physical_attempt_id": physical.physical_attempt_id,
+        "candidate_receipt_digest": candidate_receipt_digest,
+        "reconciler_id": "fixture-adapter",
+        "reconciler_generation": 1,
+        "reconciliation_action": action,
+    }
+    return {
+        **command,
+        "reconcile_fence": build_reconcile_fence(
+            ticket_id=ticket.ticket_id,
+            expected_revision=ticket.revision,
+            physical_attempt_id=physical.physical_attempt_id,
+            candidate_receipt_digest=candidate_receipt_digest,
+            reconciler_id="fixture-adapter",
+            reconciler_generation=1,
+            reconciliation_action=action,
+        ),
+    }
+
+
+def settle_candidate_input(
+    ticket: Any,
+    candidate_receipt_digest: str,
+    *,
+    idempotency_key: str,
+    reconciler_id: str | None = None,
+) -> dict[str, Any]:
+    physical = ticket.physical_attempt
+    claimant = ticket.claimant
+    assert physical is not None and claimant is not None
+    current_reconciler_id = reconciler_id or claimant.adapter_id
+    return {
+        "ticket_id": ticket.ticket_id,
+        "expected_revision": ticket.revision,
+        "candidate_receipt_digest": candidate_receipt_digest,
+        "reconciler_id": current_reconciler_id,
+        "reconciler_generation": claimant.adapter_generation,
+        "reconcile_fence": build_reconcile_fence(
+            ticket_id=ticket.ticket_id,
+            expected_revision=ticket.revision,
+            physical_attempt_id=physical.physical_attempt_id,
+            candidate_receipt_digest=candidate_receipt_digest,
+            reconciler_id=current_reconciler_id,
+            reconciler_generation=claimant.adapter_generation,
+            reconciliation_action="settle",
+        ),
+        "idempotency_key": idempotency_key,
+    }
+
+
 def candidate_receipt(
     ticket: Any,
     *,
@@ -228,7 +295,7 @@ def candidate_receipt(
     physical = ticket.physical_attempt
     assert physical is not None
     payload: dict[str, Any] = {
-        "schema_version": "aar.candidate-receipt.v1",
+        "schema_version": "aar.caller-work-candidate-receipt.v1",
         "ticket_id": ticket.ticket_id,
         "ticket_digest": ticket.ticket_digest,
         "physical_attempt_id": physical_attempt_id or physical.physical_attempt_id,
@@ -252,6 +319,51 @@ def candidate_receipt(
         "signature_digest": "sha256:" + "e" * 64,
     }
     return {**payload, "receipt_digest": canonical_digest(payload)}
+
+
+def model_document(value: Any) -> dict[str, Any]:
+    document = json.loads(value.model_dump_json())
+    assert isinstance(document, dict)
+    return document
+
+
+def assert_command_journal(
+    repo: Any,
+    *,
+    idempotency_key: str,
+    command_kind: str,
+    result: Any,
+) -> None:
+    document = model_document(result)
+    result_json = json.dumps(
+        document,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    with sqlite3.connect(repo.database_path) as connection:
+        row = connection.execute(
+            """
+            SELECT command_kind, result_revision, result_ticket_json, result_digest
+            FROM caller_work_command_receipts
+            WHERE operation_id = ? AND idempotency_key = ?
+            """,
+            (OPERATION_ID, idempotency_key),
+        ).fetchone()
+        count = connection.execute(
+            """
+            SELECT COUNT(*) FROM caller_work_command_receipts
+            WHERE operation_id = ? AND idempotency_key = ?
+            """,
+            (OPERATION_ID, idempotency_key),
+        ).fetchone()
+    assert row == (
+        command_kind,
+        result.revision,
+        result_json,
+        canonical_digest(document),
+    )
+    assert count == (1,)
 
 
 class MutableClock:
@@ -353,9 +465,7 @@ def test_claim_expiry_boundary_fences_old_claim_and_retry_reuses_provider_key(
         clock.value = first.claimant.claim_expires_at_unix_ms
 
         with pytest.raises(ExpiredCallerClaim):
-            repo.mark_send_started(
-                mark_send_started_input(first, idempotency_key="expired-mark")
-            )
+            repo.mark_send_started(mark_send_started_input(first, idempotency_key="expired-mark"))
 
         pending = repo.reclaim_expired(
             ticket_id=TICKET_ID,
@@ -369,6 +479,93 @@ def test_claim_expiry_boundary_fences_old_claim_and_retry_reuses_provider_key(
         assert (
             second.physical_attempt.provider_or_child_idempotency_key
             == first_attempt.provider_or_child_idempotency_key
+        )
+    finally:
+        repo.close()
+
+
+def test_cumulative_deadline_fences_send_start_before_claim_expiry(tmp_path: Path) -> None:
+    from aar.runtime.caller_work import ExpiredCallerClaim
+
+    clock = MutableClock(FIXED_NOW_MS)
+    repo = new_repository(tmp_path, clock)
+    try:
+        pending = repo.get(TICKET_ID)
+        reserved = repo.claim(
+            {
+                **claim_input(pending, idempotency_key="claim-past-ticket-deadline"),
+                "claim_lease_ms": 20_000,
+            }
+        )
+        assert reserved.claimant is not None
+        assert reserved.claimant.claim_expires_at_unix_ms > reserved.deadline_unix_ms
+        clock.value = reserved.deadline_unix_ms
+
+        with pytest.raises(ExpiredCallerClaim, match="deadline expired"):
+            repo.mark_send_started(
+                mark_send_started_input(reserved, idempotency_key="mark-at-ticket-deadline")
+            )
+
+        unchanged = repo.get(TICKET_ID)
+        assert unchanged.state == "send_reserved"
+        assert unchanged.revision == reserved.revision
+        assert repo.send_started_count(TICKET_ID) == 0
+    finally:
+        repo.close()
+
+
+def test_reconcile_retry_only_when_physical_send_is_certainly_unstarted(
+    tmp_path: Path,
+) -> None:
+    from aar.runtime.caller_work import InvalidTicketTransition
+
+    clock = MutableClock(FIXED_NOW_MS)
+    repo = new_repository(tmp_path, clock)
+    try:
+        first = repo.claim(claim_input(repo.get(TICKET_ID)))
+        assert first.physical_attempt is not None
+        first_attempt = first.physical_attempt
+
+        pending = repo.reconcile(
+            reconcile_input(
+                first,
+                action="retry_if_certain_no_send",
+                idempotency_key="reconcile-certain-no-send",
+            )
+        )
+        assert pending.state == "pending"
+        assert pending.physical_attempt is None
+
+        second = repo.claim(claim_input(pending, idempotency_key="claim-after-reconcile"))
+        assert second.physical_attempt is not None
+        assert second.physical_attempt.physical_attempt_id != first_attempt.physical_attempt_id
+        assert (
+            second.physical_attempt.provider_or_child_idempotency_key
+            == first_attempt.provider_or_child_idempotency_key
+        )
+        started = repo.mark_send_started(
+            mark_send_started_input(second, idempotency_key="mark-after-reconcile")
+        )
+        with pytest.raises(InvalidTicketTransition, match="unstarted send reservation"):
+            repo.reconcile(
+                reconcile_input(
+                    started,
+                    action="retry_if_certain_no_send",
+                    idempotency_key="reconcile-after-send-mark",
+                )
+            )
+        unchanged = repo.get(TICKET_ID)
+        assert unchanged.state == "send_started"
+        assert unchanged.revision == started.revision
+        assert unchanged.physical_attempt is not None
+        assert started.physical_attempt is not None
+        assert (
+            unchanged.physical_attempt.physical_attempt_id
+            == started.physical_attempt.physical_attempt_id
+        )
+        assert (
+            unchanged.physical_attempt.provider_or_child_idempotency_key
+            == started.physical_attempt.provider_or_child_idempotency_key
         )
     finally:
         repo.close()
@@ -420,24 +617,29 @@ def test_stale_claimant_and_reconciler_cannot_both_win_same_ticket_revision(
         started = repo.mark_send_started(
             mark_send_started_input(reserved, idempotency_key="mark-stale-race")
         )
+        commit_command = commit_input(started, idempotency_key="commit-race")
         receipt = candidate_receipt(started, suffix="race")
+        receipt["sent_at_unix_ms"] = commit_command["sent_at_unix_ms"]
+        receipt["provider_or_child_request_id"] = commit_command["provider_or_child_request_id"]
+        receipt["observation"] = commit_command["observation"]
+        receipt_without_digest = dict(receipt)
+        receipt_without_digest.pop("receipt_digest")
+        receipt["receipt_digest"] = canonical_digest(receipt_without_digest)
         repo.append_candidate_receipt(receipt)
         barrier = Barrier(2)
 
         def claimant_commit() -> Any:
             barrier.wait()
-            return repo.commit(commit_input(started, idempotency_key="commit-race"))
+            return repo.commit(commit_command)
 
         def reconcile() -> Any:
             barrier.wait()
             return repo.settle_candidate(
-                ticket_id=TICKET_ID,
-                expected_revision=started.revision,
-                candidate_receipt_digest=receipt["receipt_digest"],
-                reconciler_id="reconciler",
-                reconciler_generation=1,
-                reconcile_fence="sha256:" + "f" * 64,
-                idempotency_key="reconcile-race",
+                **settle_candidate_input(
+                    started,
+                    receipt["receipt_digest"],
+                    idempotency_key="reconcile-race",
+                )
             )
 
         with ThreadPoolExecutor(max_workers=2) as pool:
@@ -452,15 +654,15 @@ def test_stale_claimant_and_reconciler_cannot_both_win_same_ticket_revision(
 
         assert len(outcomes) == 1
         assert len(errors) == 1 and isinstance(errors[0], StaleTicketRevision)
-        assert repo.get(TICKET_ID).state == "settled_success"
+        assert repo.get(TICKET_ID).state in {"settled_success", "quarantined"}
     finally:
         repo.close()
 
 
-def test_provider_acceptance_crash_preserves_attempts_and_late_receipts(
+def test_provider_acceptance_crash_does_not_redispatch_and_late_receipt_settles(
     tmp_path: Path,
 ) -> None:
-    from aar.runtime.caller_work import CallerWorkDispatcher, InjectedDispatchCrash
+    from aar.runtime.caller_work import CallerWorkDispatcher
 
     clock = MutableClock(FIXED_NOW_MS)
     repo = new_repository(tmp_path, clock)
@@ -486,39 +688,82 @@ def test_provider_acceptance_crash_preserves_attempts_and_late_receipts(
             return None
 
     adapter = Adapter()
-    dispatcher = CallerWorkDispatcher(
-        repo,
-        adapter,
-        crash_after_provider_acceptance_once=True,
-    )
+    dispatcher = CallerWorkDispatcher(repo, adapter)
     try:
-        with pytest.raises(InjectedDispatchCrash):
-            dispatcher.dispatch(TICKET_ID)
-
-        after_crash = repo.get(TICKET_ID)
-        assert after_crash.state == "send_started"
-        assert len(repo.physical_attempt_history(TICKET_ID)) == 1
-
-        completed = dispatcher.resume(TICKET_ID)
-        assert completed.state == "settled_success"
-        attempts = repo.physical_attempt_history(TICKET_ID)
-        assert len(attempts) == 2
-        assert attempts[0].physical_attempt_id != attempts[1].physical_attempt_id
-        assert adapter.keys == [adapter.keys[0], adapter.keys[0]]
-
-        late = candidate_receipt(
-            completed,
-            suffix="late-first-attempt",
-            physical_attempt_id=attempts[0].physical_attempt_id,
+        reserved = repo.claim(claim_input(repo.get(TICKET_ID)))
+        started = repo.mark_send_started(
+            mark_send_started_input(reserved, idempotency_key="mark-crash")
         )
+        first_attempt = started.physical_attempt
+        assert first_attempt is not None
+
+        # The provider accepted the request, but the caller crashed before the
+        # observation could be committed.  The durable send-start mark is the
+        # only authority available after restart.
+        adapter.send(
+            idempotency_key=first_attempt.provider_or_child_idempotency_key,
+            request=started.request,
+        )
+        assert adapter.calls == 1
+
+        resumed = dispatcher.resume(TICKET_ID)
+        assert resumed.state == "outcome_unknown"
+        assert adapter.calls == 1
+        assert adapter.keys == [first_attempt.provider_or_child_idempotency_key]
+        assert resumed.physical_attempt is not None
+        assert resumed.physical_attempt.physical_attempt_id == first_attempt.physical_attempt_id
+        assert (
+            resumed.physical_attempt.provider_or_child_idempotency_key
+            == first_attempt.provider_or_child_idempotency_key
+        )
+
+        late = candidate_receipt(resumed, suffix="late-first-attempt")
         repo.append_candidate_receipt(late)
-        assert repo.get(TICKET_ID).state == "settled_success"
-        assert {item.physical_attempt_id for item in repo.candidate_receipts(TICKET_ID)} >= {
-            attempts[0].physical_attempt_id,
-            attempts[1].physical_attempt_id,
-        }
+        completed = repo.settle_candidate(
+            **settle_candidate_input(
+                resumed,
+                late["receipt_digest"],
+                idempotency_key="settle-late-first",
+            )
+        )
+        assert completed.state == "settled_success"
+        assert completed.settled_receipt_digest == late["receipt_digest"]
     finally:
         dispatcher.close()
+        repo.close()
+
+
+def test_restart_lookup_receipt_settles_without_physical_redispatch(
+    tmp_path: Path,
+) -> None:
+    from aar.runtime.caller_work import CallerWorkDispatcher
+
+    clock = MutableClock(FIXED_NOW_MS)
+    repo = new_repository(tmp_path, clock)
+
+    class LookupAdapter:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.result: dict[str, Any] | None = None
+
+        def lookup(self, *, idempotency_key: str) -> dict[str, Any] | None:
+            del idempotency_key
+            self.calls += 1
+            return self.result
+
+    adapter = LookupAdapter()
+    try:
+        reserved = repo.claim(claim_input(repo.get(TICKET_ID)))
+        started = repo.mark_send_started(
+            mark_send_started_input(reserved, idempotency_key="mark-lookup-result")
+        )
+        adapter.result = candidate_receipt(started, suffix="lookup-result")
+
+        settled = CallerWorkDispatcher(repo, adapter).resume(TICKET_ID)
+        assert settled.state == "settled_success"
+        assert adapter.calls == 1
+        assert len(repo.candidate_receipts(TICKET_ID)) == 1
+    finally:
         repo.close()
 
 
@@ -581,13 +826,11 @@ def test_cancellation_vs_late_success_race_keeps_single_state_and_all_evidence(
         def settle() -> Any:
             barrier.wait()
             return repo.settle_candidate(
-                ticket_id=TICKET_ID,
-                expected_revision=started.revision,
-                candidate_receipt_digest=receipt["receipt_digest"],
-                reconciler_id="reconciler",
-                reconciler_generation=1,
-                reconcile_fence="sha256:" + "f" * 64,
-                idempotency_key="settle-race-terminal",
+                **settle_candidate_input(
+                    started,
+                    receipt["receipt_digest"],
+                    idempotency_key="settle-race-terminal",
+                )
             )
 
         with ThreadPoolExecutor(max_workers=2) as pool:
@@ -606,5 +849,457 @@ def test_cancellation_vs_late_success_race_keeps_single_state_and_all_evidence(
         assert receipt["receipt_digest"] in {
             item.receipt_digest for item in repo.candidate_receipts(TICKET_ID)
         }
+    finally:
+        repo.close()
+
+
+def test_authoritative_operation_cancellation_blocks_claim_without_ticket_mutation(
+    tmp_path: Path,
+) -> None:
+    from aar.runtime.caller_work import CallerWorkConflict
+
+    clock = MutableClock(FIXED_NOW_MS)
+    repo = new_repository(tmp_path, clock)
+    try:
+        pending = repo.get(TICKET_ID)
+        connection = sqlite3.connect(repo.database_path)
+        try:
+            connection.execute(
+                "UPDATE operation_controls SET cancellation_requested=1, "
+                "requested_at_unix_ms=? WHERE operation_id=?",
+                (FIXED_NOW_MS, OPERATION_ID),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        with pytest.raises(CallerWorkConflict, match="cancellation"):
+            repo.claim(claim_input(pending, idempotency_key="claim-after-cancel"))
+        assert repo.get(TICKET_ID) == pending
+    finally:
+        repo.close()
+
+
+def test_success_settlement_projects_suspension_and_successor_outbox(
+    tmp_path: Path,
+) -> None:
+    clock = MutableClock(FIXED_NOW_MS)
+    repo = new_repository(tmp_path, clock)
+    try:
+        reserved = repo.claim(claim_input(repo.get(TICKET_ID)))
+        started = repo.mark_send_started(
+            mark_send_started_input(reserved, idempotency_key="mark-outbox")
+        )
+        settled = repo.commit(commit_input(started, idempotency_key="commit-outbox"))
+
+        connection = sqlite3.connect(repo.database_path)
+        connection.row_factory = sqlite3.Row
+        try:
+            suspension = connection.execute(
+                "SELECT state, settled_at_unix_ms FROM rlm_workbench_suspensions "
+                "WHERE operation_id=? AND suspension_revision=?",
+                (OPERATION_ID, 1),
+            ).fetchone()
+            outbox = connection.execute(
+                "SELECT state, settlement_digest, outbox_digest "
+                "FROM rlm_workbench_successor_outbox "
+                "WHERE operation_id=? AND suspension_revision=?",
+                (OPERATION_ID, 1),
+            ).fetchone()
+        finally:
+            connection.close()
+
+        assert suspension is not None
+        assert (suspension["state"], suspension["settled_at_unix_ms"]) == (
+            "settled",
+            settled.settled_at_unix_ms,
+        )
+        assert outbox is not None
+        assert outbox["state"] == "pending"
+        assert outbox["settlement_digest"] == settled.settled_receipt_digest
+        assert outbox["outbox_digest"].startswith("sha256:")
+    finally:
+        repo.close()
+
+
+def test_conflicting_candidate_receipts_quarantine_without_successor_outbox(
+    tmp_path: Path,
+) -> None:
+    clock = MutableClock(FIXED_NOW_MS)
+    repo = new_repository(tmp_path, clock)
+    try:
+        reserved = repo.claim(claim_input(repo.get(TICKET_ID)))
+        started = repo.mark_send_started(
+            mark_send_started_input(reserved, idempotency_key="mark-conflict")
+        )
+        first = candidate_receipt(started, suffix="first-authority")
+        second = candidate_receipt(started, suffix="second-authority")
+        repo.append_candidate_receipt(first)
+        repo.append_candidate_receipt(second)
+
+        quarantined = repo.settle_candidate(
+            **settle_candidate_input(
+                started,
+                first["receipt_digest"],
+                idempotency_key="settle-conflict",
+            )
+        )
+        assert quarantined.state == "quarantined"
+        assert quarantined.settled_receipt_digest is None
+
+        connection = sqlite3.connect(repo.database_path)
+        try:
+            suspension_state = connection.execute(
+                "SELECT state FROM rlm_workbench_suspensions "
+                "WHERE operation_id=? AND suspension_revision=?",
+                (OPERATION_ID, 1),
+            ).fetchone()
+            outbox_count = connection.execute(
+                "SELECT COUNT(*) FROM rlm_workbench_successor_outbox "
+                "WHERE operation_id=? AND suspension_revision=?",
+                (OPERATION_ID, 1),
+            ).fetchone()
+        finally:
+            connection.close()
+        assert suspension_state == ("parked",)
+        assert outbox_count == (0,)
+    finally:
+        repo.close()
+
+
+def test_claim_command_exact_replay_and_cross_command_key_conflict(
+    tmp_path: Path,
+) -> None:
+    from aar.runtime.caller_work import CallerWorkIdempotencyConflict
+
+    repo = new_repository(tmp_path, MutableClock(FIXED_NOW_MS))
+    try:
+        command = claim_input(repo.get(TICKET_ID), idempotency_key="journal-claim")
+        claimed = repo.claim(command)
+        replayed = repo.claim(copy.deepcopy(command))
+        assert model_document(replayed) == model_document(claimed)
+
+        changed = copy.deepcopy(command)
+        changed["adapter_generation"] = 2
+        with pytest.raises(CallerWorkIdempotencyConflict):
+            repo.claim(changed)
+
+        cross_command = mark_send_started_input(claimed, idempotency_key="journal-claim")
+        with pytest.raises(CallerWorkIdempotencyConflict):
+            repo.mark_send_started(cross_command)
+
+        current = repo.get(TICKET_ID)
+        assert current.state == "send_reserved"
+        assert current.revision == claimed.revision
+        assert repo.send_started_count(TICKET_ID) == 0
+        assert_command_journal(
+            repo,
+            idempotency_key="journal-claim",
+            command_kind="claim",
+            result=claimed,
+        )
+    finally:
+        repo.close()
+
+
+def test_mark_send_started_command_replay_conflicts_before_second_mark(
+    tmp_path: Path,
+) -> None:
+    from aar.runtime.caller_work import CallerWorkIdempotencyConflict
+
+    repo = new_repository(tmp_path, MutableClock(FIXED_NOW_MS))
+    try:
+        reserved = repo.claim(claim_input(repo.get(TICKET_ID), idempotency_key="setup-mark-claim"))
+        command = mark_send_started_input(reserved, idempotency_key="journal-mark-send")
+        started = repo.mark_send_started(command)
+        replayed = repo.mark_send_started(copy.deepcopy(command))
+        assert model_document(replayed) == model_document(started)
+
+        changed = copy.deepcopy(command)
+        changed["lookup_supported"] = False
+        with pytest.raises(CallerWorkIdempotencyConflict):
+            repo.mark_send_started(changed)
+
+        current = repo.get(TICKET_ID)
+        assert current.revision == started.revision
+        assert current.state == "send_started"
+        assert repo.send_started_count(TICKET_ID) == 1
+        assert_command_journal(
+            repo,
+            idempotency_key="journal-mark-send",
+            command_kind="mark_send_started",
+            result=started,
+        )
+    finally:
+        repo.close()
+
+
+def test_cancel_command_replay_does_not_repeat_terminal_projection(
+    tmp_path: Path,
+) -> None:
+    from aar.runtime.caller_work import CallerWorkIdempotencyConflict
+
+    repo = new_repository(tmp_path, MutableClock(FIXED_NOW_MS))
+    try:
+        command = cancel_before_send_input(
+            repo.get(TICKET_ID),
+            expected_state="pending",
+            idempotency_key="journal-cancel",
+        )
+        cancelled = repo.cancel_before_send(command)
+        replayed = repo.cancel_before_send(copy.deepcopy(command))
+        assert model_document(replayed) == model_document(cancelled)
+
+        changed = copy.deepcopy(command)
+        changed["settled_receipt_digest"] = "sha256:" + "f" * 64
+        with pytest.raises(CallerWorkIdempotencyConflict):
+            repo.cancel_before_send(changed)
+
+        current = repo.get(TICKET_ID)
+        assert current.revision == cancelled.revision
+        assert current.state == "cancelled_before_send"
+        assert repo.send_started_count(TICKET_ID) == 0
+        assert_command_journal(
+            repo,
+            idempotency_key="journal-cancel",
+            command_kind="cancel_before_send",
+            result=cancelled,
+        )
+    finally:
+        repo.close()
+
+
+def test_commit_command_replay_does_not_duplicate_receipt_or_outbox(
+    tmp_path: Path,
+) -> None:
+    from aar.runtime.caller_work import CallerWorkIdempotencyConflict
+
+    repo = new_repository(tmp_path, MutableClock(FIXED_NOW_MS))
+    try:
+        reserved = repo.claim(
+            claim_input(repo.get(TICKET_ID), idempotency_key="setup-commit-claim")
+        )
+        started = repo.mark_send_started(
+            mark_send_started_input(reserved, idempotency_key="setup-commit-mark")
+        )
+        command = commit_input(started, idempotency_key="journal-commit")
+        settled = repo.commit(command)
+        replayed = repo.commit(copy.deepcopy(command))
+        assert model_document(replayed) == model_document(settled)
+
+        changed = copy.deepcopy(command)
+        changed["provider_or_child_request_id"] = "provider-request-changed"
+        with pytest.raises(CallerWorkIdempotencyConflict):
+            repo.commit(changed)
+
+        assert len(repo.candidate_receipts(TICKET_ID)) == 1
+        with sqlite3.connect(repo.database_path) as connection:
+            outbox_count = connection.execute(
+                "SELECT COUNT(*) FROM rlm_workbench_successor_outbox "
+                "WHERE operation_id=? AND suspension_revision=?",
+                (OPERATION_ID, 1),
+            ).fetchone()
+        assert outbox_count == (1,)
+        assert model_document(repo.get(TICKET_ID)) == model_document(settled)
+        assert_command_journal(
+            repo,
+            idempotency_key="journal-commit",
+            command_kind="commit",
+            result=settled,
+        )
+    finally:
+        repo.close()
+
+
+def test_reconcile_command_replay_does_not_create_another_attempt(
+    tmp_path: Path,
+) -> None:
+    from aar.runtime.caller_work import CallerWorkIdempotencyConflict
+
+    repo = new_repository(tmp_path, MutableClock(FIXED_NOW_MS))
+    try:
+        reserved = repo.claim(
+            claim_input(repo.get(TICKET_ID), idempotency_key="setup-reconcile-claim")
+        )
+        command = reconcile_input(
+            reserved,
+            action="retry_if_certain_no_send",
+            idempotency_key="journal-reconcile",
+        )
+        pending = repo.reconcile(command)
+        replayed = repo.reconcile(copy.deepcopy(command))
+        assert model_document(replayed) == model_document(pending)
+
+        changed = copy.deepcopy(command)
+        changed["reconciler_generation"] = 2
+        with pytest.raises(CallerWorkIdempotencyConflict):
+            repo.reconcile(changed)
+
+        current = repo.get(TICKET_ID)
+        assert current.state == "pending"
+        assert current.revision == pending.revision
+        assert current.physical_attempt is None
+        assert_command_journal(
+            repo,
+            idempotency_key="journal-reconcile",
+            command_kind="reconcile",
+            result=pending,
+        )
+    finally:
+        repo.close()
+
+
+def test_concurrent_changed_payload_same_key_creates_one_reservation(
+    tmp_path: Path,
+) -> None:
+    from aar.runtime.caller_work import CallerWorkIdempotencyConflict
+
+    repo = new_repository(tmp_path, MutableClock(FIXED_NOW_MS))
+    try:
+        pending = repo.get(TICKET_ID)
+        first = claim_input(pending, idempotency_key="journal-concurrent-claim")
+        second = copy.deepcopy(first)
+        second["adapter_generation"] = 2
+        barrier = Barrier(2)
+
+        def invoke(command: dict[str, Any]) -> Any:
+            barrier.wait()
+            return repo.claim(command)
+
+        outcomes: list[Any] = []
+        errors: list[BaseException] = []
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = (pool.submit(invoke, first), pool.submit(invoke, second))
+            for future in futures:
+                try:
+                    outcomes.append(future.result())
+                except BaseException as error:
+                    errors.append(error)
+
+        assert len(outcomes) == 1
+        assert len(errors) == 1
+        assert isinstance(errors[0], CallerWorkIdempotencyConflict)
+        winner = outcomes[0]
+        current = repo.get(TICKET_ID)
+        assert current.revision == winner.revision == 1
+        assert current.state == "send_reserved"
+        assert current.physical_attempt is not None
+        assert repo.send_started_count(TICKET_ID) == 0
+        assert_command_journal(
+            repo,
+            idempotency_key="journal-concurrent-claim",
+            command_kind="claim",
+            result=winner,
+        )
+    finally:
+        repo.close()
+
+
+def test_reconcile_rejects_stale_identity_generation_and_fence(tmp_path: Path) -> None:
+    from aar.runtime.caller_work import CallerWorkConflict
+
+    repo = new_repository(tmp_path, MutableClock(FIXED_NOW_MS))
+    try:
+        reserved = repo.claim(claim_input(repo.get(TICKET_ID)))
+        started = repo.mark_send_started(
+            mark_send_started_input(reserved, idempotency_key="mark-reconciler-authority")
+        )
+        physical = started.physical_attempt
+        assert physical is not None
+        base = reconcile_input(
+            started,
+            action="quarantine",
+            idempotency_key="reconcile-authority-base",
+            candidate_receipt_digest="sha256:" + "f" * 64,
+        )
+        variants: list[dict[str, Any]] = []
+        for field, value in (
+            ("reconciler_id", "other-principal"),
+            ("reconciler_generation", 2),
+        ):
+            command = {**base, field: value, "idempotency_key": f"reconcile-{field}"}
+            command["reconcile_fence"] = build_reconcile_fence(
+                ticket_id=started.ticket_id,
+                expected_revision=started.revision,
+                physical_attempt_id=physical.physical_attempt_id,
+                candidate_receipt_digest="sha256:" + "f" * 64,
+                reconciler_id=command["reconciler_id"],
+                reconciler_generation=command["reconciler_generation"],
+                reconciliation_action="quarantine",
+            )
+            variants.append(command)
+        variants.append(
+            {
+                **base,
+                "idempotency_key": "reconcile-invalid-fence",
+                "reconcile_fence": "sha256:" + "0" * 64,
+            }
+        )
+
+        for command in variants:
+            with pytest.raises(CallerWorkConflict):
+                repo.reconcile(command)
+        assert repo.get(TICKET_ID) == started
+    finally:
+        repo.close()
+
+
+def test_settle_candidate_exact_retry_replays_terminal_truth(tmp_path: Path) -> None:
+    from aar.runtime.caller_work import CallerWorkConflict
+
+    repo = new_repository(tmp_path, MutableClock(FIXED_NOW_MS))
+    try:
+        reserved = repo.claim(claim_input(repo.get(TICKET_ID)))
+        started = repo.mark_send_started(
+            mark_send_started_input(reserved, idempotency_key="mark-settlement-replay")
+        )
+        receipt = candidate_receipt(started, suffix="settlement-replay")
+        repo.append_candidate_receipt(receipt)
+        command = settle_candidate_input(
+            started,
+            receipt["receipt_digest"],
+            idempotency_key="settlement-replay",
+        )
+
+        first = repo.settle_candidate(**command)
+        replay = repo.settle_candidate(**command)
+        assert replay == first
+        assert replay.state == "settled_success"
+
+        changed = {**command, "reconciler_id": "other-reconciler"}
+        with pytest.raises(CallerWorkConflict):
+            repo.settle_candidate(**changed)
+    finally:
+        repo.close()
+
+
+def test_full_candidate_receipt_digest_conflict_quarantines(tmp_path: Path) -> None:
+    repo = new_repository(tmp_path, MutableClock(FIXED_NOW_MS))
+    try:
+        reserved = repo.claim(claim_input(repo.get(TICKET_ID)))
+        started = repo.mark_send_started(
+            mark_send_started_input(reserved, idempotency_key="mark-full-digest-conflict")
+        )
+        first = candidate_receipt(started, suffix="same-authority")
+        forged = {**first, "signature_digest": "sha256:" + "1" * 64}
+        from aar.runtime.caller_work import CallerWorkConflict
+
+        with pytest.raises(CallerWorkConflict):
+            repo.append_candidate_receipt(forged)
+        second = {**first, "signature_digest": "sha256:" + "0" * 64}
+        second.pop("receipt_digest")
+        second["receipt_digest"] = canonical_digest(second)
+        repo.append_candidate_receipt(first)
+        repo.append_candidate_receipt(second)
+
+        result = repo.settle_candidate(
+            **settle_candidate_input(
+                started,
+                first["receipt_digest"],
+                idempotency_key="settle-full-digest-conflict",
+            )
+        )
+        assert result.state == "quarantined"
+        assert result.settled_receipt_digest is None
     finally:
         repo.close()

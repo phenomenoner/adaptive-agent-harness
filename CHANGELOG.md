@@ -2,6 +2,30 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
+## [0.5.0a0](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0) — 2026-08-20
+
+`v0.5.0a0` is a public GitHub alpha release. It does not claim package-index publication,
+production deployment, external provider execution, or official Plugin Directory publication.
+
+### Added
+
+- add the successor-only MCP v8 surface with three RLM workbench tools and five durable caller-work
+  lifecycle tools while retaining the frozen 30-tool v7 `aar_capabilities` projection;
+- expose truthful host-owned per-method workbench capability and fail closed when requested broker
+  methods are not configured;
+- preserve claim, send-start, cancellation, receipt, reconciliation, deadline, and terminal authority
+  by forwarding MCP calls into the existing durable runtime rather than duplicating its state machine.
+
+### Verification boundary
+
+- generated contracts, schemas, MCP assets, host profiles, operation-skill metadata, and the exact wheel
+  are bound to the `0.5.0a0` candidate;
+- the exact final candidate passed 743 repository tests with five platform-gated skips and one
+  existing MCP Sampling deprecation warning; generated contracts, package assets, formatting,
+  isolated wheel installation, and an independent Luna/max current-byte review passed;
+- publication of this GitHub source/tag prerelease does not establish package-index distribution,
+  production deployment, provider-backed execution, or official Plugin Directory publication.
+
 ## [0.4.0a6](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6)
 
 The `0.4.0a6` release snapshot is governed by

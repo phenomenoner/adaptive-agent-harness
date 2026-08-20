@@ -13,9 +13,7 @@ from jsonschema import Draft202012Validator
 
 from aar.canonical import canonical_sha256
 
-BASELINE_TOOL_MANIFEST_SHA256 = (
-    "6ebf848eee74795771af23dfaaeb70fd5030cb88878327f76ffc10d1c4639ab8"
-)
+BASELINE_TOOL_MANIFEST_SHA256 = "6ebf848eee74795771af23dfaaeb70fd5030cb88878327f76ffc10d1c4639ab8"
 TARGET_PACKAGE_VERSION = "0.5.0a0"
 _CONTRACT_FILES = (
     "aar-acceptance-evidence-v1.schema.json",
@@ -55,10 +53,7 @@ def build_mcp_tools_v8_manifest(root: Path) -> dict[str, Any]:
         raise ValueError("baseline tool manifest identity mismatch")
 
     additive = _load_json(schema_root / "aar-mcp-tools-v8.json")
-    contracts = {
-        name: _load_json(schema_root / name)
-        for name in _CONTRACT_FILES
-    }
+    contracts = {name: _load_json(schema_root / name) for name in _CONTRACT_FILES}
     additive_descriptors = []
     for tool in additive["tools"]:
         annotations = dict(tool["annotations"])
@@ -72,7 +67,10 @@ def build_mcp_tools_v8_manifest(root: Path) -> dict[str, Any]:
                 "icons": None,
                 "inputSchema": _bundle_schema(tool["input_schema"], contracts),
                 "name": tool["name"],
-                "outputSchema": _bundle_schema(tool["output_schema"], contracts),
+                "outputSchema": {
+                    "type": "object",
+                    **_bundle_schema(tool["output_schema"], contracts),
+                },
                 "title": None,
             }
         )
@@ -116,9 +114,7 @@ def verify_generated_assets(root: Path) -> list[str]:
         sdd / "fixtures" / "valid-broker-catalog.json",
         failures,
     )
-    reviewed_combined = _load_json(
-        sdd / "contracts" / "aar-mcp-tools-v8-combined.json"
-    )
+    reviewed_combined = _load_json(sdd / "contracts" / "aar-mcp-tools-v8-combined.json")
     if build_mcp_tools_v8_manifest(root) != reviewed_combined:
         failures.append("aar-mcp-tools-v8-combined.json: generated content drift")
     return failures
@@ -173,11 +169,7 @@ def _bundle_schema(
             collect(target)
             replacement = {"$ref": f"#/$defs/{alias(target)}"}
             replacement.update(
-                {
-                    key: rewrite(item, current_file)
-                    for key, item in value.items()
-                    if key != "$ref"
-                }
+                {key: rewrite(item, current_file) for key, item in value.items() if key != "$ref"}
             )
             return replacement
         return {key: rewrite(item, current_file) for key, item in value.items()}

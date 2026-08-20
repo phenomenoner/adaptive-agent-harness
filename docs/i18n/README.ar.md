@@ -1,5 +1,7 @@
 <div align="center">
 
+> **`0.5.0a0`** public alpha · [`phenomenoner/adaptive-agent-harness@v0.5.0a0`](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0)
+
 # Adaptive Agent Harness
 
 ### امنح الوكلاء بيئة عمل — لا مجرد مطالبة أكبر.
@@ -7,8 +9,8 @@
 **RLM يؤلّفه المضيف + IPython مستمر + عمليات دائمة + سلطة يملكها المضيف**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.4.0a6-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6)
+[![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
+[![Release](https://img.shields.io/badge/release-v0.5.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#حالة-المشروع)
 
@@ -190,7 +192,7 @@ flowchart LR
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a6"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.5.0a0"
 ```
 
 ### إعداد Codex App
@@ -257,20 +259,20 @@ Plain Python / IPython workers and host-authorized brokers
 
 ## حالة المشروع
 
-الإصدار العام الحالي من الألفا: **`0.4.0a6`**.
+الإصدار العام الحالي من الألفا: **`0.5.0a0`**.
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.4.0a6` receipt-backed model routing, current verification, and exact release
-> boundaries, read the canonical English [release notes](../RELEASE-v0.4.0a6.md) and
+> context. For `v0.5.0a0` receipt-backed model routing, current verification, and exact release
+> boundaries, read the canonical English [release notes](../RELEASE-v0.5.0a0.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
 
-تمت إعادة إنتاج ما يلي من هذا المرشح العام:
+Current `v0.5.0a0` public release evidence:
 
 - تغطية Python من 3.11 إلى 3.14؛
-- سطح MCP v7 ذي 30 أداة؛
+- 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - مخطط SQLite تزايدي حتى v5؛
-- تشغيل المستودع بالكامل: **249 passed, 1 platform-gated skip**؛
+- full repository run: **743 passed, 5 platform-gated skips, 1 existing MCP Sampling deprecation warning**;
 - فحص exact-wheel نظيف للمشرف والواجهة الأمامية على Linux/WSL؛
 - سيناريوهات المشرف الدائم، واستبدال الواجهة الأمامية، وفقدان العملية، والكاتب القديم، وإعادة استخدام الإيصال، وسيناريوهات محاولات RLM اللاحقة المقيّدة بالسياسة؛
 

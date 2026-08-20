@@ -26,6 +26,7 @@ from aar.compat.codex_mcp import (
     ensure_codex_supervisor,
     stop_codex_supervisor,
 )
+from aar.mcp.workbench_surface import is_successor_compatible_tool_order
 
 SETUP_SCHEMA_VERSION = "aar.codex-setup.v3"
 MARKETPLACE_NAME = "aar-local"
@@ -104,13 +105,7 @@ def bundled_marketplace() -> Path:
 
 
 def _plugin_version(marketplace: Path) -> str:
-    manifest = (
-        marketplace
-        / "plugins"
-        / "adaptive-agent-runtime"
-        / ".codex-plugin"
-        / "plugin.json"
-    )
+    manifest = marketplace / "plugins" / "adaptive-agent-runtime" / ".codex-plugin" / "plugin.json"
     return str(json.loads(manifest.read_text(encoding="utf-8"))["version"])
 
 
@@ -259,8 +254,10 @@ def _normalized_global_entry(config: Path) -> dict[str, Any] | None:
     args = entry.get("args", [])
     if args is None:
         args = []
-    if not isinstance(command, str) or not isinstance(args, list) or not all(
-        isinstance(item, str) for item in args
+    if (
+        not isinstance(command, str)
+        or not isinstance(args, list)
+        or not all(isinstance(item, str) for item in args)
     ):
         raise RuntimeError("the global AAR MCP entry cannot be normalized safely")
     return {
@@ -327,12 +324,9 @@ def configure_codex(
 
     marketplace_add_required = pre_state["marketplace_root"] is None
     marketplace_replace_required = (
-        pre_state["marketplace_root"] is not None
-        and pre_state["marketplace_root"] != target_root
+        pre_state["marketplace_root"] is not None and pre_state["marketplace_root"] != target_root
     )
-    plugin_change_required = (
-        pre_state["plugin"] != target_plugin or marketplace_replace_required
-    )
+    plugin_change_required = pre_state["plugin"] != target_plugin or marketplace_replace_required
     legacy_global_mcp_present = legacy_mcp is not None
     current_mcp_authority = (
         "multiple"
@@ -425,9 +419,7 @@ def configure_codex(
         "preflight_launcher": os.fspath(preflight_launcher),
         "provider_mutation_authority": "provider_or_operator_required",
         "restart_required_after_manual_apply": configuration_required,
-        "status": (
-            "manual_authority_required" if configuration_required else "already_configured"
-        ),
+        "status": ("manual_authority_required" if configuration_required else "already_configured"),
     }
 
 
@@ -448,8 +440,10 @@ async def _preflight(
         capabilities = _structured(await client.call_tool("aar_capabilities"))
         tools = await client.list_tools(cache_mode="reload")
         tool_names = [tool.name for tool in tools.tools]
-        if tool_names != capabilities["tool_names"]:
-            raise RuntimeError("AAR tool discovery does not match aar_capabilities")
+        if not is_successor_compatible_tool_order(tool_names, capabilities["tool_names"]):
+            raise RuntimeError(
+                "AAR tool discovery is not the frozen v7 prefix plus reviewed v8 additions"
+            )
 
         base = {
             "runtime_generation": capabilities["ready"]["runtime_generation"],
@@ -458,10 +452,7 @@ async def _preflight(
             "session_id": f"session-{scenario_id}",
             "deadline_unix_ms": int(time.time() * 1000) + 60_000,
         }
-        grants = {
-            item["capability"]: item["grant_id"]
-            for item in capabilities["reference_grants"]
-        }
+        grants = {item["capability"]: item["grant_id"] for item in capabilities["reference_grants"]}
         workspace_id = f"workspace-{scenario_id}"
         created = _structured(
             await client.call_tool(
@@ -567,9 +558,7 @@ async def _preflight(
                     "protocol_version",
                 )
             },
-            "dependencies": {
-                key: dependency_result[key] for key in ("ipython", "numpy", "pandas")
-            },
+            "dependencies": {key: dependency_result[key] for key in ("ipython", "numpy", "pandas")},
             "calculation": {
                 "answer": dependency_result["answer"],
                 "rows": dependency_result["rows"],
@@ -645,8 +634,7 @@ def main(argv: list[str] | None = None) -> int:
         "--codex-runtime-home",
         type=Path,
         help=(
-            "Codex runtime home for --stop-runtime; defaults to "
-            f"{RUNTIME_HOME_ENV} or ~/.aar/codex"
+            f"Codex runtime home for --stop-runtime; defaults to {RUNTIME_HOME_ENV} or ~/.aar/codex"
         ),
     )
     args = parser.parse_args(argv)
@@ -686,15 +674,11 @@ def main(argv: list[str] | None = None) -> int:
         marketplace = bundled_marketplace()
         plugin_mcp_command, plugin_mcp_args = _plugin_mcp_spec(marketplace)
         if plugin_mcp_command != "aar-codex-mcp":
-            raise RuntimeError(
-                "the bundled Codex plugin must use the aar-codex-mcp host launcher"
-            )
+            raise RuntimeError("the bundled Codex plugin must use the aar-codex-mcp host launcher")
         preflight = (
             None
             if args.skip_preflight
-            else asyncio.run(
-                run_setup_preflight(codex_mcp, declared_args=plugin_mcp_args)
-            )
+            else asyncio.run(run_setup_preflight(codex_mcp, declared_args=plugin_mcp_args))
         )
         codex_runtime = None
         if not args.preflight_only:
@@ -703,9 +687,7 @@ def main(argv: list[str] | None = None) -> int:
                 aar_mcp,
                 marketplace,
                 plugin_mcp_launcher=codex_mcp,
-                codex_config=(
-                    Path(args.codex_config).expanduser() if args.codex_config else None
-                ),
+                codex_config=(Path(args.codex_config).expanduser() if args.codex_config else None),
             )
             if configured.get("status") == "manual_authority_required":
                 print(

@@ -1,5 +1,7 @@
 <div align="center">
 
+> **`0.5.0a0`** public alpha · [`phenomenoner/adaptive-agent-harness@v0.5.0a0`](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0)
+
 # Adaptive Agent Harness
 
 ### エージェントに、より大きなプロンプトではなく作業台を。
@@ -7,8 +9,8 @@
 **host が構成する RLM + persistent IPython + durable operations + host-owned authority**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.4.0a6-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6)
+[![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
+[![Release](https://img.shields.io/badge/release-v0.5.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#プロジェクトのステータス)
 
@@ -190,7 +192,7 @@ Adaptive Agent Harness は次の用途に適しています。
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a6"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.5.0a0"
 ```
 
 ### Codex App のセットアップ
@@ -257,24 +259,24 @@ MCP frontend は意図的に交換可能です。continuity database や worker 
 
 ## プロジェクトのステータス
 
-現在の公開 alpha：**`0.4.0a6`**。
+現在の公開 alpha：**`0.5.0a0`**。
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.4.0a6` receipt-backed model routing, current verification, and exact release
-> boundaries, read the canonical English [release notes](../RELEASE-v0.4.0a6.md) and
+> context. For `v0.5.0a0` receipt-backed model routing, current verification, and exact release
+> boundaries, read the canonical English [release notes](../RELEASE-v0.5.0a0.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
 
-この公開 candidate から再現した項目：
+Current `v0.5.0a0` public release evidence:
 
 - Python 3.11 から 3.14 までの coverage；
-- 30-tool MCP v7 surface；
+- 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - v5 までの additive SQLite schema；
-- repository 全体の実行：**249 passed, 1 platform-gated skip**；
+- full repository run: **743 passed, 5 platform-gated skips, 1 existing MCP Sampling deprecation warning**;
 - Linux/WSL での clean exact-wheel supervisor/frontend probe；
 - durable supervisor、frontend replacement、process-loss、stale-writer、receipt-reuse、policy-bound RLM successor scenarios。
 
-以前の native-Windows および installed-Hermes compatibility rows は、**maintainer-reported historical context** として保持されます。それらを裏付ける host receipts はこの公開 repository に含まれていないため、これらの rows はこの tree から独立して監査できず、public source candidate の release criteria でもありません。
+以前の native-Windows および installed-Hermes compatibility rows は、**maintainer-reported historical context** として保持されます。それらを裏付ける host receipts はこの公開 repository に含まれていないため、これらの rows はこの tree から独立して監査できず、public source release の release criteria でもありません。
 
 未解決の項目：
 

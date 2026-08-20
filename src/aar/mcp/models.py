@@ -114,9 +114,7 @@ class McpMutationContext(McpReadContext):
         Field(
             min_length=8,
             max_length=128,
-            description=(
-                "Use a new key, or reuse one only for the exact same mutation payload."
-            ),
+            description=("Use a new key, or reuse one only for the exact same mutation payload."),
         ),
     ]
     grant_id: Annotated[
@@ -218,6 +216,39 @@ class McpRlmMutationContext(McpReadContext):
         return self
 
 
+class McpRlmWorkbenchReadContext(StrictModel):
+    """Successor-only v8 read context without changing the frozen v7 context model."""
+
+    principal_id: IdentityValue
+    session_id: IdentityValue
+    runtime_generation: PositiveCounter
+    capability_digest: Digest
+    deadline_unix_ms: Annotated[int, Field(ge=0, strict=True)]
+
+
+class McpRlmWorkbenchMutationContext(McpRlmWorkbenchReadContext):
+    """Exact v8 workbench mutation authority and cumulative budgets."""
+
+    schema_version: Literal["aar.mcp-rlm-workbench-context.v1"] = "aar.mcp-rlm-workbench-context.v1"
+    request_id: IdentityValue
+    idempotency_key: Annotated[str, Field(min_length=8, max_length=128)]
+    grant_ids: Annotated[list[IdentityValue], Field(min_length=1, max_length=64)]
+    budget_wall_time_ms: Annotated[int, Field(ge=1_000, le=900_000, strict=True)]
+    budget_model_requests: Annotated[int, Field(ge=1, le=128, strict=True)]
+    budget_input_tokens: Annotated[int, Field(ge=0, strict=True)]
+    budget_output_tokens: Annotated[int, Field(ge=0, strict=True)]
+    budget_child_operations: Annotated[int, Field(ge=0, le=64, strict=True)]
+    budget_artifact_bytes: Annotated[int, Field(ge=0, le=33_554_432, strict=True)]
+
+    @model_validator(mode="after")
+    def grants_are_sorted_and_unique(self) -> Self:
+        if self.grant_ids != sorted(self.grant_ids):
+            raise ValueError("workbench grant_ids must be sorted")
+        if len(self.grant_ids) != len(set(self.grant_ids)):
+            raise ValueError("workbench grant_ids must be unique")
+        return self
+
+
 McpReadContextArgument = Annotated[
     McpReadContext,
     Field(
@@ -243,7 +274,7 @@ McpRlmMutationContextArgument = Annotated[
         description=(
             'Required outer argument name: "context". Pass the flat McpRlmMutationContext '
             'object shown here; never use "mutation_context", add "schema_version", or nest '
-            'grant or budget objects.'
+            "grant or budget objects."
         )
     ),
 ]

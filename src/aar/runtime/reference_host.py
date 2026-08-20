@@ -6,7 +6,7 @@ import json
 import sqlite3
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -29,6 +29,11 @@ from aar.continuity_models import (
     OperationWorkspaceCheckpointSelectionV1,
 )
 from aar.rlm_models import RlmJobSnapshot, RlmJobSpec
+from aar.rlm_workbench_models import (
+    RlmWorkbenchCapability,
+    RlmWorkbenchExecuteInput,
+    build_workbench_capability,
+)
 from aar.runtime.brokers import (
     BrokerBudgetExceeded,
     BrokerCallConflict,
@@ -42,6 +47,7 @@ from aar.runtime.brokers import (
     FakeSubagentBroker,
     TypedBrokerFacade,
 )
+from aar.runtime.caller_work import CallerWorkRepository
 from aar.runtime.continuity import (
     RLM_OPERATION_KIND,
     WORKSPACE_PROGRAM_OPERATION_KIND,
@@ -70,6 +76,11 @@ from aar.runtime.programming import (
 )
 from aar.runtime.registry import OperationRegistry, RegistryError, StaleRuntimeGeneration
 from aar.runtime.rlm import RlmEngine, RlmExecutionCancelled
+from aar.runtime.rlm_workbench import (
+    RlmWorkbenchCoordinator,
+    RlmWorkbenchDeadlineExceeded,
+    RlmWorkbenchPlanner,
+)
 from aar.runtime.worker_manager import WorkerManager
 from aar.runtime.workspace import (
     DeterministicWorkspace,
@@ -162,6 +173,8 @@ class ReferenceHost:
         model_broker_registry: ModelBrokerRegistry | None = None,
         default_model_route_profile: str | None = None,
         model_execution_journal: ModelExecutionJournal | None = None,
+        workbench_planner: RlmWorkbenchPlanner | None = None,
+        workbench_backend_availability: Mapping[str, Mapping[str, Any]] | None = None,
     ) -> None:
         if programmable_backend not in {"plain", "ipython"}:
             raise ValueError(f"unsupported programmable backend: {programmable_backend}")
@@ -184,24 +197,57 @@ class ReferenceHost:
         self.workspace = DeterministicWorkspace(database_path)
         self.artifacts = FakeArtifactBroker(database_path)
         self.program_workspace: WorkspaceBackend
+        self.caller_work: CallerWorkRepository | None = None
+        self.rlm_workbench: RlmWorkbenchCoordinator | None = None
         if programmable_backend == "plain":
-            self.program_workspace = PlainPythonWorkspaceBackend(
-                artifact_sink=self.artifacts.put
-            )
+            self.program_workspace = PlainPythonWorkspaceBackend(artifact_sink=self.artifacts.put)
         else:
-            self.program_workspace = SupervisedIPythonWorkspaceBackend(
+            ipython_workspace = SupervisedIPythonWorkspaceBackend(
                 artifact_sink=self.artifacts.put,
                 worker_manager=self.worker_manager,
             )
+            self.program_workspace = ipython_workspace
+            if self.registry.supports_rlm_workbench():
+                self.caller_work = CallerWorkRepository(database_path, now_ms=now_ms)
+                self.rlm_workbench = RlmWorkbenchCoordinator(
+                    database_path,
+                    ipython_workspace,
+                    self.caller_work,
+                    self.registry,
+                    now_ms=now_ms,
+                    planner=workbench_planner,
+                )
+                ipython_workspace.bind_broker_handler(self.rlm_workbench.handle_broker_request)
+            elif workbench_planner is not None:
+                raise ReferenceHostError(
+                    "RLM workbench planner requires the reviewed registry v6 cutover"
+                )
+        if self.rlm_workbench is None and workbench_backend_availability:
+            raise ReferenceHostError(
+                "workbench backend availability requires the reviewed IPython/v6 workbench"
+            )
+        availability: dict[str, dict[str, Any]] = {}
+        if self.rlm_workbench is not None:
+            availability["artifact.put"] = {
+                "backend_kind": "native",
+                "configured": True,
+                "reference_only": False,
+                "adapter_id": "reference-artifact-store",
+                "adapter_generation": self.runtime_generation,
+                "evidence_tier": "host_receipt_bound",
+            }
+        if workbench_backend_availability is not None:
+            availability.update(
+                {method: dict(row) for method, row in workbench_backend_availability.items()}
+            )
+        self._workbench_backend_availability = availability
         self.models = FakeModelBroker()
         if (model_broker_registry is None) != (default_model_route_profile is None):
             raise ValueError(
                 "model_broker_registry and default_model_route_profile must be provided together"
             )
         if model_execution_journal is not None and model_broker_registry is None:
-            raise ValueError(
-                "model_execution_journal requires an injected model broker registry"
-            )
+            raise ValueError("model_execution_journal requires an injected model broker registry")
         self.model_broker_registry = model_broker_registry
         self.default_model_route_profile = default_model_route_profile
         self.model_executions = (
@@ -259,9 +305,7 @@ class ReferenceHost:
                 ),
                 CapabilityDescriptor(name="workspace.inspect", access=AccessMode.READ),
                 CapabilityDescriptor(name="workspace.program.attach", access=AccessMode.READ),
-                CapabilityDescriptor(
-                    name="workspace.program.checkpoint", access=AccessMode.WRITE
-                ),
+                CapabilityDescriptor(name="workspace.program.checkpoint", access=AccessMode.WRITE),
                 CapabilityDescriptor(name="workspace.program.close", access=AccessMode.WRITE),
                 CapabilityDescriptor(name="workspace.program.create", access=AccessMode.WRITE),
                 CapabilityDescriptor(
@@ -271,9 +315,7 @@ class ReferenceHost:
                 ),
                 CapabilityDescriptor(name="workspace.program.health", access=AccessMode.READ),
                 CapabilityDescriptor(name="workspace.program.inspect", access=AccessMode.READ),
-                CapabilityDescriptor(
-                    name="workspace.program.interrupt", access=AccessMode.WRITE
-                ),
+                CapabilityDescriptor(name="workspace.program.interrupt", access=AccessMode.WRITE),
                 CapabilityDescriptor(name="workspace.program.reconcile", access=AccessMode.READ),
                 CapabilityDescriptor(name="workspace.program.restore", access=AccessMode.WRITE),
             )
@@ -286,6 +328,11 @@ class ReferenceHost:
             runtime_generation=self.runtime_generation,
             capabilities=self.capabilities,
         )
+
+    def workbench_capability(self) -> RlmWorkbenchCapability:
+        """Project exact v8 method availability from host-owned adapter configuration."""
+
+        return build_workbench_capability(self._workbench_backend_availability)
 
     def start_durable_dispatch(self) -> DurableDispatcher:
         """Enable claims after a supervisor has published its exact Ready receipt."""
@@ -300,6 +347,11 @@ class ReferenceHost:
                 cast(DispatchHost, self),
                 concurrency=self._dispatcher_concurrency,
             )
+            if self.rlm_workbench is not None:
+                self.rlm_workbench.bind_runtime_callbacks(
+                    dispatch_notifier=self._notify_workbench_dispatch,
+                    deadline_terminalizer=self._terminalize_waiting_workbench_deadline,
+                )
             dispatcher.start()
             self.dispatcher = dispatcher
             self._durable_dispatch_enabled = True
@@ -402,10 +454,14 @@ class ReferenceHost:
             return record
         continuity = self.registry.continuity_snapshot(operation)
         if continuity.dispatcher_state is not None:
+            if self.rlm_workbench is not None:
+                self.rlm_workbench.cancel_pending_caller_work(
+                    operation,
+                    reason=reason_code,
+                )
             self.registry.request_cancel(
                 operation,
-                requested_by_digest
-                or canonical_sha256({"actor": "reference-host-cancel"}),
+                requested_by_digest or canonical_sha256({"actor": "reference-host-cancel"}),
                 reason_code,
             )
             record, cancelled = self.registry.cancel_queued_dispatch(
@@ -505,6 +561,35 @@ class ReferenceHost:
         self.rlm.ensure(record.operation, spec)
         return record
 
+    def submit_rlm_workbench(
+        self,
+        envelope: RequestEnvelope,
+        value: RlmWorkbenchExecuteInput | dict[str, Any],
+    ) -> OperationRecord:
+        if self.rlm_workbench is None:
+            raise ReferenceHostError("RLM workbench requires the configured IPython backend")
+        request = RlmWorkbenchExecuteInput.model_validate(
+            value.root if isinstance(value, RlmWorkbenchExecuteInput) else value,
+            strict=True,
+        )
+        self._validate_rlm_workbench_request(envelope, request)
+        record, _created = self.registry.accept(
+            envelope,
+            canonical_json_bytes(request.root).decode(),
+        )
+        if record.state is OperationState.ACCEPTED:
+            self.rlm_workbench.admit(record.operation, request)
+            self.registry.request_dispatch(
+                record.operation,
+                kind="rlm.workbench.execute",
+            )
+            if self.dispatcher is not None:
+                self.dispatcher.notify(
+                    record.operation,
+                    kind="rlm.workbench.execute",
+                )
+        return record
+
     def submit_rlm_durable(
         self,
         envelope: RequestEnvelope,
@@ -570,9 +655,7 @@ class ReferenceHost:
             "spec": spec,
         }
         self._validate_program_workspace_request(envelope, handle, spec, payload)
-        record, _created = self.registry.accept(
-            envelope, canonical_json_bytes(payload).decode()
-        )
+        record, _created = self.registry.accept(envelope, canonical_json_bytes(payload).decode())
         if spec.checkpoint_replay_safe:
             policy = workspace_checkpoint_boundary_policy()
             self.registry.bind_recovery_policy(
@@ -610,6 +693,20 @@ class ReferenceHost:
         attempt: Any,
         fence: AttemptFence,
     ) -> OperationRecord:
+        if kind == "rlm.workbench.execute":
+            if self.rlm_workbench is None:
+                raise ReferenceHostError("RLM workbench coordinator is unavailable")
+            result = self.rlm_workbench.run_claimed(operation, attempt, fence)
+            return self.registry.transition_claimed(
+                attempt,
+                self.runtime_generation,
+                fence.dispatcher_generation,
+                fence.lease_epoch,
+                fence.owner_digest,
+                state=OperationState.SUCCEEDED,
+                result_json=canonical_json_bytes(result.root).decode(),
+                note="rlm_workbench_succeeded",
+            )
         if kind != WORKSPACE_PROGRAM_OPERATION_KIND:
             raise ReferenceHostError(f"unsupported durable dispatch kind: {kind}")
         return self.run_claimed_program_workspace(operation, attempt, fence)
@@ -979,6 +1076,45 @@ class ReferenceHost:
     ) -> OperationRecord:
         if kind == RLM_OPERATION_KIND:
             return self.mark_dispatch_failure(operation, attempt, fence, error)
+        if kind == "rlm.workbench.execute":
+            if self.rlm_workbench is None:
+                raise ReferenceHostError("RLM workbench coordinator is unavailable")
+            if isinstance(error, RlmWorkbenchDeadlineExceeded):
+                self.rlm_workbench.mark_deadline_terminal(operation)
+                snapshot = self.rlm_workbench.snapshot(operation)
+                failure = FailureEnvelope(
+                    category=FailureCategory.DEADLINE,
+                    code="DEADLINE_EXCEEDED",
+                    message=str(error)[:512],
+                    retryable=False,
+                    certainty=OutcomeCertainty.CERTAIN,
+                    operation=operation,
+                )
+                return self.registry.transition_claimed(
+                    attempt,
+                    self.runtime_generation,
+                    fence.dispatcher_generation,
+                    fence.lease_epoch,
+                    fence.owner_digest,
+                    state=OperationState.TIMED_OUT,
+                    result_json=canonical_json_bytes(snapshot.root).decode(),
+                    failure=failure,
+                    note="workbench_cumulative_deadline_expired",
+                )
+            # A successor rebind against a vanished in-memory workspace is the
+            # exact-worker-loss boundary.  Keep the inner job resumable so the
+            # already durable transfer and pre-cell checkpoint can drive the
+            # existing recovery path after the outer attempt is parked.
+            if not isinstance(error, WorkspaceNotFound):
+                self.rlm_workbench.park_claimed(operation, attempt, fence, error)
+            return self.registry.park_attempt(
+                attempt,
+                self.runtime_generation,
+                fence.dispatcher_generation,
+                fence.lease_epoch,
+                fence.owner_digest,
+                note=f"rlm_workbench_dispatch_exception:{type(error).__name__}",
+            )
         if kind != WORKSPACE_PROGRAM_OPERATION_KIND:
             raise ReferenceHostError(f"unsupported durable dispatch kind: {kind}")
         return self.registry.park_attempt(
@@ -1096,9 +1232,56 @@ class ReferenceHost:
     def recover_durable(self) -> None:
         """Reconcile every registered durable operation kind before dispatch claims."""
 
+        self.recover_durable_caller_work_deadlines()
         self.recover_durable_effects()
+        self.recover_durable_workbench()
         self.recover_durable_rlm()
         self.recover_durable_workspaces()
+
+    def recover_durable_caller_work_deadlines(self) -> int:
+        """Settle expired caller waits without issuing new physical work."""
+
+        coordinator = self.rlm_workbench
+        if coordinator is None:
+            return 0
+        certain, uncertain = coordinator.sweep_expired_caller_work()
+        for operation in certain:
+            record = self.registry.get(operation)
+            if record.state is OperationState.ACCEPTED:
+                self.registry.time_out(operation, self.runtime_generation)
+        # Existing cancellation intent owns uncertain tickets.  Recovery must
+        # not steal that authority or enqueue fresh work.
+        return len(certain) + len(uncertain)
+
+    def _terminalize_waiting_workbench_deadline(self, operation: OperationRef) -> None:
+        coordinator = self.rlm_workbench
+        if coordinator is None:
+            return
+        record = self.registry.get(operation)
+        if record.state is not OperationState.ACCEPTED:
+            return
+        snapshot = coordinator.snapshot(operation)
+        if snapshot.phase != "timed_out":
+            return
+        self.registry.time_out(
+            operation,
+            self.runtime_generation,
+            result_json=canonical_json_bytes(snapshot.root).decode(),
+        )
+
+    def _notify_workbench_dispatch(self, operation: OperationRef, kind: str) -> None:
+        dispatcher = self.dispatcher
+        if dispatcher is not None:
+            dispatcher.notify(operation, kind=kind)
+
+    def recover_durable_workbench(self) -> int:
+        """Recover successor workbenches from their exact pre-cell checkpoints."""
+
+        coordinator = self.rlm_workbench
+        if coordinator is None:
+            return 0
+        with self._recovery_lock:
+            return coordinator.recover_indeterminate(self.runtime_generation)
 
     def recover_durable_effects(self) -> tuple[BrokerReconciliationReport, ...]:
         """Reconcile broker receipts without deciding any operation successor."""
@@ -1109,12 +1292,8 @@ class ReferenceHost:
             if not self.brokers.has_unresolved_calls(operation):
                 continue
             try:
-                envelope = RequestEnvelope.model_validate_json(
-                    record.request_json, strict=True
-                )
-                report = self.brokers.bind(
-                    envelope, operation
-                ).reconcile_unresolved(
+                envelope = RequestEnvelope.model_validate_json(record.request_json, strict=True)
+                report = self.brokers.bind(envelope, operation).reconcile_unresolved(
                     current_capability_digest=self.capabilities.digest
                 )
             except (BrokerCallConflict, BrokerGrantDenied, ValueError):
@@ -1159,9 +1338,7 @@ class ReferenceHost:
                         payload["handle"], strict=True
                     )
                     spec = WorkspaceProgramSpec.model_validate(payload["spec"], strict=True)
-                    envelope = RequestEnvelope.model_validate_json(
-                        record.request_json, strict=True
-                    )
+                    envelope = RequestEnvelope.model_validate_json(record.request_json, strict=True)
                     manifest = self.registry.latest_workspace_checkpoint(handle)
                     continuity = self.registry.continuity_snapshot(operation)
                     plan = plan_workspace_checkpoint_successor(
@@ -1386,9 +1563,7 @@ class ReferenceHost:
                     )
                     continue
                 try:
-                    envelope = RequestEnvelope.model_validate_json(
-                        record.request_json, strict=True
-                    )
+                    envelope = RequestEnvelope.model_validate_json(record.request_json, strict=True)
                     if envelope.capability_digest != self.capabilities.digest:
                         self.registry.requeue_indeterminate(
                             operation,
@@ -1404,9 +1579,7 @@ class ReferenceHost:
                     continuity = self.registry.continuity_snapshot(operation)
                     reconciliation = broker.reconcile_unresolved(
                         current_capability_digest=self.capabilities.digest,
-                        cancellation_requested=(
-                            continuity.control.cancellation_requested
-                        )
+                        cancellation_requested=(continuity.control.cancellation_requested),
                     )
                     unresolved_calls = reconciliation.unresolved
                     plan = plan_rlm_step_successor(
@@ -1469,15 +1642,11 @@ class ReferenceHost:
     ) -> BrokerReconciliationReport:
         record = self.registry.get(operation)
         if record.state is not OperationState.INDETERMINATE:
-            raise BrokerCallConflict(
-                "broker reconciliation requires an indeterminate operation"
-            )
+            raise BrokerCallConflict("broker reconciliation requires an indeterminate operation")
         envelope = RequestEnvelope.model_validate_json(record.request_json, strict=True)
         broker = self.brokers.bind(envelope, operation)
         return broker.reconcile_unresolved(
-            current_capability_digest=(
-                current_capability_digest or self.capabilities.digest
-            ),
+            current_capability_digest=(current_capability_digest or self.capabilities.digest),
             current_compensation_grant=current_compensation_grant,
             propose_compensation=propose_compensation,
         )
@@ -1616,9 +1785,7 @@ class ReferenceHost:
         self, envelope: RequestEnvelope, bundle: AdaptiveAssetBundle
     ) -> OperationRecord:
         self._validate_asset_import_request(envelope, bundle)
-        record, _created = self.registry.accept(
-            envelope, canonical_json_bytes(bundle).decode()
-        )
+        record, _created = self.registry.accept(envelope, canonical_json_bytes(bundle).decode())
         return record
 
     def run_asset_import(
@@ -1794,9 +1961,7 @@ class ReferenceHost:
             input_digest=canonical_sha256(spec),
         )
 
-    def _validate_request(
-        self, envelope: RequestEnvelope, spec: WorkspaceExecuteSpec
-    ) -> None:
+    def _validate_request(self, envelope: RequestEnvelope, spec: WorkspaceExecuteSpec) -> None:
         if envelope.runtime_generation != self.runtime_generation:
             raise StaleRuntimeGeneration(
                 "runtime generation is "
@@ -1882,9 +2047,7 @@ class ReferenceHost:
         except (WorkspaceNotFound, WorkspaceSessionMismatch) as error:
             raise WorkspaceBindingDenied(str(error)) from error
 
-    def _validate_rlm_request(
-        self, envelope: RequestEnvelope, spec: RlmJobSpec
-    ) -> None:
+    def _validate_rlm_request(self, envelope: RequestEnvelope, spec: RlmJobSpec) -> None:
         if envelope.runtime_generation != self.runtime_generation:
             raise StaleRuntimeGeneration(
                 "runtime generation is "
@@ -1920,6 +2083,98 @@ class ReferenceHost:
         if envelope.workspace is not None:
             raise WorkspaceBindingDenied(
                 "portable RLM execution is not implicitly bound to a workspace"
+            )
+
+    def _validate_rlm_workbench_request(
+        self,
+        envelope: RequestEnvelope,
+        request: RlmWorkbenchExecuteInput,
+    ) -> None:
+        context = request.root["context"]
+        spec = request.root["spec"]
+        if envelope.runtime_generation != self.runtime_generation:
+            raise StaleRuntimeGeneration(
+                "runtime generation is "
+                f"{self.runtime_generation}, not {envelope.runtime_generation}"
+            )
+        if envelope.capability_digest != self.capabilities.digest:
+            raise CapabilityMismatch("capability digest does not match the reference host")
+        if self._now_ms() >= envelope.deadline_unix_ms:
+            raise DeadlineExpired("request deadline has expired before acceptance")
+        if envelope.workspace is not None:
+            raise WorkspaceBindingDenied(
+                "workbench admission creates its own operation-scoped workspace"
+            )
+        expected_context = {
+            "runtime_generation": envelope.runtime_generation,
+            "capability_digest": envelope.capability_digest,
+            "principal_id": envelope.principal.value,
+            "session_id": envelope.session.value,
+            "request_id": envelope.request_id,
+            "idempotency_key": envelope.idempotency_key,
+            "deadline_unix_ms": envelope.deadline_unix_ms,
+            "budget_wall_time_ms": envelope.budget.wall_time_ms,
+            "budget_model_requests": envelope.budget.model_requests,
+            "budget_input_tokens": envelope.budget.input_tokens,
+            "budget_output_tokens": envelope.budget.output_tokens,
+            "budget_child_operations": envelope.budget.child_operations,
+            "budget_artifact_bytes": envelope.budget.artifact_bytes,
+        }
+        mismatched = [
+            name for name, expected in expected_context.items() if context[name] != expected
+        ]
+        if mismatched:
+            raise InputDigestMismatch(
+                "workbench context differs from the outer envelope: "
+                + ", ".join(sorted(mismatched))
+            )
+        remaining_ms = envelope.deadline_unix_ms - self._now_ms()
+        if envelope.budget.wall_time_ms == 0 or remaining_ms > envelope.budget.wall_time_ms:
+            raise BudgetDenied("workbench wall-time budget does not cover the deadline")
+        budgets = spec["budgets"]
+        route = spec["model"]["route_binding"]
+        requested_budget = {
+            "wall_time_ms": budgets["total_wall_time_ms"],
+            "model_requests": budgets["max_model_calls"],
+            "output_tokens": route["max_output_tokens"],
+            "child_operations": budgets["max_subagent_calls"],
+            "artifact_bytes": budgets["max_artifact_bytes"],
+        }
+        authorized_budget = {
+            "wall_time_ms": envelope.budget.wall_time_ms,
+            "model_requests": envelope.budget.model_requests,
+            "output_tokens": envelope.budget.output_tokens,
+            "child_operations": envelope.budget.child_operations,
+            "artifact_bytes": envelope.budget.artifact_bytes,
+        }
+        exceeded = sorted(
+            name
+            for name, requested in requested_budget.items()
+            if requested > authorized_budget[name]
+        )
+        if budgets["max_model_calls"] > 0 and envelope.budget.input_tokens == 0:
+            exceeded.append("input_tokens")
+        if exceeded:
+            raise BudgetDenied(
+                "workbench requested budgets exceed admitted maxima: "
+                + ", ".join(sorted(set(exceeded)))
+            )
+        if budgets["total_wall_time_ms"] > remaining_ms:
+            raise BudgetDenied("workbench deadline cannot cover the requested total wall time")
+        grant_ids = tuple(grant.grant_id for grant in envelope.grants)
+        if grant_ids != tuple(context["grant_ids"]):
+            raise GrantDenied("workbench grant IDs differ from the admitted context")
+        usable = {
+            grant.capability
+            for grant in envelope.grants
+            if grant.issued_to == envelope.principal
+            and grant.expires_at_unix_ms >= envelope.deadline_unix_ms
+        }
+        if "rlm.workbench.execute" not in usable:
+            raise GrantDenied("rlm.workbench.execute grant is absent or expired")
+        if canonical_sha256(spec) != envelope.input_digest:
+            raise InputDigestMismatch(
+                "workbench spec does not match the outer envelope input digest"
             )
 
     def _validate_asset_import_request(
@@ -1964,6 +2219,10 @@ class ReferenceHost:
             self._runtime_resources_closed = True
         if self.dispatcher is not None:
             self.dispatcher.close()
+        if self.rlm_workbench is not None:
+            self.rlm_workbench.close()
+        if self.caller_work is not None:
+            self.caller_work.close()
         self.program_workspace.shutdown()
         self.adaptive_assets.close()
         self.rlm.close()

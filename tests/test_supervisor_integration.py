@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from aar.compat.codex_mcp import stop_codex_supervisor
+from aar.mcp.workbench_surface import SUCCESSOR_TOOL_NAMES
 from aar.runtime.process_identity import (
     ProcessStartIdentity,
     SupervisorDiscoveryRecord,
@@ -58,10 +59,10 @@ def _start_supervisor(
         exact_module_command(
             "aar.runtime.supervisor",
             [
-            "--runtime-home",
-            str(runtime_home),
-            "--programmable-backend",
-            backend,
+                "--runtime-home",
+                str(runtime_home),
+                "--programmable-backend",
+                backend,
             ],
             isolated=False,
         ),
@@ -175,7 +176,9 @@ def test_frontends_reconnect_and_restart_with_non_destructive_generation_retirem
             ],
         )
         tools = next(item for item in rows if item.get("id") == 2)["result"]["tools"]
-        assert len(tools) == 30
+        names = [tool["name"] for tool in tools]
+        assert len(names) == 38
+        assert tuple(names[-8:]) == SUCCESSOR_TOOL_NAMES
         assert process.poll() is None
 
         capabilities = _tool_call(runtime_home, name="aar_capabilities", arguments={})
@@ -196,31 +199,32 @@ def test_frontends_reconnect_and_restart_with_non_destructive_generation_retirem
                     bad_client.makefile("rb").readline().rstrip(b"\n"), strict=True
                 )
                 assert error.kind == "error"
-        assert _tool_call(runtime_home, name="aar_capabilities", arguments={})[
-            "ready"
-        ]["runtime_generation"] == discovery.runtime_generation
+        assert (
+            _tool_call(runtime_home, name="aar_capabilities", arguments={})["ready"][
+                "runtime_generation"
+            ]
+            == discovery.runtime_generation
+        )
 
         with ThreadPoolExecutor(max_workers=6) as executor:
             concurrent_results = tuple(
                 executor.map(
-                    lambda _index: _tool_call(
-                        runtime_home, name="aar_capabilities", arguments={}
-                    ),
+                    lambda _index: _tool_call(runtime_home, name="aar_capabilities", arguments={}),
                     range(6),
                 )
             )
-        assert {
-            item["ready"]["runtime_generation"] for item in concurrent_results
-        } == {discovery.runtime_generation}
+        assert {item["ready"]["runtime_generation"] for item in concurrent_results} == {
+            discovery.runtime_generation
+        }
 
         contender = subprocess.run(
             exact_module_command(
                 "aar.runtime.supervisor",
                 [
-                "--runtime-home",
-                str(runtime_home),
-                "--programmable-backend",
-                "plain",
+                    "--runtime-home",
+                    str(runtime_home),
+                    "--programmable-backend",
+                    "plain",
                 ],
                 isolated=False,
             ),
@@ -275,15 +279,21 @@ def test_frontends_reconnect_and_restart_with_non_destructive_generation_retirem
         assert successor_discovery.process_identity != discovery.process_identity
         assert (private / discovery.credential_file).exists()
         assert (private / successor_discovery.credential_file).exists()
-        assert SupervisorDiscoveryRecord.model_validate_json(
-            (private / "discovery.json").read_bytes(), strict=True
-        ) == successor_discovery
+        assert (
+            SupervisorDiscoveryRecord.model_validate_json(
+                (private / "discovery.json").read_bytes(), strict=True
+            )
+            == successor_discovery
+        )
     finally:
         _stop_supervisor(successor, runtime_home)
 
-    assert SupervisorDiscoveryRecord.model_validate_json(
-        (private / "discovery.json").read_bytes(), strict=True
-    ) == successor_discovery
+    assert (
+        SupervisorDiscoveryRecord.model_validate_json(
+            (private / "discovery.json").read_bytes(), strict=True
+        )
+        == successor_discovery
+    )
     assert (private / discovery.credential_file).exists()
     assert (private / successor_discovery.credential_file).exists()
 
@@ -355,9 +365,12 @@ def test_hard_owner_loss_reconciles_predecessor_and_worker_binding(tmp_path: Pat
         assert worker[0] in {"lost", "quarantined", "terminated"}
         assert worker[1]
         assert not process_identity_matches(worker_identity)
-        assert _tool_call(runtime_home, name="aar_capabilities", arguments={})[
-            "ready"
-        ]["runtime_generation"] == successor_discovery.runtime_generation
+        assert (
+            _tool_call(runtime_home, name="aar_capabilities", arguments={})["ready"][
+                "runtime_generation"
+            ]
+            == successor_discovery.runtime_generation
+        )
     finally:
         if first.poll() is None:
             first.kill()
@@ -379,10 +392,7 @@ def test_durable_rlm_survives_frontend_exit_and_reconnects_by_operation_id(
     try:
         capabilities = _tool_call(runtime_home, name="aar_capabilities", arguments={})
         deadline = capabilities["server_now_unix_ms"] + 60_000
-        grants = {
-            item["capability"]: item["grant_id"]
-            for item in capabilities["reference_grants"]
-        }
+        grants = {item["capability"]: item["grant_id"] for item in capabilities["reference_grants"]}
         read_context = {
             "runtime_generation": capabilities["ready"]["runtime_generation"],
             "capability_digest": capabilities["ready"]["capabilities"]["digest"],

@@ -20,6 +20,7 @@ from aar.compat.codex_mcp import (
     SHUTDOWN_REQUEST_SCHEMA_VERSION,
     stop_codex_supervisor,
 )
+from aar.mcp.workbench_surface import SUCCESSOR_TOOL_NAMES
 from aar.runtime import process_identity as process_identity_module
 from aar.runtime.process_identity import (
     ProcessIdentityObservation,
@@ -220,10 +221,13 @@ def _stop_test_supervisor(runtime_home: Path) -> None:
 
 def _assert_capabilities(rows: list[dict[str, Any]], discovery: SupervisorDiscoveryRecord) -> None:
     tools = next(item for item in rows if item.get("id") == 2)["result"]["tools"]
-    assert len(tools) == 30
+    names = [tool["name"] for tool in tools]
     response = next(item for item in rows if item.get("id") == 3)["result"]
     assert response["isError"] is False
     capabilities = response["structuredContent"]
+    assert names[: len(capabilities["tool_names"])] == capabilities["tool_names"]
+    assert tuple(names[len(capabilities["tool_names"]) :]) == SUCCESSOR_TOOL_NAMES
+    assert len(names) == 38
     assert capabilities["supervisor"]["mode"] == "attached-supervisor"
     assert capabilities["supervisor"]["frontend_ephemeral"] is True
     assert capabilities["ready"]["runtime_generation"] == discovery.runtime_generation
@@ -275,10 +279,7 @@ def test_spawn_readiness_tolerates_transient_discovery_share_error(
 
     monkeypatch.setattr(Path, "read_bytes", deny_read)
 
-    assert (
-        codex_mcp._read_discovery(tmp_path, tolerate_transient_unreadable=True)
-        is None
-    )
+    assert codex_mcp._read_discovery(tmp_path, tolerate_transient_unreadable=True) is None
     with pytest.raises(codex_mcp.CodexMcpLauncherError, match="unreadable"):
         codex_mcp._read_discovery(tmp_path)
 
@@ -314,9 +315,7 @@ def test_concurrent_codex_launchers_converge_on_one_supervisor(tmp_path: Path) -
         for rows, stderr in results:
             _assert_capabilities(rows, discovery)
             assert stderr == ""
-        lifecycle = (runtime_home / "supervisor" / "lifecycle.jsonl").read_text(
-            encoding="utf-8"
-        )
+        lifecycle = (runtime_home / "supervisor" / "lifecycle.jsonl").read_text(encoding="utf-8")
         assert lifecycle.count('"state":"ready"') == 1
     finally:
         _stop_test_supervisor(runtime_home)
@@ -745,9 +744,7 @@ class _PidReuseSpawnedChild(_FakeChild):
         return self.returncode
 
 
-def _assert_spawned_child_not_signalled_by_pid(
-    child: _PidReuseSpawnedChild, seam: str
-) -> None:
+def _assert_spawned_child_not_signalled_by_pid(child: _PidReuseSpawnedChild, seam: str) -> None:
     assert child.replacement_signal_count == 0, (
         f"{seam} signalled the PID-reuse replacement through Popen instead of a retained "
         "exact child handle"

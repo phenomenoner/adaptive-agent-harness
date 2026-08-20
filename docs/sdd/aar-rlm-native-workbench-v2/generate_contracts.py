@@ -89,9 +89,9 @@ def write_json(path: Path, value: Any) -> None:
 
 
 def canonical_bytes(value: Any) -> bytes:
-    return json.dumps(
-        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    ).encode("utf-8")
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(
+        "utf-8"
+    )
 
 
 def canonical_digest(value: Any) -> str:
@@ -248,7 +248,9 @@ rlm_directive = {
             {
                 "kind": const("execute_cell"),
                 "code": {"type": "string", "minLength": 1, "maxLength": 65_536},
-                "expected_result_hint": {"oneOf": [{"type": "string", "maxLength": 4_096}, {"type": "null"}]},
+                "expected_result_hint": {
+                    "oneOf": [{"type": "string", "maxLength": 4_096}, {"type": "null"}]
+                },
             }
         ),
         strict_object(
@@ -264,7 +266,7 @@ rlm_directive = {
                 "reason": {"type": "string", "minLength": 1, "maxLength": 4_096},
             }
         ),
-    ]
+    ],
 }
 normalize_required_lists(rlm_directive)
 
@@ -279,7 +281,9 @@ recovery_planner_input = strict_object(
         "settled_ticket_receipt_digests": array(DIGEST, minimum=1, maximum=64),
         "committed_artifact_binding_digests": array(DIGEST, maximum=64),
         "committed_event_digests": array(DIGEST, maximum=256),
-        "failure_code": enum("worker_lost", "supervisor_restarted", "rebind_failed", "stack_unavailable"),
+        "failure_code": enum(
+            "worker_lost", "supervisor_restarted", "rebind_failed", "stack_unavailable"
+        ),
         "remaining_model_calls": {"type": "integer", "minimum": 1, "maximum": 64},
         "remaining_wall_time_ms": {"type": "integer", "minimum": 1, "maximum": 900_000},
     }
@@ -350,9 +354,7 @@ execute_input["allOf"] = [
             "properties": {
                 "spec": {
                     "properties": {
-                        "model": {
-                            "properties": {"execution_mode": {"const": "caller_delegated"}}
-                        }
+                        "model": {"properties": {"execution_mode": {"const": "caller_delegated"}}}
                     }
                 }
             }
@@ -514,18 +516,20 @@ failure = strict_object(
             strict_object(
                 {
                     "name": CAPABILITY,
-                    "value": {"oneOf": [
-                        {"type": "string", "maxLength": 512},
-                        {"type": "integer"},
-                        {
-                            "allOf": [
-                                {"type": "number"},
-                                {"not": {"type": "integer"}},
-                            ]
-                        },
-                        {"type": "boolean"},
-                        {"type": "null"},
-                    ]},
+                    "value": {
+                        "oneOf": [
+                            {"type": "string", "maxLength": 512},
+                            {"type": "integer"},
+                            {
+                                "allOf": [
+                                    {"type": "number"},
+                                    {"not": {"type": "integer"}},
+                                ]
+                            },
+                            {"type": "boolean"},
+                            {"type": "null"},
+                        ]
+                    },
                 }
             ),
             maximum=32,
@@ -598,7 +602,13 @@ snapshot["allOf"] = [
         "if": {
             "properties": {
                 "phase": {
-                    "enum": ["accepted", "preparing_workspace", "running", "checkpointing", "finalizing"]
+                    "enum": [
+                        "accepted",
+                        "preparing_workspace",
+                        "running",
+                        "checkpointing",
+                        "finalizing",
+                    ]
                 }
             },
             "required": ["phase"],
@@ -643,12 +653,17 @@ backend_availability = strict_object(
         "reference_only": {"type": "boolean"},
         "adapter_id": {"oneOf": [IDENTITY, {"type": "null"}]},
         "adapter_generation": {"oneOf": [POSITIVE, {"type": "null"}]},
-        "evidence_tier": enum("unknown", "caller_observed", "host_receipt_bound", "provider_attested"),
+        "evidence_tier": enum(
+            "unknown", "caller_observed", "host_receipt_bound", "provider_attested"
+        ),
     }
 )
 backend_availability["allOf"] = [
     {
-        "if": {"properties": {"backend_kind": {"const": "unconfigured"}}, "required": ["backend_kind"]},
+        "if": {
+            "properties": {"backend_kind": {"const": "unconfigured"}},
+            "required": ["backend_kind"],
+        },
         "then": {
             "properties": {
                 "configured": {"const": False},
@@ -660,7 +675,10 @@ backend_availability["allOf"] = [
         },
     },
     {
-        "if": {"properties": {"backend_kind": {"const": "reference"}}, "required": ["backend_kind"]},
+        "if": {
+            "properties": {"backend_kind": {"const": "reference"}},
+            "required": ["backend_kind"],
+        },
         "then": {
             "properties": {
                 "configured": {"const": True},
@@ -709,7 +727,9 @@ workbench_capability = strict_object(
 background_actor_state = strict_object(
     {
         "actor_id": IDENTITY,
-        "kind": enum("lease_keeper", "ticket_sweeper", "deadline_sweeper", "reconciler", "worker_supervisor"),
+        "kind": enum(
+            "lease_keeper", "ticket_sweeper", "deadline_sweeper", "reconciler", "worker_supervisor"
+        ),
         "state": enum("starting", "running", "stopping", "stopped", "failed"),
         "generation": POSITIVE,
         "last_heartbeat_unix_ms": {"oneOf": [TIMESTAMP_MS, {"type": "null"}]},
@@ -771,7 +791,11 @@ workbench_contract = {
         "RlmWorkbenchStatusOutcome": workbench_status_outcome,
         "RlmWorkbenchCapabilityOutcome": workbench_capability_outcome,
     },
-    "oneOf": [ref("RlmWorkbenchExecuteInput"), ref("RlmWorkbenchSnapshot"), ref("RlmWorkbenchResult")],
+    "oneOf": [
+        ref("RlmWorkbenchExecuteInput"),
+        ref("RlmWorkbenchSnapshot"),
+        ref("RlmWorkbenchResult"),
+    ],
 }
 
 logical_owner = {
@@ -918,7 +942,9 @@ ticket = strict_object(
 ticket["allOf"] = [
     {
         "if": {"properties": {"state": {"const": "pending"}}, "required": ["state"]},
-        "then": {"properties": {"claimant": {"type": "null"}, "physical_attempt": {"type": "null"}}},
+        "then": {
+            "properties": {"claimant": {"type": "null"}, "physical_attempt": {"type": "null"}}
+        },
     },
     {
         "if": {"properties": {"state": {"const": "send_reserved"}}, "required": ["state"]},
@@ -1114,9 +1140,7 @@ cancel_before_send_input = strict_object(
         "claim_id": {"oneOf": [IDENTITY, {"type": "null"}]},
         "claim_fence": {"oneOf": [DIGEST, {"type": "null"}]},
         "physical_attempt_id": {"oneOf": [IDENTITY, {"type": "null"}]},
-        "expected_claim_expires_at_unix_ms": {
-            "oneOf": [TIMESTAMP_MS, {"type": "null"}]
-        },
+        "expected_claim_expires_at_unix_ms": {"oneOf": [TIMESTAMP_MS, {"type": "null"}]},
         "settled_receipt_digest": DIGEST,
         "settled_at_unix_ms": TIMESTAMP_MS,
         "reason": enum("user_requested", "deadline", "operation_cancel", "shutdown"),
@@ -1181,13 +1205,17 @@ model_observation["allOf"] = [
             "properties": {"outcome": {"enum": ["failed_certain", "outcome_unknown"]}},
             "required": ["outcome"],
         },
-        "then": {"properties": {"output_text": {"type": "null"}, "output_digest": {"type": "null"}}},
+        "then": {
+            "properties": {"output_text": {"type": "null"}, "output_digest": {"type": "null"}}
+        },
     },
 ]
 child_observation = strict_object(
     {
         "kind": const("subagent"),
-        "outcome": enum("accepted", "succeeded", "failed_certain", "outcome_unknown", "cancelled_certain"),
+        "outcome": enum(
+            "accepted", "succeeded", "failed_certain", "outcome_unknown", "cancelled_certain"
+        ),
         "child_execution_id": IDENTITY,
         "result_digest": {"oneOf": [DIGEST, {"type": "null"}]},
         "artifact_manifest_digest": {"oneOf": [DIGEST, {"type": "null"}]},
@@ -1201,7 +1229,11 @@ child_observation["allOf"] = [
     },
     {
         "if": {
-            "properties": {"outcome": {"enum": ["accepted", "failed_certain", "outcome_unknown", "cancelled_certain"]}},
+            "properties": {
+                "outcome": {
+                    "enum": ["accepted", "failed_certain", "outcome_unknown", "cancelled_certain"]
+                }
+            },
             "required": ["outcome"],
         },
         "then": {"properties": {"result_digest": {"type": "null"}}},
@@ -1305,9 +1337,7 @@ reconcile_input["allOf"] = [
         "then": {"properties": {"candidate_receipt_digest": DIGEST}},
     }
 ]
-caller_work_outcome = {
-    "oneOf": [ticket, external("aar-rlm-workbench-v1.schema.json", "Failure")]
-}
+caller_work_outcome = {"oneOf": [ticket, external("aar-rlm-workbench-v1.schema.json", "Failure")]}
 
 caller_contract = {
     "$schema": DRAFT,
@@ -1425,7 +1455,12 @@ artifact_contract = {
         "CellCommitManifest": cell_commit_manifest,
         "FinalizationManifest": finalization_manifest,
     },
-    "oneOf": [ref("ArtifactBinding"), ref("ArtifactStage"), ref("CellCommitManifest"), ref("FinalizationManifest")],
+    "oneOf": [
+        ref("ArtifactBinding"),
+        ref("ArtifactStage"),
+        ref("CellCommitManifest"),
+        ref("FinalizationManifest"),
+    ],
 }
 
 frame_identity = {
@@ -1446,7 +1481,13 @@ frame_identity = {
 broker_intent_payload = strict_object(
     {
         "context": external("aar-rlm-workbench-v1.schema.json", "BrokerContextV2"),
-        "method": enum("model.request", "subagent.submit", "subagent.result", "evidence.query", "effect.propose"),
+        "method": enum(
+            "model.request",
+            "subagent.submit",
+            "subagent.result",
+            "evidence.query",
+            "effect.propose",
+        ),
         "contract_id": IDENTITY,
         "request_digest": DIGEST,
         "request": {
@@ -1591,9 +1632,7 @@ execute_result_payload["allOf"] = [
     },
     {
         "if": {
-            "properties": {
-                "status": {"enum": ["failed", "cancelled", "protocol_error"]}
-            },
+            "properties": {"status": {"enum": ["failed", "cancelled", "protocol_error"]}},
             "required": ["status"],
         },
         "then": {
@@ -1687,6 +1726,8 @@ rebind_ack_payload = strict_object(
         "ack_digest": DIGEST,
     }
 )
+
+
 def typed_frame(
     kind: str,
     direction: str,
@@ -1697,9 +1738,7 @@ def typed_frame(
     return strict_object(
         {
             **frame_identity,
-            "broker_call_ordinal": (
-                POSITIVE if broker_ordinal_required else {"type": "null"}
-            ),
+            "broker_call_ordinal": (POSITIVE if broker_ordinal_required else {"type": "null"}),
             "kind": const(kind),
             "direction": const(direction),
             "payload": payload,
@@ -1746,12 +1785,8 @@ frame_variants = [
         False,
     ),
     typed_frame("execute_result", "worker_to_supervisor", execute_result_payload, False),
-    typed_frame(
-        "broker_receipt", "supervisor_to_worker", broker_receipt_payload, True, True
-    ),
-    typed_frame(
-        "broker_suspend", "supervisor_to_worker", broker_suspend_payload, True, True
-    ),
+    typed_frame("broker_receipt", "supervisor_to_worker", broker_receipt_payload, True, True),
+    typed_frame("broker_suspend", "supervisor_to_worker", broker_suspend_payload, True, True),
     typed_frame(
         "rebind_prepare",
         "supervisor_to_worker",
@@ -1959,7 +1994,15 @@ semantic_receipt_document = strict_object(
 )
 semantic_receipt = strict_object(
     {
-        "kind": enum("host", "model_route", "model_usage", "subagent", "authorization", "artifact", "reconciler"),
+        "kind": enum(
+            "host",
+            "model_route",
+            "model_usage",
+            "subagent",
+            "authorization",
+            "artifact",
+            "reconciler",
+        ),
         "receipt_digest": DIGEST,
         "file": evidence_file_binding,
     }
@@ -2005,8 +2048,14 @@ candidate_manifest = strict_object(
         "profile_digests": array(DIGEST, minimum=1, maximum=32),
         "skill_digests": array(DIGEST, minimum=1, maximum=32),
         "artifacts": array(evidence_file_binding, minimum=8, maximum=256),
-        "python_versions": array({"type": "string", "pattern": r"^3\.(?:11|12|13|14)(?:\.[0-9]+)?$"}, minimum=1, maximum=4),
-        "platforms": array(enum("linux-x86_64", "windows-x86_64", "macos-arm64"), minimum=1, maximum=3),
+        "python_versions": array(
+            {"type": "string", "pattern": r"^3\.(?:11|12|13|14)(?:\.[0-9]+)?$"},
+            minimum=1,
+            maximum=4,
+        ),
+        "platforms": array(
+            enum("linux-x86_64", "windows-x86_64", "macos-arm64"), minimum=1, maximum=3
+        ),
         "build_command": {"type": "string", "minLength": 1, "maxLength": 2048},
         "created_at_unix_ms": TIMESTAMP_MS,
         "manifest_digest": DIGEST,
@@ -2139,9 +2188,7 @@ cutover_event_payload["allOf"] = [
     },
     {
         "if": {
-            "properties": {
-                "state": {"enum": ["candidate_active", "rolled_back_before_write"]}
-            },
+            "properties": {"state": {"enum": ["candidate_active", "rolled_back_before_write"]}},
             "required": ["state"],
         },
         "then": {
@@ -2156,9 +2203,7 @@ cutover_event_payload["allOf"] = [
     },
     {
         "if": {
-            "properties": {
-                "state": {"enum": ["post_snapshot_write", "retired_forward"]}
-            },
+            "properties": {"state": {"enum": ["post_snapshot_write", "retired_forward"]}},
             "required": ["state"],
         },
         "then": {
@@ -2173,9 +2218,7 @@ cutover_event_payload["allOf"] = [
     },
     {
         "if": {
-            "properties": {
-                "state": {"enum": ["rolled_back_before_write", "retired_forward"]}
-            },
+            "properties": {"state": {"enum": ["rolled_back_before_write", "retired_forward"]}},
             "required": ["state"],
         },
         "then": {"properties": {"decision_digest": DIGEST}},
@@ -2229,7 +2272,12 @@ tool_surface = {
             "capability": "rlm.workbench.execute",
             "input_schema": "aar-rlm-workbench-v1.schema.json#/$defs/RlmWorkbenchExecuteInput",
             "output_schema": "aar-rlm-workbench-v1.schema.json#/$defs/RlmWorkbenchExecuteOutcome",
-            "annotations": {"readOnlyHint": False, "idempotentHint": True, "destructiveHint": True, "openWorldHint": True},
+            "annotations": {
+                "readOnlyHint": False,
+                "idempotentHint": True,
+                "destructiveHint": True,
+                "openWorldHint": True,
+            },
         },
         {
             "name": "aar_rlm_workbench_capabilities",
@@ -2238,7 +2286,12 @@ tool_surface = {
             "capability": "rlm.workbench.read",
             "input_schema": "aar-rlm-workbench-v1.schema.json#/$defs/RlmWorkbenchCapabilitiesInput",
             "output_schema": "aar-rlm-workbench-v1.schema.json#/$defs/RlmWorkbenchCapabilityOutcome",
-            "annotations": {"readOnlyHint": True, "idempotentHint": True, "destructiveHint": False, "openWorldHint": False},
+            "annotations": {
+                "readOnlyHint": True,
+                "idempotentHint": True,
+                "destructiveHint": False,
+                "openWorldHint": False,
+            },
         },
         {
             "name": "aar_rlm_workbench_status",
@@ -2247,7 +2300,12 @@ tool_surface = {
             "capability": "rlm.workbench.read",
             "input_schema": "aar-rlm-workbench-v1.schema.json#/$defs/RlmWorkbenchStatusInput",
             "output_schema": "aar-rlm-workbench-v1.schema.json#/$defs/RlmWorkbenchStatusOutcome",
-            "annotations": {"readOnlyHint": True, "idempotentHint": True, "destructiveHint": False, "openWorldHint": False},
+            "annotations": {
+                "readOnlyHint": True,
+                "idempotentHint": True,
+                "destructiveHint": False,
+                "openWorldHint": False,
+            },
         },
         {
             "name": "aar_broker_work_claim",
@@ -2256,7 +2314,12 @@ tool_surface = {
             "capability": "broker.caller.claim",
             "input_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkClaimInput",
             "output_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkOutcome",
-            "annotations": {"readOnlyHint": False, "idempotentHint": True, "destructiveHint": False, "openWorldHint": False},
+            "annotations": {
+                "readOnlyHint": False,
+                "idempotentHint": True,
+                "destructiveHint": False,
+                "openWorldHint": False,
+            },
         },
         {
             "name": "aar_broker_work_mark_send_started",
@@ -2265,7 +2328,12 @@ tool_surface = {
             "capability": "broker.caller.send",
             "input_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkMarkSendStartedInput",
             "output_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkOutcome",
-            "annotations": {"readOnlyHint": False, "idempotentHint": True, "destructiveHint": False, "openWorldHint": False},
+            "annotations": {
+                "readOnlyHint": False,
+                "idempotentHint": True,
+                "destructiveHint": False,
+                "openWorldHint": False,
+            },
         },
         {
             "name": "aar_broker_work_cancel_before_send",
@@ -2274,7 +2342,12 @@ tool_surface = {
             "capability": "broker.caller.cancel",
             "input_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkCancelBeforeSendInput",
             "output_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkOutcome",
-            "annotations": {"readOnlyHint": False, "idempotentHint": True, "destructiveHint": True, "openWorldHint": False},
+            "annotations": {
+                "readOnlyHint": False,
+                "idempotentHint": True,
+                "destructiveHint": True,
+                "openWorldHint": False,
+            },
         },
         {
             "name": "aar_broker_work_commit",
@@ -2283,7 +2356,12 @@ tool_surface = {
             "capability": "broker.caller.commit",
             "input_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkCommitInput",
             "output_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkOutcome",
-            "annotations": {"readOnlyHint": False, "idempotentHint": True, "destructiveHint": False, "openWorldHint": False},
+            "annotations": {
+                "readOnlyHint": False,
+                "idempotentHint": True,
+                "destructiveHint": False,
+                "openWorldHint": False,
+            },
         },
         {
             "name": "aar_broker_work_reconcile",
@@ -2292,68 +2370,409 @@ tool_surface = {
             "capability": "broker.caller.reconcile",
             "input_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkReconcileInput",
             "output_schema": "aar-caller-work-v1.schema.json#/$defs/CallerWorkOutcome",
-            "annotations": {"readOnlyHint": False, "idempotentHint": True, "destructiveHint": False, "openWorldHint": False},
+            "annotations": {
+                "readOnlyHint": False,
+                "idempotentHint": True,
+                "destructiveHint": False,
+                "openWorldHint": False,
+            },
         },
     ],
 }
 
 fault_cases = [
-    ("FC-CALL-001", "AC-L05", "before_claim_commit", "claimant crash before reservation commit", "ticket stays pending; physical sends=0"),
-    ("FC-CALL-002", "AC-L05", "after_claim_before_send_mark", "claimant crash after send reservation", "reservation expires safely; physical sends=0"),
-    ("FC-CALL-003", "AC-L05", "before_send_mark_commit", "send attempted before durable mark", "adapter rejects; physical sends=0"),
-    ("FC-CALL-004", "AC-L05", "after_send_mark_before_physical_send", "claimant crash", "ticket is may-have-sent and requires lookup; no blind reclaim"),
-    ("FC-CALL-005", "AC-L05", "after_physical_send_before_receipt", "claimant crash", "ticket is outcome_unknown; duplicate sends=0"),
-    ("FC-CALL-006", "AC-L06", "late_receipt_after_cancel", "append candidate receipt", "current reconciler alone may settle or quarantine"),
-    ("FC-CALL-007", "AC-L06", "conflicting_receipts", "append different digest for same physical attempt", "ticket quarantines; terminal truth is not overwritten"),
-    ("FC-CALL-008", "AC-L04", "expired_pre_send_reservation", "second claimant claims", "one current claim; stale claimant mutations=0"),
-    ("FC-CALL-009", "AC-L04", "concurrent_claim", "two claimants race", "one reservation succeeds; one conflict"),
-    ("FC-CALL-010", "AC-B04", "foreign_claimant_commit", "wrong principal/generation commits", "mutation rejected; ticket unchanged"),
-    ("FC-CALL-011", "AC-B04", "wrong_ticket_digest", "commit with wrong digest", "mutation rejected before observation write"),
-    ("FC-CALL-012", "AC-I04", "same_key_changed_payload", "replay changed claim/commit payload", "changed payload conflicts before observation/external mutation; ticket and attempt unchanged"),
-    ("FC-CALL-013", "AC-L03", "cancel_before_send_start_cas", "cancellation/control revision wins", "ticket settles cancelled_before_send; physical sends=0"),
-    ("FC-CALL-014", "AC-L03", "cancel_after_send_start_cas", "send-start commit wins", "pre-send cancellation conflicts; may-have-sent reconciliation applies"),
-    ("FC-CALL-015", "AC-L03", "stale_send_start_cross_row_fence", "stale control/cancellation/suspension/deadline/claim input", "send-start rejected; physical sends=0"),
-    ("FC-WAIT-001", "AC-L02", "suspend_transaction_before_commit", "crash", "old attempt remains sole owner; no ticket visible"),
-    ("FC-WAIT-002", "AC-L02", "suspend_transaction_after_commit", "crash", "ticket visible; no active attempt; worker write-fenced"),
-    ("FC-WAIT-003", "AC-L04", "settlement_before_successor_outbox", "crash", "reconciler enqueues one successor"),
-    ("FC-WAIT-004", "AC-L04", "duplicate_successor_enqueue", "two reconcilers race", "unique operation/suspension key yields one successor"),
-    ("FC-WAIT-005", "AC-L03", "cancel_vs_ticket_settle", "race", "one CAS winner; losing evidence retained as candidate only"),
-    ("FC-WAIT-006", "AC-L10", "quiet_restart_past_deadline", "startup sweep", "no new send; cancel/lookup/quarantine per send state"),
-    ("FC-LEASE-001", "AC-L01", "schedule_before_keeper_register", "close races", "new attempt aborts or registered keeper is joined"),
-    ("FC-LEASE-002", "AC-L01", "keeper_heartbeat_vs_terminal", "race", "terminal attempt never renewed"),
-    ("FC-LEASE-003", "AC-L01", "keeper_failure", "inject failure", "attempt parks/fails; no silent expiry"),
-    ("FC-LEASE-004", "AC-B03", "close_with_live_callbacks", "close runtime owner", "callbacks drained/fenced before stores close"),
-    ("FC-LEASE-005", "AC-L07", "stale_attempt_inner_write", "allow old worker completion after successor claim", "authoritative broker/RLM/artifact writes=0; matching external evidence enters candidate lane only"),
-    ("FC-WORKER-001", "AC-L08", "worker_loss_before_broker_intent", "kill worker", "restore checkpoint and recovery-plan; no automatic cell replay"),
-    ("FC-WORKER-002", "AC-L08", "worker_loss_after_send_started", "kill worker", "receipt lookup/reconcile precedes continuation"),
-    ("FC-WORKER-003", "AC-L09", "ambient_effect_before_suspend", "attempt durable facade call", "automatic replay forbidden; job recovery-plans or parks"),
-    ("FC-WORKER-004", "AC-I01", "typed_frame_payload_or_direction_mutant", "empty/missing/extra/wrong-direction frame", "schema rejects before semantic or authority handling"),
-    ("FC-REBIND-001", "AC-I06", "crash_before_rebind_commit", "coordinator restart", "prepared transfer retries or aborts; predecessor remains fenced; successor not authoritative"),
-    ("FC-REBIND-002", "AC-I06", "crash_after_commit_before_delivery", "coordinator restart", "exact committed token redelivers; one successor authority"),
-    ("FC-REBIND-003", "AC-I06", "crash_after_delivery_before_ack", "coordinator restart", "idempotent commit redelivery and acknowledgement; live stack resumes at most once"),
-    ("FC-REBIND-004", "AC-I06", "committed_worker_lost", "worker process unavailable", "successor fenced; transfer consumed as recovery_fenced_loss; recovery planner uses checkpoint"),
-    ("FC-ART-001", "AC-A02", "failed_cell_with_staged_artifact", "cell raises", "published final artifacts=0"),
-    ("FC-ART-002", "AC-A03", "second_artifact_stage_failure", "inject failure", "visible artifacts=0; staged rows reconcile/discard"),
-    ("FC-ART-003", "AC-A04", "crash_after_cell_manifest_before_promotion", "restart", "manifest-authorized promotion occurs once"),
-    ("FC-FINAL-001", "AC-J05", "planner_and_cell_completion_race", "two proposals", "one coordinator FinalizationManifest wins"),
-    ("FC-FINAL-002", "AC-L03", "cancel_before_finalization_cas", "race", "no success/artifact visibility"),
-    ("FC-FINAL-003", "AC-J05", "crash_after_finalization_cas", "restart", "same terminal result/artifacts are projected once"),
-    ("FC-CHILD-001", "AC-S01", "crash_before_child_acceptance", "restart", "safe resend using child idempotency identity"),
-    ("FC-CHILD-002", "AC-S03", "crash_after_child_acceptance", "restart", "lookup retained child; duplicate child starts=0"),
-    ("FC-CHILD-003", "AC-S04", "parent_cancel_with_live_child", "cancel", "child cancellation requested and terminal parent waits or parks"),
-    ("FC-EVID-001", "AC-E01", "reference_fake_profile", "admit full journey", "admission fails; no reference-only backend advertised as configured"),
-    ("FC-CONTRACT-001", "AC-C02", "overlapping_bounded_quantifiers", "validate hostile completion regex", "profile rejects before engine compilation; no superlinear matcher work"),
-    ("FC-CONTRACT-002", "AC-C02", "trailing_dollar_newline_divergence", "validate hostile completion regex", "profile rejects the nonportable end anchor"),
-    ("FC-CONTRACT-003", "AC-C02", "ecmascript_unicode_identity_escape", "validate hostile completion regex", "profile rejects the nonportable identity escape"),
-    ("FC-MIG-001", "AC-C04", "crash_before_begin", "terminate migrator", "baseline DB remains authoritative and byte-stable"),
-    ("FC-MIG-002", "AC-C04", "crash_after_ddl_before_registry", "terminate transaction", "DDL and registry row roll back together"),
-    ("FC-MIG-003", "AC-C04", "crash_after_registry_before_commit", "terminate transaction", "registry row and DDL remain absent after reopen"),
-    ("FC-MIG-004", "AC-C04", "duplicate_apply", "run exact migration twice", "second apply is idempotent and digest-equal"),
-    ("FC-MIG-005", "AC-C04", "integrity_failure", "inject foreign-key/integrity failure", "transaction rolls back and preserved copy remains recovery authority"),
-    ("FC-MIG-006", "AC-C04", "committed_pages_only_in_wal", "create snapshot through SQLite backup API", "snapshot contains the WAL-only row and canonical populated row-set digest"),
-    ("FC-MIG-007", "AC-C04", "crash_after_registry_before_attestation", "terminate migration transaction", "DDL, schema row and migration attestation are all absent after reopen"),
-    ("FC-MIG-008", "AC-C04", "rollback_after_post_snapshot_write", "request prior-snapshot rollback", "cutover authority rejects rollback and v6 remains authoritative for forward recovery"),
-    ("FC-MIG-009", "AC-C04", "missing_external_cutover_authority", "start candidate launcher", "launcher refuses both candidate admission and prior-snapshot selection"),
+    (
+        "FC-CALL-001",
+        "AC-L05",
+        "before_claim_commit",
+        "claimant crash before reservation commit",
+        "ticket stays pending; physical sends=0",
+    ),
+    (
+        "FC-CALL-002",
+        "AC-L05",
+        "after_claim_before_send_mark",
+        "claimant crash after send reservation",
+        "reservation expires safely; physical sends=0",
+    ),
+    (
+        "FC-CALL-003",
+        "AC-L05",
+        "before_send_mark_commit",
+        "send attempted before durable mark",
+        "adapter rejects; physical sends=0",
+    ),
+    (
+        "FC-CALL-004",
+        "AC-L05",
+        "after_send_mark_before_physical_send",
+        "claimant crash",
+        "ticket is may-have-sent and requires lookup; no blind reclaim",
+    ),
+    (
+        "FC-CALL-005",
+        "AC-L05",
+        "after_physical_send_before_receipt",
+        "claimant crash",
+        "ticket is outcome_unknown; duplicate sends=0",
+    ),
+    (
+        "FC-CALL-006",
+        "AC-L06",
+        "late_receipt_after_cancel",
+        "append candidate receipt",
+        "current reconciler alone may settle or quarantine",
+    ),
+    (
+        "FC-CALL-007",
+        "AC-L06",
+        "conflicting_receipts",
+        "append different digest for same physical attempt",
+        "ticket quarantines; terminal truth is not overwritten",
+    ),
+    (
+        "FC-CALL-008",
+        "AC-L04",
+        "expired_pre_send_reservation",
+        "second claimant claims",
+        "one current claim; stale claimant mutations=0",
+    ),
+    (
+        "FC-CALL-009",
+        "AC-L04",
+        "concurrent_claim",
+        "two claimants race",
+        "one reservation succeeds; one conflict",
+    ),
+    (
+        "FC-CALL-010",
+        "AC-B04",
+        "foreign_claimant_commit",
+        "wrong principal/generation commits",
+        "mutation rejected; ticket unchanged",
+    ),
+    (
+        "FC-CALL-011",
+        "AC-B04",
+        "wrong_ticket_digest",
+        "commit with wrong digest",
+        "mutation rejected before observation write",
+    ),
+    (
+        "FC-CALL-012",
+        "AC-I04",
+        "same_key_changed_payload",
+        "replay changed claim/commit payload",
+        "changed payload conflicts before observation/external mutation; ticket and attempt unchanged",
+    ),
+    (
+        "FC-CALL-013",
+        "AC-L03",
+        "cancel_before_send_start_cas",
+        "cancellation/control revision wins",
+        "ticket settles cancelled_before_send; physical sends=0",
+    ),
+    (
+        "FC-CALL-014",
+        "AC-L03",
+        "cancel_after_send_start_cas",
+        "send-start commit wins",
+        "pre-send cancellation conflicts; may-have-sent reconciliation applies",
+    ),
+    (
+        "FC-CALL-015",
+        "AC-L03",
+        "stale_send_start_cross_row_fence",
+        "stale control/cancellation/suspension/deadline/claim input",
+        "send-start rejected; physical sends=0",
+    ),
+    (
+        "FC-WAIT-001",
+        "AC-L02",
+        "suspend_transaction_before_commit",
+        "crash",
+        "old attempt remains sole owner; no ticket visible",
+    ),
+    (
+        "FC-WAIT-002",
+        "AC-L02",
+        "suspend_transaction_after_commit",
+        "crash",
+        "ticket visible; no active attempt; worker write-fenced",
+    ),
+    (
+        "FC-WAIT-003",
+        "AC-L04",
+        "settlement_before_successor_outbox",
+        "crash",
+        "reconciler enqueues one successor",
+    ),
+    (
+        "FC-WAIT-004",
+        "AC-L04",
+        "duplicate_successor_enqueue",
+        "two reconcilers race",
+        "unique operation/suspension key yields one successor",
+    ),
+    (
+        "FC-WAIT-005",
+        "AC-L03",
+        "cancel_vs_ticket_settle",
+        "race",
+        "one CAS winner; losing evidence retained as candidate only",
+    ),
+    (
+        "FC-WAIT-006",
+        "AC-L10",
+        "quiet_restart_past_deadline",
+        "startup sweep",
+        "no new send; cancel/lookup/quarantine per send state",
+    ),
+    (
+        "FC-LEASE-001",
+        "AC-L01",
+        "schedule_before_keeper_register",
+        "close races",
+        "new attempt aborts or registered keeper is joined",
+    ),
+    (
+        "FC-LEASE-002",
+        "AC-L01",
+        "keeper_heartbeat_vs_terminal",
+        "race",
+        "terminal attempt never renewed",
+    ),
+    (
+        "FC-LEASE-003",
+        "AC-L01",
+        "keeper_failure",
+        "inject failure",
+        "attempt parks/fails; no silent expiry",
+    ),
+    (
+        "FC-LEASE-004",
+        "AC-B03",
+        "close_with_live_callbacks",
+        "close runtime owner",
+        "callbacks drained/fenced before stores close",
+    ),
+    (
+        "FC-LEASE-005",
+        "AC-L07",
+        "stale_attempt_inner_write",
+        "allow old worker completion after successor claim",
+        "authoritative broker/RLM/artifact writes=0; matching external evidence enters candidate lane only",
+    ),
+    (
+        "FC-WORKER-001",
+        "AC-L08",
+        "worker_loss_before_broker_intent",
+        "kill worker",
+        "restore checkpoint and recovery-plan; no automatic cell replay",
+    ),
+    (
+        "FC-WORKER-002",
+        "AC-L08",
+        "worker_loss_after_send_started",
+        "kill worker",
+        "receipt lookup/reconcile precedes continuation",
+    ),
+    (
+        "FC-WORKER-003",
+        "AC-L09",
+        "ambient_effect_before_suspend",
+        "attempt durable facade call",
+        "automatic replay forbidden; job recovery-plans or parks",
+    ),
+    (
+        "FC-WORKER-004",
+        "AC-I01",
+        "typed_frame_payload_or_direction_mutant",
+        "empty/missing/extra/wrong-direction frame",
+        "schema rejects before semantic or authority handling",
+    ),
+    (
+        "FC-REBIND-001",
+        "AC-I06",
+        "crash_before_rebind_commit",
+        "coordinator restart",
+        "prepared transfer retries or aborts; predecessor remains fenced; successor not authoritative",
+    ),
+    (
+        "FC-REBIND-002",
+        "AC-I06",
+        "crash_after_commit_before_delivery",
+        "coordinator restart",
+        "exact committed token redelivers; one successor authority",
+    ),
+    (
+        "FC-REBIND-003",
+        "AC-I06",
+        "crash_after_delivery_before_ack",
+        "coordinator restart",
+        "idempotent commit redelivery and acknowledgement; live stack resumes at most once",
+    ),
+    (
+        "FC-REBIND-004",
+        "AC-I06",
+        "committed_worker_lost",
+        "worker process unavailable",
+        "successor fenced; transfer consumed as recovery_fenced_loss; recovery planner uses checkpoint",
+    ),
+    (
+        "FC-ART-001",
+        "AC-A02",
+        "failed_cell_with_staged_artifact",
+        "cell raises",
+        "published final artifacts=0",
+    ),
+    (
+        "FC-ART-002",
+        "AC-A03",
+        "second_artifact_stage_failure",
+        "inject failure",
+        "visible artifacts=0; staged rows reconcile/discard",
+    ),
+    (
+        "FC-ART-003",
+        "AC-A04",
+        "crash_after_cell_manifest_before_promotion",
+        "restart",
+        "manifest-authorized promotion occurs once",
+    ),
+    (
+        "FC-FINAL-001",
+        "AC-J05",
+        "planner_and_cell_completion_race",
+        "two proposals",
+        "one coordinator FinalizationManifest wins",
+    ),
+    (
+        "FC-FINAL-002",
+        "AC-L03",
+        "cancel_before_finalization_cas",
+        "race",
+        "no success/artifact visibility",
+    ),
+    (
+        "FC-FINAL-003",
+        "AC-J05",
+        "crash_after_finalization_cas",
+        "restart",
+        "same terminal result/artifacts are projected once",
+    ),
+    (
+        "FC-CHILD-001",
+        "AC-S01",
+        "crash_before_child_acceptance",
+        "restart",
+        "safe resend using child idempotency identity",
+    ),
+    (
+        "FC-CHILD-002",
+        "AC-S03",
+        "crash_after_child_acceptance",
+        "restart",
+        "lookup retained child; duplicate child starts=0",
+    ),
+    (
+        "FC-CHILD-003",
+        "AC-S04",
+        "parent_cancel_with_live_child",
+        "cancel",
+        "child cancellation requested and terminal parent waits or parks",
+    ),
+    (
+        "FC-EVID-001",
+        "AC-E01",
+        "reference_fake_profile",
+        "admit full journey",
+        "admission fails; no reference-only backend advertised as configured",
+    ),
+    (
+        "FC-CONTRACT-001",
+        "AC-C02",
+        "overlapping_bounded_quantifiers",
+        "validate hostile completion regex",
+        "profile rejects before engine compilation; no superlinear matcher work",
+    ),
+    (
+        "FC-CONTRACT-002",
+        "AC-C02",
+        "trailing_dollar_newline_divergence",
+        "validate hostile completion regex",
+        "profile rejects the nonportable end anchor",
+    ),
+    (
+        "FC-CONTRACT-003",
+        "AC-C02",
+        "ecmascript_unicode_identity_escape",
+        "validate hostile completion regex",
+        "profile rejects the nonportable identity escape",
+    ),
+    (
+        "FC-MIG-001",
+        "AC-C04",
+        "crash_before_begin",
+        "terminate migrator",
+        "baseline DB remains authoritative and byte-stable",
+    ),
+    (
+        "FC-MIG-002",
+        "AC-C04",
+        "crash_after_ddl_before_registry",
+        "terminate transaction",
+        "DDL and registry row roll back together",
+    ),
+    (
+        "FC-MIG-003",
+        "AC-C04",
+        "crash_after_registry_before_commit",
+        "terminate transaction",
+        "registry row and DDL remain absent after reopen",
+    ),
+    (
+        "FC-MIG-004",
+        "AC-C04",
+        "duplicate_apply",
+        "run exact migration twice",
+        "second apply is idempotent and digest-equal",
+    ),
+    (
+        "FC-MIG-005",
+        "AC-C04",
+        "integrity_failure",
+        "inject foreign-key/integrity failure",
+        "transaction rolls back and preserved copy remains recovery authority",
+    ),
+    (
+        "FC-MIG-006",
+        "AC-C04",
+        "committed_pages_only_in_wal",
+        "create snapshot through SQLite backup API",
+        "snapshot contains the WAL-only row and canonical populated row-set digest",
+    ),
+    (
+        "FC-MIG-007",
+        "AC-C04",
+        "crash_after_registry_before_attestation",
+        "terminate migration transaction",
+        "DDL, schema row and migration attestation are all absent after reopen",
+    ),
+    (
+        "FC-MIG-008",
+        "AC-C04",
+        "rollback_after_post_snapshot_write",
+        "request prior-snapshot rollback",
+        "cutover authority rejects rollback and v6 remains authoritative for forward recovery",
+    ),
+    (
+        "FC-MIG-009",
+        "AC-C04",
+        "missing_external_cutover_authority",
+        "start candidate launcher",
+        "launcher refuses both candidate admission and prior-snapshot selection",
+    ),
 ]
 fault_matrix = {
     "schema_version": "aar.sdd-fault-matrix.v1",
@@ -2436,7 +2855,8 @@ def bundle_schema(schema_ref: str) -> dict[str, Any]:
     root_schema = rewrite(deepcopy(document["$defs"][def_name]), filename)
     if collected:
         root_schema["$defs"] = {
-            alias(key): value for key, value in sorted(collected.items(), key=lambda item: alias(item[0]))
+            alias(key): value
+            for key, value in sorted(collected.items(), key=lambda item: alias(item[0]))
         }
     root_schema["$schema"] = DRAFT
     Draft202012Validator.check_schema(root_schema)
@@ -2471,7 +2891,10 @@ def build_full_tool_manifest(baseline_path: Path) -> tuple[Path, Path]:
                 "icons": None,
                 "inputSchema": bundle_schema(tool["input_schema"]),
                 "name": tool["name"],
-                "outputSchema": bundle_schema(tool["output_schema"]),
+                "outputSchema": {
+                    "type": "object",
+                    **bundle_schema(tool["output_schema"]),
+                },
                 "title": None,
             }
         )
@@ -2730,8 +3153,8 @@ def build_fixtures() -> dict[str, Any]:
     }
     valid_portable_pattern = deepcopy(valid)
     valid_portable_pattern["spec"]["completion"]["output_contract"]["schema"] = portable_schema
-    valid_portable_pattern["spec"]["completion"]["output_contract"]["schema_digest"] = canonical_digest(
-        portable_schema
+    valid_portable_pattern["spec"]["completion"]["output_contract"]["schema_digest"] = (
+        canonical_digest(portable_schema)
     )
     deep_schema: dict[str, Any] = {"type": "string"}
     for _ in range(35):
@@ -2739,9 +3162,13 @@ def build_fixtures() -> dict[str, Any]:
     deep_schema["$schema"] = DRAFT
     invalid_deep = deepcopy(valid)
     invalid_deep["spec"]["completion"]["output_contract"]["schema"] = deep_schema
-    invalid_deep["spec"]["completion"]["output_contract"]["schema_digest"] = canonical_digest(deep_schema)
+    invalid_deep["spec"]["completion"]["output_contract"]["schema_digest"] = canonical_digest(
+        deep_schema
+    )
     invalid_instance_limit = deepcopy(valid)
-    invalid_instance_limit["spec"]["completion"]["output_contract"]["max_instance_bytes"] = 1_048_577
+    invalid_instance_limit["spec"]["completion"]["output_contract"]["max_instance_bytes"] = (
+        1_048_577
+    )
 
     def contract_row(
         method: str,
@@ -2754,20 +3181,69 @@ def build_fixtures() -> dict[str, Any]:
         return {
             "method": method,
             "contract_id": contract_id,
-            "request_schema_digest": canonical_digest(contracts[request_file]["$defs"][request_def]),
-            "response_schema_digest": canonical_digest(contracts[response_file]["$defs"][response_def]),
+            "request_schema_digest": canonical_digest(
+                contracts[request_file]["$defs"][request_def]
+            ),
+            "response_schema_digest": canonical_digest(
+                contracts[response_file]["$defs"][response_def]
+            ),
         }
 
     contract_rows = [
-        contract_row("model.request", "aar.broker-contract.model-request.v2", "aar-caller-work-v1.schema.json", "ModelRequestV2", "aar-caller-work-v1.schema.json", "ModelObservation"),
-        contract_row("subagent.submit", "aar.broker-contract.subagent-submit.v2", "aar-caller-work-v1.schema.json", "SubagentSubmitV2", "aar-caller-work-v1.schema.json", "ChildObservation"),
-        contract_row("subagent.result", "aar.broker-contract.subagent-result.v2", "aar-caller-work-v1.schema.json", "SubagentResultV2", "aar-caller-work-v1.schema.json", "ChildObservation"),
-        contract_row("evidence.query", "aar.broker-contract.evidence-query.v2", "aar-caller-work-v1.schema.json", "EvidenceQueryV2", "aar-caller-work-v1.schema.json", "EvidenceObservation"),
-        contract_row("artifact.put", "aar.artifact-stage.v1", "aar-artifact-publication-v1.schema.json", "ArtifactStage", "aar-artifact-publication-v1.schema.json", "ArtifactBinding"),
-        contract_row("effect.propose", "aar.broker-contract.effect-propose.v2", "aar-caller-work-v1.schema.json", "EffectProposeV2", "aar-caller-work-v1.schema.json", "EffectObservation"),
+        contract_row(
+            "model.request",
+            "aar.broker-contract.model-request.v2",
+            "aar-caller-work-v1.schema.json",
+            "ModelRequestV2",
+            "aar-caller-work-v1.schema.json",
+            "ModelObservation",
+        ),
+        contract_row(
+            "subagent.submit",
+            "aar.broker-contract.subagent-submit.v2",
+            "aar-caller-work-v1.schema.json",
+            "SubagentSubmitV2",
+            "aar-caller-work-v1.schema.json",
+            "ChildObservation",
+        ),
+        contract_row(
+            "subagent.result",
+            "aar.broker-contract.subagent-result.v2",
+            "aar-caller-work-v1.schema.json",
+            "SubagentResultV2",
+            "aar-caller-work-v1.schema.json",
+            "ChildObservation",
+        ),
+        contract_row(
+            "evidence.query",
+            "aar.broker-contract.evidence-query.v2",
+            "aar-caller-work-v1.schema.json",
+            "EvidenceQueryV2",
+            "aar-caller-work-v1.schema.json",
+            "EvidenceObservation",
+        ),
+        contract_row(
+            "artifact.put",
+            "aar.artifact-stage.v1",
+            "aar-artifact-publication-v1.schema.json",
+            "ArtifactStage",
+            "aar-artifact-publication-v1.schema.json",
+            "ArtifactBinding",
+        ),
+        contract_row(
+            "effect.propose",
+            "aar.broker-contract.effect-propose.v2",
+            "aar-caller-work-v1.schema.json",
+            "EffectProposeV2",
+            "aar-caller-work-v1.schema.json",
+            "EffectObservation",
+        ),
     ]
     broker_catalog_core = {"schema_version": "aar.broker-catalog.v2", "contracts": contract_rows}
-    broker_catalog = {**broker_catalog_core, "catalog_digest": canonical_digest(broker_catalog_core)}
+    broker_catalog = {
+        **broker_catalog_core,
+        "catalog_digest": canonical_digest(broker_catalog_core),
+    }
     availability = []
     for row in contract_rows:
         caller_driven = row["method"] != "artifact.put"
@@ -2777,12 +3253,16 @@ def build_fixtures() -> dict[str, Any]:
                 "backend_kind": "caller_driver" if caller_driven else "native",
                 "configured": True,
                 "reference_only": False,
-                "adapter_id": "fixture-caller-driver" if caller_driven else "fixture-artifact-store",
+                "adapter_id": "fixture-caller-driver"
+                if caller_driven
+                else "fixture-artifact-store",
                 "adapter_generation": 1,
                 "evidence_tier": "host_receipt_bound",
             }
         )
-    combined_surface = json.loads((CONTRACTS / "aar-mcp-tools-v8-combined.json").read_text(encoding="utf-8"))
+    combined_surface = json.loads(
+        (CONTRACTS / "aar-mcp-tools-v8-combined.json").read_text(encoding="utf-8")
+    )
     valid_capability = {
         "schema_version": "aar.rlm-workbench-capability.v1",
         "surface_version": "aar.mcp-tools.v8",
@@ -2874,9 +3354,7 @@ def build_fixtures() -> dict[str, Any]:
     valid_cancelled_before_send_pending["claimant"] = None
     valid_cancelled_before_send_pending["physical_attempt"] = None
     invalid_cancelled_before_send = deepcopy(valid_cancelled_before_send_reserved)
-    invalid_cancelled_before_send["physical_attempt"][
-        "send_started_at_unix_ms"
-    ] = 1_999_999_999_000
+    invalid_cancelled_before_send["physical_attempt"]["send_started_at_unix_ms"] = 1_999_999_999_000
     valid_cancelled_certain = deepcopy(valid_send_started)
     valid_cancelled_certain["revision"] = 3
     valid_cancelled_certain["state"] = "cancelled_certain"
@@ -2915,8 +3393,7 @@ def build_fixtures() -> dict[str, Any]:
     invalid_failure["code"] = "UNKNOWN_EXTERNAL_CODE"
     invalid_failure_details = deepcopy(valid_failure)
     invalid_failure_details["details"] = [
-        {"name": f"detail-{index}", "value": index}
-        for index in range(33)
+        {"name": f"detail-{index}", "value": index} for index in range(33)
     ]
     broker_context_fixture = {
         "schema_version": "aar.broker-context.v2",
@@ -3332,9 +3809,7 @@ def build_fixtures() -> dict[str, Any]:
             "migration_attestation_digest": (
                 None if state == "prepared" else valid_migration_attestation["attestation_digest"]
             ),
-            "candidate_readback_digest": (
-                None if state == "prepared" else "sha256:" + "a" * 64
-            ),
+            "candidate_readback_digest": (None if state == "prepared" else "sha256:" + "a" * 64),
             "post_snapshot_barrier_digest": barrier_digest,
             "decision_digest": decision_digest,
         }
@@ -3513,27 +3988,107 @@ def build_fixtures() -> dict[str, Any]:
             "schema_version": "aar.sdd-fixture-index.v1",
             "fixtures": [
                 {"path": "valid-route-catalog.json", "schema_valid": True, "profile_valid": True},
-                {"path": "valid-workbench-execute.json", "schema_valid": True, "profile_valid": True},
-                {"path": "invalid-caller-start-only-false.json", "schema_valid": False, "profile_valid": False},
-                {"path": "invalid-job-supplied-grants.json", "schema_valid": False, "profile_valid": False},
-                {"path": "invalid-route-missing-profile-digest.json", "schema_valid": False, "profile_valid": False},
-                {"path": "invalid-route-fallback-explicit.json", "schema_valid": False, "profile_valid": False},
-                {"path": "invalid-planner-schema-override.json", "schema_valid": False, "profile_valid": False},
-                {"path": "invalid-remote-schema-ref.json", "schema_valid": True, "profile_valid": False},
-                {"path": "valid-schema-portable-pattern.json", "schema_valid": True, "profile_valid": True},
-                {"path": "invalid-schema-format.json", "schema_valid": True, "profile_valid": False},
-                {"path": "invalid-schema-pattern-properties.json", "schema_valid": True, "profile_valid": False},
-                {"path": "invalid-schema-missing-local-ref.json", "schema_valid": True, "profile_valid": False},
-                {"path": "invalid-schema-lookbehind.json", "schema_valid": True, "profile_valid": False},
-                {"path": "invalid-schema-python-anchors.json", "schema_valid": True, "profile_valid": False},
-                {"path": "invalid-schema-nested-quantifier.json", "schema_valid": True, "profile_valid": False},
-                {"path": "invalid-schema-possessive-quantifier.json", "schema_valid": True, "profile_valid": False},
-                {"path": "invalid-schema-alternation.json", "schema_valid": True, "profile_valid": False},
-                {"path": "invalid-schema-overlapping-quantified-atoms.json", "schema_valid": True, "profile_valid": False},
-                {"path": "invalid-schema-trailing-end-anchor.json", "schema_valid": True, "profile_valid": False},
-                {"path": "invalid-schema-ecmascript-identity-escape.json", "schema_valid": True, "profile_valid": False},
+                {
+                    "path": "valid-workbench-execute.json",
+                    "schema_valid": True,
+                    "profile_valid": True,
+                },
+                {
+                    "path": "invalid-caller-start-only-false.json",
+                    "schema_valid": False,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-job-supplied-grants.json",
+                    "schema_valid": False,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-route-missing-profile-digest.json",
+                    "schema_valid": False,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-route-fallback-explicit.json",
+                    "schema_valid": False,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-planner-schema-override.json",
+                    "schema_valid": False,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-remote-schema-ref.json",
+                    "schema_valid": True,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "valid-schema-portable-pattern.json",
+                    "schema_valid": True,
+                    "profile_valid": True,
+                },
+                {
+                    "path": "invalid-schema-format.json",
+                    "schema_valid": True,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-schema-pattern-properties.json",
+                    "schema_valid": True,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-schema-missing-local-ref.json",
+                    "schema_valid": True,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-schema-lookbehind.json",
+                    "schema_valid": True,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-schema-python-anchors.json",
+                    "schema_valid": True,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-schema-nested-quantifier.json",
+                    "schema_valid": True,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-schema-possessive-quantifier.json",
+                    "schema_valid": True,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-schema-alternation.json",
+                    "schema_valid": True,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-schema-overlapping-quantified-atoms.json",
+                    "schema_valid": True,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-schema-trailing-end-anchor.json",
+                    "schema_valid": True,
+                    "profile_valid": False,
+                },
+                {
+                    "path": "invalid-schema-ecmascript-identity-escape.json",
+                    "schema_valid": True,
+                    "profile_valid": False,
+                },
                 {"path": "invalid-schema-depth.json", "schema_valid": True, "profile_valid": False},
-                {"path": "invalid-schema-instance-limit.json", "schema_valid": False, "profile_valid": False},
+                {
+                    "path": "invalid-schema-instance-limit.json",
+                    "schema_valid": False,
+                    "profile_valid": False,
+                },
             ],
         },
     }
@@ -3577,22 +4132,21 @@ def main() -> int:
     for item in fixture_index["fixtures"]:
         if item["path"] == "valid-route-catalog.json":
             continue
-        structural_valid = not list(
-            execute_validator.iter_errors(fixtures[item["path"]])
-        )
+        structural_valid = not list(execute_validator.iter_errors(fixtures[item["path"]]))
         if structural_valid is not item["schema_valid"]:
-            raise ValueError(
-                f"fixture structural expectation mismatch: {item['path']}"
-            )
+            raise ValueError(f"fixture structural expectation mismatch: {item['path']}")
 
     file_entries = []
     generated_paths = [
-        *(path for path in sorted(CONTRACTS.glob("*.json")) if path.name != "contract-manifest.json"),
+        *(
+            path
+            for path in sorted(CONTRACTS.glob("*.json"))
+            if path.name != "contract-manifest.json"
+        ),
         *(
             path
             for path in sorted(FIXTURES.iterdir())
-            if path.is_file()
-            and path.name != "registry-v5-migration-verification.json"
+            if path.is_file() and path.name != "registry-v5-migration-verification.json"
         ),
         ROOT / "fault-matrix.json",
         ROOT / "migration-v6.sql",
@@ -3609,14 +4163,16 @@ def main() -> int:
     manifest_payload = {
         "schema_version": "aar.sdd-contract-manifest.v1",
         "generator": "generate_contracts.py",
-        "generator_sha256": "sha256:"
-        + hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "generator_sha256": "sha256:" + hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "json_schema_profile": "aar.json-schema-profile.v1",
         "files": file_entries,
     }
-    manifest_payload["manifest_digest"] = "sha256:" + hashlib.sha256(
-        json.dumps(manifest_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
+    manifest_payload["manifest_digest"] = (
+        "sha256:"
+        + hashlib.sha256(
+            json.dumps(manifest_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+    )
     write_json(CONTRACTS / "contract-manifest.json", manifest_payload)
     print(
         json.dumps(

@@ -51,7 +51,7 @@ def test_profile_contract_binds_runtime_configs_and_skill() -> None:
     )
     assert contract["package"]["python_requires"] == ">=3.11,<3.15"
     assert contract["operation_skill"]["digest"] == metadata["skill_digest"]
-    assert contract["operation_skill"]["version"] == "0.9.6"
+    assert contract["operation_skill"]["version"] == "0.10.0"
     for host in ("codex", "hermes"):
         profile = contract["profiles"][host]
         content = (ROOT / profile["bundle"] / profile["config_file"]).read_bytes()
@@ -61,11 +61,10 @@ def test_profile_contract_binds_runtime_configs_and_skill() -> None:
 def test_codex_plugin_uses_single_development_cachebuster() -> None:
     manifest = json.loads(
         (
-            ROOT
-            / "profiles/codex/plugins/adaptive-agent-runtime/.codex-plugin/plugin.json"
+            ROOT / "profiles/codex/plugins/adaptive-agent-runtime/.codex-plugin/plugin.json"
         ).read_text(encoding="utf-8")
     )
-    assert manifest["version"].startswith("0.4.0+codex.")
+    assert manifest["version"].startswith("0.5.0-a0+codex.")
     assert manifest["version"].count("+codex.") == 1
     interface_text = json.dumps(manifest["interface"]).lower()
     assert "tool use or analysis" in interface_text
@@ -75,8 +74,7 @@ def test_codex_plugin_uses_single_development_cachebuster() -> None:
 def test_codex_plugin_default_prompts_fit_host_limit() -> None:
     manifest = json.loads(
         (
-            ROOT
-            / "profiles/codex/plugins/adaptive-agent-runtime/.codex-plugin/plugin.json"
+            ROOT / "profiles/codex/plugins/adaptive-agent-runtime/.codex-plugin/plugin.json"
         ).read_text(encoding="utf-8")
     )
     prompts = manifest["interface"]["defaultPrompt"]
@@ -95,7 +93,7 @@ def test_codex_profile_uses_package_exported_host_launcher() -> None:
 
 def test_hermes_distribution_tracks_current_profile_release() -> None:
     distribution = (ROOT / HERMES_ROOT / "distribution.yaml").read_text(encoding="utf-8")
-    assert "version: 0.4.0\n" in distribution
+    assert "version: 0.5.0a0\n" in distribution
 
 
 def test_hermes_runtime_config_and_review_map_are_equivalent() -> None:

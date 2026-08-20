@@ -1,5 +1,7 @@
 <div align="center">
 
+> **`0.5.0a0`** public alpha · [`phenomenoner/adaptive-agent-harness@v0.5.0a0`](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0)
+
 # Adaptive Agent Harness
 
 ### Dai agli agenti un banco di lavoro — non solo un prompt più grande.
@@ -7,8 +9,8 @@
 **RLM composto dall’host + IPython persistente + operazioni durevoli + autorità dell’host**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.4.0a6-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6)
+[![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
+[![Release](https://img.shields.io/badge/release-v0.5.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#stato-del-progetto)
 
@@ -190,7 +192,7 @@ Vedi [Perché RLM + IPython](../../docs/WHY-RLM-AND-IPYTHON.md) per la motivazio
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a6"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.5.0a0"
 ```
 
 ### Configurazione di Codex App
@@ -257,20 +259,20 @@ Il frontend MCP è intenzionalmente sostituibile. Non possiede il database della
 
 ## Stato del progetto
 
-Alfa pubblica attuale: **`0.4.0a6`**.
+Alfa pubblica attuale: **`0.5.0a0`**.
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.4.0a6` receipt-backed model routing, current verification, and exact release
-> boundaries, read the canonical English [release notes](../RELEASE-v0.4.0a6.md) and
+> context. For `v0.5.0a0` receipt-backed model routing, current verification, and exact release
+> boundaries, read the canonical English [release notes](../RELEASE-v0.5.0a0.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
 
-Riprodotto da questo candidato pubblico:
+Current `v0.5.0a0` public release evidence:
 
 - copertura da Python 3.11 a 3.14;
-- superficie MCP v7 con 30 strumenti;
+- 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - schema SQLite additivo fino a v5;
-- esecuzione completa del repository: **249 superati, 1 saltato per vincolo di piattaforma**;
+- full repository run: **743 passed, 5 platform-gated skips, 1 existing MCP Sampling deprecation warning**;
 - un probe pulito del supervisore/frontend con wheel esatto su Linux/WSL;
 - supervisore durevole, sostituzione del frontend, perdita di processo, writer obsoleto, riutilizzo delle ricevute e scenari di successori RLM vincolati da policy;
 

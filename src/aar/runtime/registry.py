@@ -10,7 +10,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.continuity_models import (
@@ -29,6 +29,7 @@ from aar.continuity_models import (
     OperationWorkspaceCheckpointBoundaryV1,
     OperationWorkspaceCheckpointSelectionV1,
 )
+from aar.rlm_workbench_models import CallerWorkTicket
 from aar.runtime.models import OperationEvent, OperationRecord
 from aar.runtime.workspace_models import (
     ProgrammableWorkspaceHandle,
@@ -43,6 +44,16 @@ from aar.schemas import (
     OutcomeCertainty,
     RequestEnvelope,
 )
+
+
+class CallerTicketWriter(Protocol):
+    """Narrow same-transaction ticket projection seam used by workbench TX-C."""
+
+    def create_ticket_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        ticket: CallerWorkTicket,
+    ) -> CallerWorkTicket: ...
 
 
 @dataclass(frozen=True)
@@ -130,7 +141,11 @@ SCHEMA_VERSION_CONTINUITY = 2
 SCHEMA_VERSION_SUPERVISOR = 3
 SCHEMA_VERSION_RECOVERY_POLICY = 4
 SCHEMA_VERSION_WORKSPACE_RECOVERY = 5
-SCHEMA_VERSION_CURRENT = SCHEMA_VERSION_WORKSPACE_RECOVERY
+SCHEMA_VERSION_RLM_WORKBENCH = 6
+SCHEMA_VERSION_CURRENT = SCHEMA_VERSION_RLM_WORKBENCH
+REGISTRY_V6_MIGRATION_DIGEST = (
+    "sha256:8e7080b319aadb4eb98b5e3b9e12efe8c189c0bd12a82dc8ba1eea7c7bfe29b7"
+)
 DEFAULT_EVENT_PAGE_LIMIT = 100
 MAX_EVENT_PAGE_LIMIT = 500
 DEFAULT_EVENT_PAGE_BYTES = 64 * 1024
@@ -141,13 +156,11 @@ _DISPATCH_RUNNING = "running"
 _DISPATCH_PARKED = "parked"
 _DISPATCH_COMPLETED = "completed"
 _DURABLE_DISPATCH_KINDS = frozenset(
-    {"rlm.execute", "workspace.program.execute"}
+    {"rlm.execute", "rlm.workbench.execute", "workspace.program.execute"}
 )
 _RECOVERY_START_SUCCESSOR = "start_successor"
 _RECOVERY_RESTORE_CHECKPOINT = "restore_checkpoint"
-_RECOVERY_SUCCESSOR_DECISIONS = frozenset(
-    {_RECOVERY_START_SUCCESSOR, _RECOVERY_RESTORE_CHECKPOINT}
-)
+_RECOVERY_SUCCESSOR_DECISIONS = frozenset({_RECOVERY_START_SUCCESSOR, _RECOVERY_RESTORE_CHECKPOINT})
 _RECOVERY_DECISIONS = frozenset(
     {
         "needs_user",
@@ -201,7 +214,6 @@ def _decision_value(value: Any) -> str:
     return str(normalized)
 
 
-
 def _operation_ref(value: Any) -> OperationRef:
     if isinstance(value, OperationRef):
         return value
@@ -241,6 +253,15 @@ class OperationRegistry:
         except Exception:
             self._connection.close()
             raise
+
+    def supports_rlm_workbench(self) -> bool:
+        """Return whether the reviewed offline v6 cutover is present."""
+
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT MAX(version) AS version FROM schema_migrations"
+            ).fetchone()
+            return row is not None and int(row["version"] or 0) >= SCHEMA_VERSION_RLM_WORKBENCH
 
     def _table_exists(self, table_name: str) -> bool:
         row = self._connection.execute(
@@ -321,6 +342,9 @@ class OperationRegistry:
                 self._apply_v5_schema()
                 if current_version < SCHEMA_VERSION_WORKSPACE_RECOVERY:
                     self._insert_schema_version(SCHEMA_VERSION_WORKSPACE_RECOVERY)
+                    current_version = SCHEMA_VERSION_WORKSPACE_RECOVERY
+                if current_version >= SCHEMA_VERSION_RLM_WORKBENCH:
+                    self._validate_v6_schema()
 
                 self._connection.commit()
             except Exception:
@@ -376,12 +400,45 @@ class OperationRegistry:
 
     @staticmethod
     def _migration_digest(version: int) -> str:
+        if version == SCHEMA_VERSION_RLM_WORKBENCH:
+            return REGISTRY_V6_MIGRATION_DIGEST
         return canonical_sha256(
             {
                 "registry": "aar.runtime.registry",
                 "version": version,
             }
         )
+
+    def _validate_v6_schema(self) -> None:
+        required_tables = {
+            "caller_work_candidate_receipts",
+            "caller_work_command_receipts",
+            "caller_work_tickets",
+            "migration_v6_attestations",
+            "operation_controls",
+            "rlm_workbench_cells",
+            "rlm_workbench_finalization_manifests",
+            "rlm_workbench_jobs",
+            "rlm_workbench_suspensions",
+        }
+        missing = sorted(table for table in required_tables if not self._table_exists(table))
+        if missing:
+            raise UnsupportedRegistrySchema(
+                "registry v6 is missing required tables: " + ", ".join(missing)
+            )
+        attestation = self._connection.execute(
+            """
+            SELECT migration_sql_digest FROM migration_v6_attestations
+            WHERE migration_version = 6
+            """
+        ).fetchone()
+        if (
+            attestation is None
+            or str(attestation["migration_sql_digest"]) != REGISTRY_V6_MIGRATION_DIGEST
+        ):
+            raise UnsupportedRegistrySchema(
+                "registry v6 has no matching reviewed migration attestation"
+            )
 
     def _insert_schema_version(self, version: int) -> None:
         digest = self._migration_digest(version)
@@ -553,7 +610,6 @@ class OperationRegistry:
             """
         )
 
-
     def _apply_v4_schema(self) -> None:
         decision_columns = self._column_names("operation_recovery_decisions")
         for name, declaration in (
@@ -651,7 +707,6 @@ class OperationRegistry:
                 ON operation_workspace_checkpoint_selections(state, operation_id);
             """
         )
-
 
     def schema_versions(self) -> tuple[int, ...]:
         """Return the applied registry migration versions without mutating the database."""
@@ -852,9 +907,7 @@ class OperationRegistry:
             ):
                 raise StaleAttemptFence("worker binding fence is stale")
             sequence = (
-                binding.last_event_sequence
-                if last_event_sequence is None
-                else last_event_sequence
+                binding.last_event_sequence if last_event_sequence is None else last_event_sequence
             )
             if sequence < binding.last_event_sequence:
                 raise StaleAttemptFence("worker event sequence cannot move backwards")
@@ -958,9 +1011,7 @@ class OperationRegistry:
                 None if row["ready_at_unix_ms"] is None else int(row["ready_at_unix_ms"])
             ),
             draining_at_unix_ms=(
-                None
-                if row["draining_at_unix_ms"] is None
-                else int(row["draining_at_unix_ms"])
+                None if row["draining_at_unix_ms"] is None else int(row["draining_at_unix_ms"])
             ),
             stopped_at_unix_ms=(
                 None if row["stopped_at_unix_ms"] is None else int(row["stopped_at_unix_ms"])
@@ -1251,9 +1302,7 @@ class OperationRegistry:
                 or dispatch_exists is not None
                 or attempt_exists is not None
             ):
-                raise InvalidTransition(
-                    "recovery policy must be bound before durable dispatch"
-                )
+                raise InvalidTransition("recovery policy must be bound before durable dispatch")
 
             now = self._now_ms()
             self._connection.execute(
@@ -1581,8 +1630,7 @@ class OperationRegistry:
                 attempt_row is None
                 or str(attempt_row["attempt_id"]) != selection.prior_attempt.attempt_id
                 or int(attempt_row["runtime_generation"]) != selection.runtime_generation
-                or int(attempt_row["dispatcher_generation"])
-                != selection.dispatcher_generation
+                or int(attempt_row["dispatcher_generation"]) != selection.dispatcher_generation
             ):
                 raise StaleAttemptFence("checkpoint selection attempt fence is stale")
             dispatch = self._connection.execute(
@@ -1618,9 +1666,7 @@ class OperationRegistry:
                 or policy.environment_digest != selection.environment_digest
             ):
                 raise IdempotencyConflict("checkpoint selection policy binding is stale")
-            manifest = self.workspace_checkpoint_manifest(
-                selection.checkpoint_manifest_digest
-            )
+            manifest = self.workspace_checkpoint_manifest(selection.checkpoint_manifest_digest)
             if manifest is None:
                 raise InvalidTransition("selected checkpoint is not in the durable catalog")
             if (
@@ -2015,9 +2061,7 @@ class OperationRegistry:
             )
             return self.get(operation)
 
-    def request_dispatch(
-        self, operation: OperationRef, kind: str = "rlm.execute"
-    ) -> Any:
+    def request_dispatch(self, operation: OperationRef, kind: str = "rlm.execute") -> Any:
         """Durably enqueue an accepted operation without claiming it."""
 
         if kind not in _DURABLE_DISPATCH_KINDS:
@@ -2078,6 +2122,224 @@ class OperationRegistry:
             ).fetchone()
             assert current is not None
             return self._dispatch_model(operation, current)
+
+    def _prepare_workbench_successor_unlocked(
+        self,
+        *,
+        operation_id: str,
+        successor_attempt_id: str,
+        successor_attempt_no: int,
+        dispatcher_generation: int,
+        lease_epoch: int,
+        owner_digest: str,
+        now: int,
+    ) -> str:
+        rows = self._connection.execute(
+            """
+            SELECT
+                outbox.suspension_revision,
+                outbox.settlement_digest,
+                outbox.outbox_digest,
+                outbox.rebind_generation,
+                suspension.ticket_id,
+                suspension.checkpoint_digest,
+                suspension.cell_execution_id,
+                suspension.state AS suspension_state,
+                job.phase AS job_phase,
+                job.control_revision AS job_control_revision,
+                job.cancellation_revision,
+                job.cumulative_deadline_unix_ms,
+                control.control_revision AS operation_control_revision,
+                control.cancellation_requested,
+                authority.attempt_id AS prior_attempt_id,
+                authority.attempt_fence AS prior_attempt_fence,
+                authority.authority_generation AS prior_authority_generation,
+                authority.worker_owner_generation,
+                authority.worker_process_identity_digest,
+                authority.workspace_id,
+                authority.workspace_generation,
+                authority.workspace_revision,
+                authority.cell_execution_id AS authority_cell_execution_id
+            FROM rlm_workbench_successor_outbox AS outbox
+            JOIN rlm_workbench_suspensions AS suspension
+              ON suspension.operation_id = outbox.operation_id
+             AND suspension.suspension_revision = outbox.suspension_revision
+            JOIN rlm_workbench_jobs AS job
+              ON job.operation_id = outbox.operation_id
+            JOIN operation_controls AS control
+              ON control.operation_id = outbox.operation_id
+            JOIN rlm_workbench_attempt_authority AS authority
+              ON authority.operation_id = outbox.operation_id
+            WHERE outbox.operation_id = ? AND outbox.state = 'pending'
+            """,
+            (operation_id,),
+        ).fetchall()
+        if len(rows) != 1:
+            raise InvalidTransition("workbench successor claim requires exactly one pending outbox")
+        row = rows[0]
+        if (
+            str(row["job_phase"]) != "accepted"
+            or str(row["suspension_state"]) not in {"settled", "cancelled"}
+            or int(row["job_control_revision"]) != int(row["operation_control_revision"])
+            or bool(row["cancellation_requested"])
+            or str(row["cell_execution_id"]) != str(row["authority_cell_execution_id"])
+        ):
+            raise InvalidTransition("workbench successor control authority is stale")
+        deadline = int(row["cumulative_deadline_unix_ms"])
+        if now >= deadline:
+            raise InvalidTransition("workbench successor token deadline has expired")
+        prior_attempt = self._connection.execute(
+            "SELECT state FROM operation_attempts WHERE operation_id = ? AND attempt_id = ?",
+            (operation_id, row["prior_attempt_id"]),
+        ).fetchone()
+        if prior_attempt is None or str(prior_attempt["state"]) != "suspended_external":
+            raise StaleAttemptFence("workbench predecessor attempt is not suspended")
+        active_prior_lease = self._connection.execute(
+            """
+            SELECT 1 FROM operation_leases AS lease
+            JOIN operation_attempts AS attempt
+              ON attempt.operation_id = lease.operation_id
+             AND attempt.attempt_no = lease.attempt_no
+            WHERE attempt.operation_id = ? AND attempt.attempt_id = ?
+              AND lease.released_at_unix_ms IS NULL
+            """,
+            (operation_id, row["prior_attempt_id"]),
+        ).fetchone()
+        if active_prior_lease is not None:
+            raise StaleAttemptFence("workbench predecessor still owns a lease")
+        ticket = self._connection.execute(
+            """
+            SELECT state, settled_receipt_digest FROM caller_work_tickets
+            WHERE ticket_id = ? AND operation_id = ? AND suspension_revision = ?
+            """,
+            (row["ticket_id"], operation_id, row["suspension_revision"]),
+        ).fetchone()
+        if (
+            ticket is None
+            or str(ticket["state"])
+            not in {"settled_success", "settled_failure", "cancelled_certain"}
+            or str(ticket["settled_receipt_digest"]) != str(row["settlement_digest"])
+        ):
+            raise InvalidTransition("workbench successor settlement binding is stale")
+
+        rebind_generation = int(row["rebind_generation"]) + 1
+        prior_authority_generation = int(row["prior_authority_generation"])
+        successor_authority_generation = prior_authority_generation + 1
+        successor_attempt_fence = canonical_sha256(
+            {
+                "dispatcher_generation": dispatcher_generation,
+                "lease_epoch": lease_epoch,
+                "owner_digest": owner_digest,
+            }
+        )
+        token_material = {
+            "schema_version": "aar.workspace-successor-rebind.v1",
+            "operation": {"type": "operation", "value": operation_id},
+            "rebind_generation": rebind_generation,
+            "prior_authority_generation": prior_authority_generation,
+            "successor_authority_generation": successor_authority_generation,
+            "expected_control_revision": int(row["job_control_revision"]),
+            "expected_cancellation_revision": int(row["cancellation_revision"]),
+            "expected_cumulative_deadline_unix_ms": deadline,
+            "prior_attempt_id": str(row["prior_attempt_id"]),
+            "prior_attempt_fence": str(row["prior_attempt_fence"]),
+            "successor_attempt_id": successor_attempt_id,
+            "successor_attempt_fence": successor_attempt_fence,
+            "workspace": {"type": "workspace", "value": str(row["workspace_id"])},
+            "workspace_generation": int(row["workspace_generation"]),
+            "workspace_revision": int(row["workspace_revision"]),
+            "cell_execution_id": str(row["cell_execution_id"]),
+            "suspension_revision": int(row["suspension_revision"]),
+            "ticket_id": str(row["ticket_id"]),
+            "settled_receipt_digest": str(row["settlement_digest"]),
+            "successor_outbox_digest": str(row["outbox_digest"]),
+            "worker_owner_generation": int(row["worker_owner_generation"]),
+            "worker_process_identity_digest": str(row["worker_process_identity_digest"]),
+            "expires_at_unix_ms": deadline,
+            "single_use": True,
+        }
+        token_digest = canonical_sha256(token_material)
+        self._connection.execute(
+            """
+            INSERT INTO rlm_workbench_rebind_transfers(
+                token_digest, operation_id, suspension_revision,
+                settlement_digest, outbox_digest, rebind_generation,
+                prior_authority_generation, successor_authority_generation,
+                expected_control_revision, expected_cancellation_revision,
+                expected_cumulative_deadline_unix_ms,
+                prior_attempt_id, prior_attempt_fence,
+                successor_attempt_id, successor_attempt_fence,
+                worker_owner_generation, worker_process_identity_digest,
+                workspace_id, workspace_generation, workspace_revision,
+                cell_execution_id, expires_at_unix_ms, state,
+                prepared_at_unix_ms
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                      'prepared', ?)
+            """,
+            (
+                token_digest,
+                operation_id,
+                row["suspension_revision"],
+                row["settlement_digest"],
+                row["outbox_digest"],
+                rebind_generation,
+                prior_authority_generation,
+                successor_authority_generation,
+                row["job_control_revision"],
+                row["cancellation_revision"],
+                deadline,
+                row["prior_attempt_id"],
+                row["prior_attempt_fence"],
+                successor_attempt_id,
+                successor_attempt_fence,
+                row["worker_owner_generation"],
+                row["worker_process_identity_digest"],
+                row["workspace_id"],
+                row["workspace_generation"],
+                row["workspace_revision"],
+                row["cell_execution_id"],
+                deadline,
+                now,
+            ),
+        )
+        self._connection.execute(
+            """
+            UPDATE rlm_workbench_successor_outbox
+            SET state = 'prepared', rebind_generation = ?,
+                successor_attempt_id = ?, successor_attempt_fence = ?,
+                prepared_at_unix_ms = ?
+            WHERE operation_id = ? AND suspension_revision = ?
+              AND state = 'pending' AND rebind_generation = ?
+            """,
+            (
+                rebind_generation,
+                successor_attempt_id,
+                successor_attempt_fence,
+                now,
+                operation_id,
+                row["suspension_revision"],
+                rebind_generation - 1,
+            ),
+        )
+        if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+            raise StaleAttemptFence("workbench successor outbox changed during prepare")
+        self._connection.execute(
+            """
+            UPDATE operation_attempts
+            SET checkpoint_digest = ?
+            WHERE operation_id = ? AND attempt_no = ? AND attempt_id = ?
+              AND state = 'running'
+            """,
+            (
+                row["checkpoint_digest"],
+                operation_id,
+                successor_attempt_no,
+                successor_attempt_id,
+            ),
+        )
+        if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+            raise StaleAttemptFence("workbench successor attempt changed during prepare")
+        return token_digest
 
     def claim_next(
         self,
@@ -2179,6 +2441,40 @@ class OperationRegistry:
                         expires,
                     ),
                 )
+                successor_token_digest: str | None = None
+                if str(candidate["dispatch_kind"]) == "rlm.workbench.execute" and attempt_no > 1:
+                    recovery_pending = self._connection.execute(
+                        """
+                        SELECT 1
+                        FROM rlm_workbench_rebind_transfers AS transfer
+                        JOIN rlm_workbench_cells AS cell
+                          ON cell.operation_id = transfer.operation_id
+                         AND cell.cell_execution_id = transfer.cell_execution_id
+                        WHERE transfer.operation_id = ?
+                          AND (
+                            (transfer.state = 'consumed'
+                             AND transfer.consumption_kind = 'recovery_fenced_loss')
+                            OR transfer.state = 'aborted'
+                          )
+                          AND cell.state = 'lost_before_commit'
+                          AND NOT EXISTS (
+                            SELECT 1 FROM rlm_workbench_cells AS later
+                            WHERE later.operation_id = cell.operation_id
+                              AND later.cell_index > cell.cell_index
+                          )
+                        """,
+                        (operation_id,),
+                    ).fetchone()
+                    if recovery_pending is None:
+                        successor_token_digest = self._prepare_workbench_successor_unlocked(
+                            operation_id=operation_id,
+                            successor_attempt_id=attempt_id,
+                            successor_attempt_no=attempt_no,
+                            dispatcher_generation=dispatcher_generation,
+                            lease_epoch=lease_epoch,
+                            owner_digest=str(owner_digest),
+                            now=now,
+                        )
                 revision = int(candidate["record_revision"]) + 1
                 self._connection.execute(
                     """
@@ -2252,6 +2548,11 @@ class OperationRegistry:
                         "dispatcher_generation": dispatcher_generation,
                         "lease_epoch": lease_epoch,
                         "runtime_generation": runtime_generation,
+                        **(
+                            {"successor_rebind_token_digest": successor_token_digest}
+                            if successor_token_digest is not None
+                            else {}
+                        ),
                     },
                 )
                 attempt_ref = OperationAttemptRefV1(
@@ -2402,15 +2703,36 @@ class OperationRegistry:
                 "SELECT * FROM operation_dispatch WHERE operation_id = ?",
                 (operation.value,),
             ).fetchone()
+            now = self._now_ms()
+            prior_attempt_is_quiescent = True
+            if dispatch is not None and dispatch["current_attempt_no"] is not None:
+                attempt = self._connection.execute(
+                    "SELECT state FROM operation_attempts "
+                    "WHERE operation_id = ? AND attempt_no = ?",
+                    (operation.value, int(dispatch["current_attempt_no"])),
+                ).fetchone()
+                live_lease = self._connection.execute(
+                    """
+                    SELECT 1 FROM operation_leases
+                    WHERE operation_id = ? AND attempt_no = ?
+                      AND released_at_unix_ms IS NULL AND expires_at_unix_ms > ?
+                    LIMIT 1
+                    """,
+                    (operation.value, int(dispatch["current_attempt_no"]), now),
+                ).fetchone()
+                prior_attempt_is_quiescent = bool(
+                    attempt is not None
+                    and str(attempt["state"]) != OperationState.RUNNING.value
+                    and live_lease is None
+                )
             if (
                 OperationState(row["state"]) is not OperationState.ACCEPTED
                 or dispatch is None
-                or str(dispatch["state"]) != _DISPATCH_QUEUED
-                or dispatch["current_attempt_no"] is not None
+                or str(dispatch["state"]) not in {_DISPATCH_QUEUED, _DISPATCH_PARKED}
+                or not prior_attempt_is_quiescent
             ):
                 return self._record(row), False
             revision = int(row["record_revision"]) + 1
-            now = self._now_ms()
             self._connection.execute(
                 """
                 UPDATE operations
@@ -2435,15 +2757,104 @@ class OperationRegistry:
                 """
                 UPDATE operation_dispatch
                 SET state = ?, finished_at_unix_ms = ?
-                WHERE operation_id = ? AND state = ? AND current_attempt_no IS NULL
+                WHERE operation_id = ? AND state IN (?, ?)
                 """,
                 (
                     _DISPATCH_COMPLETED,
                     now,
                     operation.value,
                     _DISPATCH_QUEUED,
+                    _DISPATCH_PARKED,
                 ),
             )
+            if str(dispatch["kind"]) == "rlm.workbench.execute":
+                control = self._connection.execute(
+                    "SELECT control_revision, cancellation_requested, reason_code "
+                    "FROM operation_controls WHERE operation_id = ?",
+                    (operation.value,),
+                ).fetchone()
+                job = self._connection.execute(
+                    "SELECT cancellation_revision FROM rlm_workbench_jobs WHERE operation_id = ?",
+                    (operation.value,),
+                ).fetchone()
+                if control is None or not bool(control["cancellation_requested"]) or job is None:
+                    raise InvalidTransition("workbench cancellation authority is absent")
+                cancellation_failure_json = canonical_json_bytes(
+                    {
+                        "schema_version": "aar.envelope.v1",
+                        "category": "cancelled",
+                        "code": "CONFLICT",
+                        "message": "operation cancellation completed before successor claim",
+                        "retryable": False,
+                        "certainty": "certain",
+                        "operation": operation.model_dump(mode="json"),
+                        "details": [
+                            {
+                                "name": "reason_code",
+                                "value": str(control["reason_code"] or "user_requested"),
+                            }
+                        ],
+                    }
+                ).decode()
+                self._connection.execute(
+                    """
+                    UPDATE rlm_workbench_jobs
+                    SET phase = 'cancelled', control_revision = ?,
+                        cancellation_revision = ?, cancellation_requested = 1,
+                        failure_json = ?, certainty = 'certain', updated_at_unix_ms = ?
+                    WHERE operation_id = ?
+                      AND phase NOT IN ('succeeded', 'failed', 'cancelled', 'timed_out')
+                    """,
+                    (
+                        int(control["control_revision"]),
+                        int(job["cancellation_revision"]) + 1,
+                        cancellation_failure_json,
+                        now,
+                        operation.value,
+                    ),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("workbench cancellation lost its phase CAS")
+                self._connection.execute(
+                    """
+                    UPDATE rlm_workbench_cells
+                    SET state = 'cancelled', updated_at_unix_ms = ?
+                    WHERE operation_id = ? AND state IN ('prepared', 'running', 'suspended')
+                    """,
+                    (now, operation.value),
+                )
+                self._connection.execute(
+                    """
+                    UPDATE rlm_workbench_suspensions
+                    SET state = 'cancelled', settled_at_unix_ms = ?
+                    WHERE operation_id = ? AND state = 'pending'
+                    """,
+                    (now, operation.value),
+                )
+                self._connection.execute(
+                    """
+                    UPDATE rlm_workbench_successor_outbox
+                    SET state = 'consumed', consumed_at_unix_ms = ?
+                    WHERE operation_id = ? AND state = 'prepared'
+                    """,
+                    (now, operation.value),
+                )
+                self._connection.execute(
+                    """
+                    UPDATE rlm_workbench_rebind_transfers
+                    SET state = 'aborted', aborted_at_unix_ms = ?
+                    WHERE operation_id = ? AND state = 'prepared'
+                    """,
+                    (now, operation.value),
+                )
+                self._connection.execute(
+                    """
+                    UPDATE rlm_workbench_artifact_stages
+                    SET state = 'discarded', updated_at_unix_ms = ?
+                    WHERE operation_id = ? AND state = 'staged'
+                    """,
+                    (now, operation.value),
+                )
             self._insert_event(
                 operation.value,
                 OperationState.CANCELLED,
@@ -2498,9 +2909,7 @@ class OperationRegistry:
                 raise StaleAttemptFence("outer operation is no longer running")
             revision = int(row["record_revision"]) + 1
             now = self._now_ms()
-            failure_json = (
-                None if failure is None else canonical_json_bytes(failure).decode()
-            )
+            failure_json = None if failure is None else canonical_json_bytes(failure).decode()
             self._connection.execute(
                 """
                 UPDATE operations
@@ -2552,9 +2961,7 @@ class OperationRegistry:
                 (now, operation.value, attempt_no, lease_epoch),
             )
             dispatch_state = (
-                _DISPATCH_PARKED
-                if state is OperationState.INDETERMINATE
-                else _DISPATCH_COMPLETED
+                _DISPATCH_PARKED if state is OperationState.INDETERMINATE else _DISPATCH_COMPLETED
             )
             self._connection.execute(
                 """
@@ -2609,8 +3016,7 @@ class OperationRegistry:
                 owner_digest,
             )
             outer = self._connection.execute(
-                "SELECT state, certainty, record_revision FROM operations "
-                "WHERE operation_id = ?",
+                "SELECT state, certainty, record_revision FROM operations WHERE operation_id = ?",
                 (operation.value,),
             ).fetchone()
             assert outer is not None
@@ -2749,6 +3155,1000 @@ class OperationRegistry:
             note=note,
         )
 
+    def suspend_workbench_attempt(
+        self,
+        attempt_ref: OperationAttemptRefV1,
+        dispatcher_generation: int,
+        lease_epoch: int,
+        owner_digest: str,
+        *,
+        attempt_fence: str,
+        cell_execution_id: str,
+        pre_checkpoint_digest: str,
+        ticket: CallerWorkTicket,
+        ticket_writer: CallerTicketWriter,
+    ) -> OperationRecord:
+        """Commit workbench TX-C and release one caller-wait predecessor attempt."""
+
+        with self._lock, self._connection:
+            operation, attempt_no, attempt_id = _attempt_identity(attempt_ref)
+            ticket_document = dict(ticket.root)
+            ticket_operation = OperationRef.model_validate(
+                ticket_document["operation"], strict=True
+            )
+            if ticket_operation != operation:
+                raise InvalidTransition("caller ticket operation does not match the attempt")
+            runtime_generation = self._current_runtime_generation_unlocked()
+            attempt, _lease = self._validate_fence_unlocked(
+                operation,
+                attempt_no,
+                attempt_id,
+                runtime_generation,
+                dispatcher_generation,
+                lease_epoch,
+                owner_digest,
+            )
+            outer = self._connection.execute(
+                "SELECT * FROM operations WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            job = self._connection.execute(
+                "SELECT * FROM rlm_workbench_jobs WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            control = self._connection.execute(
+                "SELECT * FROM operation_controls WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            cell = self._connection.execute(
+                "SELECT * FROM rlm_workbench_cells "
+                "WHERE operation_id = ? AND cell_execution_id = ?",
+                (operation.value, cell_execution_id),
+            ).fetchone()
+            authority = self._connection.execute(
+                "SELECT * FROM rlm_workbench_attempt_authority WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            dispatch = self._connection.execute(
+                "SELECT * FROM operation_dispatch WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            if outer is None or OperationState(outer["state"]) is not OperationState.RUNNING:
+                raise InvalidTransition("workbench suspension requires a running operation")
+            if job is None or str(job["phase"]) != "running":
+                raise InvalidTransition("workbench suspension requires running phase")
+            if control is None or bool(control["cancellation_requested"]):
+                raise InvalidTransition("workbench suspension is fenced by cancellation")
+            if int(job["control_revision"]) != int(control["control_revision"]):
+                raise InvalidTransition("workbench and operation control revisions diverged")
+            if self._now_ms() >= int(job["cumulative_deadline_unix_ms"]):
+                raise InvalidTransition("workbench suspension reached its cumulative deadline")
+            if (
+                cell is None
+                or str(cell["state"]) != "running"
+                or str(cell["attempt_id"]) != attempt_id
+                or str(cell["attempt_fence"]) != attempt_fence
+                or str(cell["pre_checkpoint_digest"]) != pre_checkpoint_digest
+            ):
+                raise StaleAttemptFence("workbench cell suspension fence is stale")
+            if (
+                authority is None
+                or str(authority["attempt_id"]) != attempt_id
+                or str(authority["attempt_fence"]) != attempt_fence
+                or str(authority["cell_execution_id"]) != cell_execution_id
+                or str(authority["workspace_id"]) != str(cell["workspace_id"])
+                or int(authority["workspace_generation"]) != int(cell["workspace_generation"])
+                or int(authority["workspace_revision"]) != int(cell["pre_workspace_revision"])
+            ):
+                raise StaleAttemptFence("workbench attempt authority fence is stale")
+            if (
+                dispatch is None
+                or str(dispatch["state"]) != _DISPATCH_RUNNING
+                or int(dispatch["current_attempt_no"]) != attempt_no
+            ):
+                raise StaleAttemptFence("workbench dispatch suspension fence is stale")
+
+            prior_suspension = self._connection.execute(
+                "SELECT COALESCE(MAX(suspension_revision), 0) AS value "
+                "FROM rlm_workbench_suspensions WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            suspension_revision = int(prior_suspension["value"]) + 1
+            if int(ticket_document["suspension_revision"]) != suspension_revision:
+                raise InvalidTransition("caller ticket suspension revision is stale")
+            prior_control_revision = int(job["control_revision"])
+            next_control_revision = prior_control_revision + 1
+            request = dict(ticket_document["request"])
+            owner = dict(ticket_document["owner"])
+            owner_json = canonical_json_bytes(owner).decode()
+            now = self._now_ms()
+            self._connection.execute(
+                """
+                INSERT INTO rlm_workbench_suspensions(
+                    operation_id, suspension_revision, control_revision,
+                    cell_execution_id, logical_owner_json, logical_owner_digest,
+                    broker_method, contract_id, request_digest, ticket_id,
+                    checkpoint_digest, state, created_at_unix_ms, settled_at_unix_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NULL)
+                """,
+                (
+                    operation.value,
+                    suspension_revision,
+                    next_control_revision,
+                    cell_execution_id,
+                    owner_json,
+                    canonical_sha256(owner),
+                    request["method"],
+                    request["contract_id"],
+                    ticket_document["request_digest"],
+                    ticket_document["ticket_id"],
+                    pre_checkpoint_digest,
+                    now,
+                ),
+            )
+            created = ticket_writer.create_ticket_in_transaction(self._connection, ticket)
+            if created != ticket:
+                raise IdempotencyConflict("caller ticket projection changed during suspension")
+
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_cells
+                SET state = 'suspended', updated_at_unix_ms = ?
+                WHERE operation_id = ? AND cell_execution_id = ?
+                  AND state = 'running' AND attempt_id = ? AND attempt_fence = ?
+                  AND pre_checkpoint_digest = ?
+                """,
+                (
+                    now,
+                    operation.value,
+                    cell_execution_id,
+                    attempt_id,
+                    attempt_fence,
+                    pre_checkpoint_digest,
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("workbench cell changed during suspension")
+
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_jobs
+                SET phase = 'waiting_external', control_revision = ?, updated_at_unix_ms = ?
+                WHERE operation_id = ? AND phase = 'running' AND control_revision = ?
+                """,
+                (
+                    next_control_revision,
+                    now,
+                    operation.value,
+                    prior_control_revision,
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("workbench phase changed during suspension")
+            self._connection.execute(
+                """
+                UPDATE operation_controls
+                SET control_revision = ?
+                WHERE operation_id = ? AND control_revision = ?
+                  AND cancellation_requested = 0
+                """,
+                (next_control_revision, operation.value, prior_control_revision),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("operation control changed during suspension")
+            self._connection.execute(
+                """
+                UPDATE operation_attempts
+                SET state = 'suspended_external', certainty = ?,
+                    recovery_reason = 'caller_work_wait', ended_at_unix_ms = ?
+                WHERE operation_id = ? AND attempt_no = ? AND attempt_id = ?
+                  AND state = ?
+                """,
+                (
+                    OutcomeCertainty.CERTAIN.value,
+                    now,
+                    operation.value,
+                    attempt_no,
+                    attempt_id,
+                    OperationState.RUNNING.value,
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("attempt changed during suspension")
+            self._connection.execute(
+                """
+                UPDATE operation_leases
+                SET released_at_unix_ms = ?
+                WHERE operation_id = ? AND attempt_no = ? AND lease_epoch = ?
+                  AND released_at_unix_ms IS NULL
+                """,
+                (now, operation.value, attempt_no, lease_epoch),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("attempt lease changed during suspension")
+            outer_revision = int(outer["record_revision"]) + 1
+            self._connection.execute(
+                """
+                UPDATE operations
+                SET state = ?, certainty = ?, record_revision = ?,
+                    reconciliation_required = 0, updated_at_unix_ms = ?
+                WHERE operation_id = ? AND state = ? AND record_revision = ?
+                """,
+                (
+                    OperationState.ACCEPTED.value,
+                    OutcomeCertainty.CERTAIN.value,
+                    outer_revision,
+                    now,
+                    operation.value,
+                    OperationState.RUNNING.value,
+                    int(outer["record_revision"]),
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("outer operation changed during suspension")
+            self._connection.execute(
+                """
+                UPDATE operation_dispatch
+                SET state = ?, finished_at_unix_ms = ?
+                WHERE operation_id = ? AND state = ? AND current_attempt_no = ?
+                """,
+                (_DISPATCH_PARKED, now, operation.value, _DISPATCH_RUNNING, attempt_no),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("dispatch changed during suspension")
+            self._insert_event(
+                operation.value,
+                OperationState.ACCEPTED,
+                OutcomeCertainty.CERTAIN,
+                outer_revision,
+                now,
+                "workbench_waiting_external",
+                attempt_no=attempt_no,
+                event_kind="workbench_waiting_external",
+                payload={
+                    "suspension_revision": suspension_revision,
+                    "ticket_id": ticket_document["ticket_id"],
+                    "cell_execution_id": cell_execution_id,
+                },
+            )
+            del attempt
+            return self.get(operation)
+
+    @staticmethod
+    def _workbench_rebind_token_from_row(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "schema_version": "aar.workspace-successor-rebind.v1",
+            "operation": {"type": "operation", "value": str(row["operation_id"])},
+            "rebind_generation": int(row["rebind_generation"]),
+            "prior_authority_generation": int(row["prior_authority_generation"]),
+            "successor_authority_generation": int(row["successor_authority_generation"]),
+            "expected_control_revision": int(row["expected_control_revision"]),
+            "expected_cancellation_revision": int(row["expected_cancellation_revision"]),
+            "expected_cumulative_deadline_unix_ms": int(
+                row["expected_cumulative_deadline_unix_ms"]
+            ),
+            "prior_attempt_id": str(row["prior_attempt_id"]),
+            "prior_attempt_fence": str(row["prior_attempt_fence"]),
+            "successor_attempt_id": str(row["successor_attempt_id"]),
+            "successor_attempt_fence": str(row["successor_attempt_fence"]),
+            "workspace": {"type": "workspace", "value": str(row["workspace_id"])},
+            "workspace_generation": int(row["workspace_generation"]),
+            "workspace_revision": int(row["workspace_revision"]),
+            "cell_execution_id": str(row["cell_execution_id"]),
+            "suspension_revision": int(row["suspension_revision"]),
+            "ticket_id": str(row["ticket_id"]),
+            "settled_receipt_digest": str(row["settlement_digest"]),
+            "successor_outbox_digest": str(row["outbox_digest"]),
+            "worker_owner_generation": int(row["worker_owner_generation"]),
+            "worker_process_identity_digest": str(row["worker_process_identity_digest"]),
+            "expires_at_unix_ms": int(row["expires_at_unix_ms"]),
+            "single_use": True,
+            "token_digest": str(row["token_digest"]),
+        }
+
+    def prepared_workbench_rebind(
+        self,
+        attempt_ref: OperationAttemptRefV1,
+        dispatcher_generation: int,
+        lease_epoch: int,
+        owner_digest: str,
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            operation, attempt_no, attempt_id = _attempt_identity(attempt_ref)
+            runtime_generation = self._current_runtime_generation_unlocked()
+            self._validate_fence_unlocked(
+                operation,
+                attempt_no,
+                attempt_id,
+                runtime_generation,
+                dispatcher_generation,
+                lease_epoch,
+                owner_digest,
+            )
+            row = self._connection.execute(
+                """
+                SELECT transfer.*, suspension.ticket_id
+                FROM rlm_workbench_rebind_transfers AS transfer
+                JOIN rlm_workbench_suspensions AS suspension
+                  ON suspension.operation_id = transfer.operation_id
+                 AND suspension.suspension_revision = transfer.suspension_revision
+                JOIN rlm_workbench_cells AS cell
+                  ON cell.operation_id = transfer.operation_id
+                 AND cell.cell_execution_id = transfer.cell_execution_id
+                WHERE transfer.operation_id = ?
+                  AND transfer.successor_attempt_id = ?
+                  AND (
+                    (transfer.state = 'prepared' AND cell.state = 'suspended')
+                    OR (transfer.state = 'committed' AND cell.state = 'running')
+                    OR (
+                      transfer.state = 'consumed'
+                      AND transfer.consumption_kind = 'worker_ack'
+                      AND cell.state = 'running'
+                    )
+                  )
+                """,
+                (operation.value, attempt_id),
+            ).fetchone()
+            if row is None:
+                return None
+            token = self._workbench_rebind_token_from_row(row)
+            expected_fence = canonical_sha256(
+                {
+                    "dispatcher_generation": dispatcher_generation,
+                    "lease_epoch": lease_epoch,
+                    "owner_digest": owner_digest,
+                }
+            )
+            if token["successor_attempt_fence"] != expected_fence:
+                raise StaleAttemptFence("prepared successor attempt fence is stale")
+            return token
+
+    def commit_workbench_rebind(
+        self,
+        attempt_ref: OperationAttemptRefV1,
+        dispatcher_generation: int,
+        lease_epoch: int,
+        owner_digest: str,
+        *,
+        token_digest: str,
+        worker_owner_generation: int,
+        worker_process_identity_digest: str,
+    ) -> dict[str, Any]:
+        with self._lock, self._connection:
+            operation, attempt_no, attempt_id = _attempt_identity(attempt_ref)
+            runtime_generation = self._current_runtime_generation_unlocked()
+            self._validate_fence_unlocked(
+                operation,
+                attempt_no,
+                attempt_id,
+                runtime_generation,
+                dispatcher_generation,
+                lease_epoch,
+                owner_digest,
+            )
+            row = self._connection.execute(
+                """
+                SELECT transfer.*, suspension.ticket_id,
+                       suspension.state AS suspension_state,
+                       outbox.state AS outbox_state,
+                       job.phase AS job_phase,
+                       job.control_revision AS job_control_revision,
+                       job.cancellation_revision AS job_cancellation_revision,
+                       job.cumulative_deadline_unix_ms,
+                       control.control_revision AS operation_control_revision,
+                       control.cancellation_requested,
+                       authority.attempt_id AS authority_attempt_id,
+                       authority.attempt_fence AS authority_attempt_fence,
+                       authority.authority_generation AS current_authority_generation,
+                       authority.rebind_token_digest AS authority_rebind_token_digest,
+                       authority.worker_owner_generation AS current_worker_owner_generation,
+                       authority.worker_process_identity_digest AS current_worker_identity_digest,
+                       authority.cell_execution_id AS authority_cell_execution_id,
+                       cell.state AS cell_state,
+                       dispatch.state AS dispatch_state,
+                       dispatch.current_attempt_no
+                FROM rlm_workbench_rebind_transfers AS transfer
+                JOIN rlm_workbench_suspensions AS suspension
+                  ON suspension.operation_id = transfer.operation_id
+                 AND suspension.suspension_revision = transfer.suspension_revision
+                JOIN rlm_workbench_successor_outbox AS outbox
+                  ON outbox.operation_id = transfer.operation_id
+                 AND outbox.suspension_revision = transfer.suspension_revision
+                JOIN rlm_workbench_jobs AS job
+                  ON job.operation_id = transfer.operation_id
+                JOIN operation_controls AS control
+                  ON control.operation_id = transfer.operation_id
+                JOIN rlm_workbench_attempt_authority AS authority
+                  ON authority.operation_id = transfer.operation_id
+                JOIN rlm_workbench_cells AS cell
+                  ON cell.operation_id = transfer.operation_id
+                 AND cell.cell_execution_id = transfer.cell_execution_id
+                JOIN operation_dispatch AS dispatch
+                  ON dispatch.operation_id = transfer.operation_id
+                WHERE transfer.token_digest = ? AND transfer.operation_id = ?
+                  AND transfer.successor_attempt_id = ?
+                """,
+                (token_digest, operation.value, attempt_id),
+            ).fetchone()
+            if row is None:
+                raise InvalidTransition("prepared workbench rebind token does not exist")
+            token = self._workbench_rebind_token_from_row(row)
+            now = self._now_ms()
+            rebind_state = str(row["state"])
+            if rebind_state in {"committed", "consumed"}:
+                committed_control_revision = int(row["expected_control_revision"]) + 1
+                if (
+                    (
+                        rebind_state == "consumed"
+                        and (
+                            str(row["consumption_kind"]) != "worker_ack"
+                            or row["ack_digest"] is None
+                        )
+                    )
+                    or str(row["outbox_state"]) != "consumed"
+                    or str(row["job_phase"]) != "running"
+                    or str(row["suspension_state"]) not in {"settled", "cancelled"}
+                    or str(row["cell_state"]) != "running"
+                    or str(row["dispatch_state"]) != _DISPATCH_RUNNING
+                    or int(row["current_attempt_no"]) != attempt_no
+                    or int(row["job_control_revision"]) != committed_control_revision
+                    or int(row["operation_control_revision"]) != committed_control_revision
+                    or int(row["job_cancellation_revision"])
+                    != int(row["expected_cancellation_revision"])
+                    or bool(row["cancellation_requested"])
+                    or int(row["cumulative_deadline_unix_ms"])
+                    != int(row["expected_cumulative_deadline_unix_ms"])
+                    or str(row["authority_attempt_id"]) != attempt_id
+                    or str(row["authority_attempt_fence"]) != str(row["successor_attempt_fence"])
+                    or int(row["current_authority_generation"])
+                    != int(row["successor_authority_generation"])
+                    or str(row["authority_rebind_token_digest"]) != token_digest
+                    or str(row["authority_cell_execution_id"]) != str(row["cell_execution_id"])
+                    or int(row["current_worker_owner_generation"]) != worker_owner_generation
+                    or str(row["current_worker_identity_digest"]) != worker_process_identity_digest
+                    or int(row["worker_owner_generation"]) != worker_owner_generation
+                    or str(row["worker_process_identity_digest"]) != worker_process_identity_digest
+                ):
+                    raise StaleAttemptFence("committed workbench rebind replay is stale")
+                return token
+            if (
+                str(row["state"]) != "prepared"
+                or str(row["outbox_state"]) != "prepared"
+                or str(row["job_phase"]) != "accepted"
+                or str(row["suspension_state"]) not in {"settled", "cancelled"}
+                or str(row["cell_state"]) != "suspended"
+                or str(row["dispatch_state"]) != _DISPATCH_RUNNING
+                or int(row["current_attempt_no"]) != attempt_no
+                or int(row["job_control_revision"]) != int(row["expected_control_revision"])
+                or int(row["operation_control_revision"]) != int(row["expected_control_revision"])
+                or int(row["job_cancellation_revision"])
+                != int(row["expected_cancellation_revision"])
+                or bool(row["cancellation_requested"])
+                or int(row["cumulative_deadline_unix_ms"])
+                != int(row["expected_cumulative_deadline_unix_ms"])
+                or now >= int(row["expires_at_unix_ms"])
+                or str(row["authority_attempt_id"]) != str(row["prior_attempt_id"])
+                or str(row["authority_attempt_fence"]) != str(row["prior_attempt_fence"])
+                or int(row["current_authority_generation"])
+                != int(row["prior_authority_generation"])
+                or str(row["authority_cell_execution_id"]) != str(row["cell_execution_id"])
+                or int(row["current_worker_owner_generation"]) != worker_owner_generation
+                or str(row["current_worker_identity_digest"]) != worker_process_identity_digest
+                or int(row["worker_owner_generation"]) != worker_owner_generation
+                or str(row["worker_process_identity_digest"]) != worker_process_identity_digest
+            ):
+                raise StaleAttemptFence("workbench rebind commit authority is stale")
+
+            next_control_revision = int(row["expected_control_revision"]) + 1
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_attempt_authority
+                SET attempt_id = ?, attempt_fence = ?, authority_generation = ?,
+                    rebind_token_digest = ?, updated_at_unix_ms = ?
+                WHERE operation_id = ? AND attempt_id = ? AND attempt_fence = ?
+                  AND authority_generation = ?
+                """,
+                (
+                    attempt_id,
+                    row["successor_attempt_fence"],
+                    row["successor_authority_generation"],
+                    token_digest,
+                    now,
+                    operation.value,
+                    row["prior_attempt_id"],
+                    row["prior_attempt_fence"],
+                    row["prior_authority_generation"],
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("workbench authority changed during rebind commit")
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_cells
+                SET state = 'running', attempt_id = ?, attempt_fence = ?,
+                    updated_at_unix_ms = ?
+                WHERE operation_id = ? AND cell_execution_id = ? AND state = 'suspended'
+                  AND attempt_id = ? AND attempt_fence = ?
+                """,
+                (
+                    attempt_id,
+                    row["successor_attempt_fence"],
+                    now,
+                    operation.value,
+                    row["cell_execution_id"],
+                    row["prior_attempt_id"],
+                    row["prior_attempt_fence"],
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("workbench cell changed during rebind commit")
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_jobs
+                SET phase = 'running', control_revision = ?, updated_at_unix_ms = ?
+                WHERE operation_id = ? AND phase = 'accepted' AND control_revision = ?
+                """,
+                (
+                    next_control_revision,
+                    now,
+                    operation.value,
+                    row["expected_control_revision"],
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("workbench phase changed during rebind commit")
+            self._connection.execute(
+                """
+                UPDATE operation_controls SET control_revision = ?
+                WHERE operation_id = ? AND control_revision = ?
+                  AND cancellation_requested = 0
+                """,
+                (
+                    next_control_revision,
+                    operation.value,
+                    row["expected_control_revision"],
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("operation control changed during rebind commit")
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_rebind_transfers
+                SET state = 'committed', committed_at_unix_ms = ?
+                WHERE token_digest = ? AND state = 'prepared'
+                """,
+                (now, token_digest),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("workbench transfer changed during rebind commit")
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_successor_outbox
+                SET state = 'consumed', consumed_at_unix_ms = ?
+                WHERE operation_id = ? AND suspension_revision = ?
+                  AND state = 'prepared' AND successor_attempt_id = ?
+                  AND successor_attempt_fence = ?
+                """,
+                (
+                    now,
+                    operation.value,
+                    row["suspension_revision"],
+                    attempt_id,
+                    row["successor_attempt_fence"],
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("workbench outbox changed during rebind commit")
+            outer = self._connection.execute(
+                "SELECT record_revision FROM operations WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            assert outer is not None
+            self._insert_event(
+                operation.value,
+                OperationState.RUNNING,
+                OutcomeCertainty.CERTAIN,
+                int(outer["record_revision"]),
+                now,
+                "workbench_rebind_committed",
+                attempt_no=attempt_no,
+                event_kind="workbench_rebind_committed",
+                payload={"token_digest": token_digest},
+            )
+            return token
+
+    def acknowledge_workbench_rebind(
+        self,
+        attempt_ref: OperationAttemptRefV1,
+        dispatcher_generation: int,
+        lease_epoch: int,
+        owner_digest: str,
+        *,
+        token_digest: str,
+        acknowledgement: dict[str, Any],
+    ) -> None:
+        with self._lock, self._connection:
+            operation, attempt_no, attempt_id = _attempt_identity(attempt_ref)
+            runtime_generation = self._current_runtime_generation_unlocked()
+            self._validate_fence_unlocked(
+                operation,
+                attempt_no,
+                attempt_id,
+                runtime_generation,
+                dispatcher_generation,
+                lease_epoch,
+                owner_digest,
+            )
+            row = self._connection.execute(
+                """
+                SELECT transfer.*, authority.attempt_id AS authority_attempt_id,
+                       authority.attempt_fence AS authority_attempt_fence,
+                       authority.authority_generation AS current_authority_generation,
+                       authority.rebind_token_digest
+                FROM rlm_workbench_rebind_transfers AS transfer
+                JOIN rlm_workbench_attempt_authority AS authority
+                  ON authority.operation_id = transfer.operation_id
+                WHERE transfer.token_digest = ? AND transfer.operation_id = ?
+                  AND transfer.successor_attempt_id = ?
+                """,
+                (token_digest, operation.value, attempt_id),
+            ).fetchone()
+            if row is None:
+                raise InvalidTransition("committed workbench rebind token does not exist")
+            ack = dict(acknowledgement)
+            ack_digest = ack.pop("ack_digest", None)
+            acknowledgement_matches = (
+                str(row["authority_attempt_id"]) == attempt_id
+                and str(row["authority_attempt_fence"]) == str(row["successor_attempt_fence"])
+                and int(row["current_authority_generation"])
+                == int(row["successor_authority_generation"])
+                and str(row["rebind_token_digest"]) == token_digest
+                and acknowledgement.get("token_digest") == token_digest
+                and acknowledgement.get("acknowledged_phase") == "committed"
+                and acknowledgement.get("worker_process_identity_digest")
+                == row["worker_process_identity_digest"]
+                and int(acknowledgement.get("observed_workspace_revision", -1))
+                == int(row["workspace_revision"])
+                and acknowledgement.get("live_stack_resumed") is True
+                and ack_digest == canonical_sha256(ack)
+            )
+            if (
+                str(row["state"]) == "consumed"
+                and str(row["consumption_kind"]) == "worker_ack"
+                and row["ack_digest"] == ack_digest
+                and acknowledgement_matches
+            ):
+                return
+            if str(row["state"]) != "committed" or not acknowledgement_matches:
+                raise StaleAttemptFence("workbench rebind acknowledgement is stale")
+            now = self._now_ms()
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_rebind_transfers
+                SET state = 'consumed', consumption_kind = 'worker_ack',
+                    ack_digest = ?, consumed_at_unix_ms = ?
+                WHERE token_digest = ? AND state = 'committed'
+                """,
+                (ack_digest, now, token_digest),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("workbench rebind acknowledgement lost authority")
+            outer = self._connection.execute(
+                "SELECT record_revision FROM operations WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            assert outer is not None
+            self._insert_event(
+                operation.value,
+                OperationState.RUNNING,
+                OutcomeCertainty.CERTAIN,
+                int(outer["record_revision"]),
+                now,
+                "workbench_rebind_acknowledged",
+                attempt_no=attempt_no,
+                event_kind="workbench_rebind_acknowledged",
+                payload={"token_digest": token_digest, "ack_digest": ack_digest},
+            )
+
+    def mark_workbench_rebind_worker_lost(
+        self,
+        operation: OperationRef,
+        runtime_generation: int,
+        *,
+        token_digest: str,
+        restored_handle: ProgrammableWorkspaceHandle,
+    ) -> None:
+        """Fence a committed lost worker and bind the job to its pre-cell restore."""
+
+        with self._lock, self._connection:
+            self._require_current_runtime_unlocked(runtime_generation)
+            row = self._connection.execute(
+                """
+                SELECT outer.state AS outer_state,
+                       outer.record_revision,
+                       job.workspace_id AS job_workspace_id,
+                       job.workspace_generation AS job_workspace_generation,
+                       job.workspace_revision AS job_workspace_revision,
+                       job.phase AS job_phase,
+                       transfer.state AS transfer_state,
+                       transfer.consumption_kind,
+                       transfer.outbox_digest,
+                       transfer.prior_attempt_id,
+                       transfer.successor_attempt_id,
+                       transfer.cell_execution_id AS transfer_cell_execution_id,
+                       cell.state AS cell_state,
+                       cell.pre_checkpoint_digest,
+                       authority.attempt_id AS authority_attempt_id,
+                       authority.cell_execution_id AS authority_cell_execution_id,
+                       attempt.state AS attempt_state,
+                       outbox.state AS outbox_state
+                FROM operations AS outer
+                JOIN rlm_workbench_jobs AS job USING(operation_id)
+                JOIN rlm_workbench_rebind_transfers AS transfer USING(operation_id)
+                JOIN rlm_workbench_cells AS cell
+                  ON cell.operation_id = transfer.operation_id
+                 AND cell.cell_execution_id = transfer.cell_execution_id
+                JOIN rlm_workbench_attempt_authority AS authority USING(operation_id)
+                JOIN operation_attempts AS attempt
+                  ON attempt.operation_id = transfer.operation_id
+                 AND attempt.attempt_id = transfer.successor_attempt_id
+                JOIN rlm_workbench_successor_outbox AS outbox
+                  ON outbox.operation_id = transfer.operation_id
+                 AND outbox.suspension_revision = transfer.suspension_revision
+                 AND outbox.outbox_digest = transfer.outbox_digest
+                WHERE outer.operation_id = ? AND transfer.token_digest = ?
+                """,
+                (operation.value, token_digest),
+            ).fetchone()
+            if row is None:
+                raise InvalidTransition("committed workbench recovery transfer does not exist")
+            if str(row["outer_state"]) != OperationState.INDETERMINATE.value:
+                raise InvalidTransition("worker-loss recovery requires indeterminate outer state")
+            if str(row["job_phase"]) not in {"accepted", "running"}:
+                raise InvalidTransition("worker-loss recovery requires a resumable workbench")
+            if (
+                str(row["transfer_state"]) == "consumed"
+                and str(row["consumption_kind"]) == "recovery_fenced_loss"
+            ) or str(row["transfer_state"]) == "aborted":
+                if (
+                    str(row["cell_state"]) != "lost_before_commit"
+                    or str(row["job_workspace_id"]) != restored_handle.workspace.value
+                    or int(row["job_workspace_generation"]) != restored_handle.generation
+                    or int(row["job_workspace_revision"]) != restored_handle.revision
+                    or str(row["outbox_state"]) != "consumed"
+                ):
+                    raise IdempotencyConflict("worker-loss recovery replay changed its restore")
+                return
+            transfer_state = str(row["transfer_state"])
+            expected_authority_attempt = (
+                row["successor_attempt_id"]
+                if transfer_state == "committed"
+                else row["prior_attempt_id"]
+            )
+            if (
+                transfer_state not in {"prepared", "committed"}
+                or row["consumption_kind"] is not None
+                or str(row["cell_state"]) not in {"running", "suspended"}
+                or str(row["authority_attempt_id"]) != str(expected_authority_attempt)
+                or str(row["authority_cell_execution_id"]) != str(row["transfer_cell_execution_id"])
+                or str(row["attempt_state"]) != OperationState.INDETERMINATE.value
+            ):
+                raise StaleAttemptFence("committed workbench recovery authority is stale")
+            if (
+                restored_handle.workspace.value != str(row["job_workspace_id"])
+                or restored_handle.generation != int(row["job_workspace_generation"]) + 1
+                or restored_handle.revision != 0
+            ):
+                raise InvalidTransition("worker-loss restore is not the next workspace generation")
+            now = self._now_ms()
+            if transfer_state == "committed":
+                self._connection.execute(
+                    """
+                    UPDATE rlm_workbench_rebind_transfers
+                    SET state = 'consumed', consumption_kind = 'recovery_fenced_loss',
+                        ack_digest = NULL, consumed_at_unix_ms = ?
+                    WHERE operation_id = ? AND token_digest = ? AND state = 'committed'
+                    """,
+                    (now, operation.value, token_digest),
+                )
+            else:
+                self._connection.execute(
+                    """
+                    UPDATE rlm_workbench_rebind_transfers
+                    SET state = 'aborted', aborted_at_unix_ms = ?
+                    WHERE operation_id = ? AND token_digest = ? AND state = 'prepared'
+                    """,
+                    (now, operation.value, token_digest),
+                )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("worker-loss transfer consumption lost its CAS")
+            if str(row["outbox_state"]) == "prepared":
+                self._connection.execute(
+                    """
+                    UPDATE rlm_workbench_successor_outbox
+                    SET state = 'consumed', consumed_at_unix_ms = ?
+                    WHERE operation_id = ? AND outbox_digest = ? AND state = 'prepared'
+                    """,
+                    (now, operation.value, row["outbox_digest"]),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("worker-loss successor outbox consumption lost its CAS")
+            elif str(row["outbox_state"]) != "consumed":
+                raise StaleAttemptFence("worker-loss successor outbox state is stale")
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_cells
+                SET state = 'lost_before_commit', updated_at_unix_ms = ?
+                WHERE operation_id = ? AND cell_execution_id = ?
+                  AND state IN ('running', 'suspended')
+                """,
+                (now, operation.value, row["transfer_cell_execution_id"]),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("worker-loss cell fencing lost its CAS")
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_jobs
+                SET phase = 'running', workspace_generation = ?, workspace_revision = ?,
+                    checkpoint_digest = ?, updated_at_unix_ms = ?
+                WHERE operation_id = ? AND workspace_id = ?
+                  AND workspace_generation = ? AND workspace_revision = ?
+                """,
+                (
+                    restored_handle.generation,
+                    restored_handle.revision,
+                    row["pre_checkpoint_digest"],
+                    now,
+                    operation.value,
+                    row["job_workspace_id"],
+                    row["job_workspace_generation"],
+                    row["job_workspace_revision"],
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("worker-loss workspace restore lost its CAS")
+            self._insert_event(
+                operation.value,
+                OperationState.INDETERMINATE,
+                OutcomeCertainty.INDETERMINATE,
+                int(row["record_revision"]),
+                now,
+                "workbench_rebind_worker_lost",
+                event_kind="workbench_rebind_worker_lost",
+                payload={
+                    "token_digest": token_digest,
+                    "cell_execution_id": str(row["transfer_cell_execution_id"]),
+                    "checkpoint_digest": str(row["pre_checkpoint_digest"]),
+                    "restored_workspace_generation": restored_handle.generation,
+                },
+            )
+
+    def bind_workbench_recovery_authority(
+        self,
+        attempt_ref: OperationAttemptRefV1,
+        dispatcher_generation: int,
+        lease_epoch: int,
+        owner_digest: str,
+        *,
+        workspace: ProgrammableWorkspaceHandle,
+        worker_owner_generation: int,
+        worker_process_identity_digest: str,
+    ) -> None:
+        """Install a later attempt as authority for a checkpoint-recovery continuation."""
+
+        with self._lock, self._connection:
+            operation, attempt_no, attempt_id = _attempt_identity(attempt_ref)
+            runtime_generation = self._current_runtime_generation_unlocked()
+            self._validate_fence_unlocked(
+                operation,
+                attempt_no,
+                attempt_id,
+                runtime_generation,
+                dispatcher_generation,
+                lease_epoch,
+                owner_digest,
+            )
+            row = self._connection.execute(
+                """
+                SELECT outer.record_revision,
+                       job.workspace_id, job.workspace_generation, job.workspace_revision,
+                       authority.attempt_id AS prior_attempt_id,
+                       authority.authority_generation,
+                       authority.cell_execution_id,
+                       transfer.prior_authority_generation,
+                       transfer.successor_authority_generation,
+                       transfer.state AS transfer_state,
+                       transfer.consumption_kind,
+                       cell.state AS cell_state
+                FROM operations AS outer
+                JOIN rlm_workbench_jobs AS job USING(operation_id)
+                JOIN rlm_workbench_attempt_authority AS authority USING(operation_id)
+                JOIN rlm_workbench_rebind_transfers AS transfer
+                  ON transfer.operation_id = outer.operation_id
+                 AND transfer.cell_execution_id = authority.cell_execution_id
+                JOIN rlm_workbench_cells AS cell
+                  ON cell.operation_id = transfer.operation_id
+                 AND cell.cell_execution_id = transfer.cell_execution_id
+                WHERE outer.operation_id = ?
+                  AND (
+                    (transfer.state = 'consumed'
+                     AND transfer.consumption_kind = 'recovery_fenced_loss')
+                    OR transfer.state = 'aborted'
+                  )
+                """,
+                (operation.value,),
+            ).fetchone()
+            if row is None:
+                raise InvalidTransition("workbench has no pending worker-loss recovery")
+            if (
+                str(row["cell_state"]) != "lost_before_commit"
+                or str(row["workspace_id"]) != workspace.workspace.value
+                or int(row["workspace_generation"]) != workspace.generation
+                or int(row["workspace_revision"]) != workspace.revision
+                or str(row["prior_attempt_id"]) == attempt_id
+            ):
+                raise StaleAttemptFence("workbench recovery authority is stale")
+            current_generation = int(row["authority_generation"])
+            transfer_state = str(row["transfer_state"])
+            expected_generation = (
+                int(row["successor_authority_generation"])
+                if transfer_state == "consumed"
+                else int(row["prior_authority_generation"])
+            )
+            if current_generation != expected_generation:
+                raise StaleAttemptFence("workbench recovery predecessor generation is stale")
+            successor_generation = current_generation + 1
+            attempt_fence = canonical_sha256(
+                {
+                    "dispatcher_generation": dispatcher_generation,
+                    "lease_epoch": lease_epoch,
+                    "owner_digest": owner_digest,
+                }
+            )
+            now = self._now_ms()
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_attempt_authority
+                SET attempt_id = ?, attempt_fence = ?, authority_generation = ?,
+                    worker_owner_generation = ?, worker_process_identity_digest = ?,
+                    workspace_id = ?, workspace_generation = ?, workspace_revision = ?,
+                    rebind_token_digest = NULL, updated_at_unix_ms = ?
+                WHERE operation_id = ? AND attempt_id = ? AND authority_generation = ?
+                """,
+                (
+                    attempt_id,
+                    attempt_fence,
+                    successor_generation,
+                    worker_owner_generation,
+                    worker_process_identity_digest,
+                    workspace.workspace.value,
+                    workspace.generation,
+                    workspace.revision,
+                    now,
+                    operation.value,
+                    row["prior_attempt_id"],
+                    row["authority_generation"],
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("workbench recovery authority lost its CAS")
+            self._insert_event(
+                operation.value,
+                OperationState.RUNNING,
+                OutcomeCertainty.CERTAIN,
+                int(row["record_revision"]),
+                now,
+                "workbench_recovery_authority_bound",
+                attempt_no=attempt_no,
+                event_kind="workbench_recovery_authority_bound",
+                payload={
+                    "prior_attempt_id": str(row["prior_attempt_id"]),
+                    "successor_attempt_id": attempt_id,
+                    "authority_generation": successor_generation,
+                    "cell_execution_id": str(row["cell_execution_id"]),
+                },
+            )
+
     def finish_attempt(
         self,
         attempt_ref: Any,
@@ -2876,10 +4276,13 @@ class OperationRegistry:
         """Read persisted recovery policy decisions in decision order."""
 
         with self._lock:
-            if self._connection.execute(
-                "SELECT 1 FROM operations WHERE operation_id = ?",
-                (operation.value,),
-            ).fetchone() is None:
+            if (
+                self._connection.execute(
+                    "SELECT 1 FROM operations WHERE operation_id = ?",
+                    (operation.value,),
+                ).fetchone()
+                is None
+            ):
                 raise KeyError(operation.value)
             rows = self._connection.execute(
                 """
@@ -2895,18 +4298,14 @@ class OperationRegistry:
                     policy_version=(
                         1 if row["policy_version"] is None else int(row["policy_version"])
                     ),
-                    prior_attempt=self._attempt_ref_for_no(
-                        operation, row["prior_attempt_no"]
-                    ),
+                    prior_attempt=self._attempt_ref_for_no(operation, row["prior_attempt_no"]),
                     decision=cast(Any, str(row["decision"])),
                     reason_code=str(row["reason_code"]),
                     input_digest=str(row["input_digest"]),
                     policy_digest=row["policy_digest"],
                     checkpoint_digest=row["checkpoint_digest"],
                     effect_receipt_digest=row["effect_receipt_digest"],
-                    continuation_boundary_digest=row[
-                        "continuation_boundary_digest"
-                    ],
+                    continuation_boundary_digest=row["continuation_boundary_digest"],
                     successor_attempt=self._attempt_ref_for_no(
                         operation, row["successor_attempt_no"]
                     ),
@@ -3008,9 +4407,7 @@ class OperationRegistry:
                         "lease_epoch": int(row["lease_epoch"]),
                     },
                 )
-                operations.append(
-                    self._record_from_operation_id(OperationRef(value=operation_id))
-                )
+                operations.append(self._record_from_operation_id(OperationRef(value=operation_id)))
             return tuple(operations)
 
     def requeue_indeterminate(
@@ -3136,16 +4533,13 @@ class OperationRegistry:
                 if (
                     continuation_boundary.operation != operation
                     or continuation_boundary.prior_attempt.attempt_no != prior_attempt_no
-                    or continuation_boundary.prior_attempt.attempt_id
-                    != str(prior["attempt_id"])
-                    or continuation_boundary.runtime_generation
-                    != int(prior["runtime_generation"])
+                    or continuation_boundary.prior_attempt.attempt_id != str(prior["attempt_id"])
+                    or continuation_boundary.runtime_generation != int(prior["runtime_generation"])
                     or continuation_boundary.dispatcher_generation
                     != int(prior["dispatcher_generation"])
                     or continuation_boundary.policy_digest != policy_binding.policy_digest
                     or continuation_boundary.input_digest != bound_input_digest
-                    or continuation_boundary.environment_digest
-                    != policy_binding.environment_digest
+                    or continuation_boundary.environment_digest != policy_binding.environment_digest
                     or continuation_boundary.deadline_unix_ms
                     != self._request_deadline(str(row["request_json"]))
                 ):
@@ -3162,8 +4556,7 @@ class OperationRegistry:
                 ).fetchone()
                 if (
                     lease_row is None
-                    or int(lease_row["lease_epoch"])
-                    != continuation_boundary.lease_epoch
+                    or int(lease_row["lease_epoch"]) != continuation_boundary.lease_epoch
                 ):
                     raise StaleAttemptFence("continuation boundary lease epoch is stale")
                 control = self._connection.execute(
@@ -3220,10 +4613,8 @@ class OperationRegistry:
                     ).decode()
                     if (
                         selection.operation != continuation_boundary.operation
-                        or selection.prior_attempt
-                        != continuation_boundary.prior_attempt
-                        or selection.runtime_generation
-                        != continuation_boundary.runtime_generation
+                        or selection.prior_attempt != continuation_boundary.prior_attempt
+                        or selection.runtime_generation != continuation_boundary.runtime_generation
                         or selection.dispatcher_generation
                         != continuation_boundary.dispatcher_generation
                         or selection.lease_epoch != continuation_boundary.lease_epoch
@@ -3234,17 +4625,12 @@ class OperationRegistry:
                         or selection.checkpoint_manifest_digest
                         != continuation_boundary.checkpoint_manifest_digest
                         or selection.source_handle != continuation_boundary.source_handle
-                        or selection.environment_digest
-                        != continuation_boundary.environment_digest
-                        or selection.exclusion_count
-                        != continuation_boundary.exclusion_count
-                        or selection.exclusions_digest
-                        != continuation_boundary.exclusions_digest
-                        or selection.artifacts_digest
-                        != continuation_boundary.artifacts_digest
+                        or selection.environment_digest != continuation_boundary.environment_digest
+                        or selection.exclusion_count != continuation_boundary.exclusion_count
+                        or selection.exclusions_digest != continuation_boundary.exclusions_digest
+                        or selection.artifacts_digest != continuation_boundary.artifacts_digest
                         or selection.completeness != continuation_boundary.completeness
-                        or selection.deadline_unix_ms
-                        != continuation_boundary.deadline_unix_ms
+                        or selection.deadline_unix_ms != continuation_boundary.deadline_unix_ms
                         or str(selection_row["restored_handle_json"]) != restored_json
                     ):
                         raise IdempotencyConflict(
@@ -3546,9 +4932,7 @@ class OperationRegistry:
         if limit < 1 or limit > min(max_limit, MAX_EVENT_PAGE_LIMIT):
             raise ValueError(f"limit must be between 1 and {min(max_limit, MAX_EVENT_PAGE_LIMIT)}")
         if max_bytes < 1024 or max_bytes > MAX_EVENT_PAGE_BYTES:
-            raise ValueError(
-                f"max_bytes must be between 1024 and {MAX_EVENT_PAGE_BYTES}"
-            )
+            raise ValueError(f"max_bytes must be between 1024 and {MAX_EVENT_PAGE_BYTES}")
         with self._lock:
             exists = self._connection.execute(
                 "SELECT 1 FROM operations WHERE operation_id = ?", (operation.value,)
@@ -3580,9 +4964,7 @@ class OperationRegistry:
             events = tuple(events_list)
             has_more = len(rows) > len(events)
             next_sequence = (
-                after_sequence
-                if not visible_rows
-                else int(visible_rows[-1]["sequence"])
+                after_sequence if not visible_rows else int(visible_rows[-1]["sequence"])
             )
             terminal = self._record_from_operation_id(operation)
             terminal_snapshot = (
@@ -3640,9 +5022,7 @@ class OperationRegistry:
                 else None
             )
             dispatcher_state = None if dispatch_row is None else str(dispatch_row["state"])
-            last_event_sequence = (
-                0 if last_event["value"] is None else int(last_event["value"])
-            )
+            last_event_sequence = 0 if last_event["value"] is None else int(last_event["value"])
             return OperationContinuitySnapshotV1(
                 operation=operation,
                 operation_state=record.state,
@@ -3654,9 +5034,7 @@ class OperationRegistry:
                 dispatcher_state=cast(DispatchState | None, dispatcher_state),
                 last_event_sequence=last_event_sequence,
                 reconciliation_required=record.reconciliation_required,
-                recovery_reason=(
-                    None if attempt_row is None else attempt_row["recovery_reason"]
-                ),
+                recovery_reason=(None if attempt_row is None else attempt_row["recovery_reason"]),
             )
 
     def _current_runtime_generation_unlocked(self) -> int:
@@ -3668,9 +5046,7 @@ class OperationRegistry:
 
     def _require_current_runtime_unlocked(self, runtime_generation: int) -> None:
         if runtime_generation != self._current_runtime_generation_unlocked():
-            raise StaleRuntimeGeneration(
-                f"runtime generation {runtime_generation} is not current"
-            )
+            raise StaleRuntimeGeneration(f"runtime generation {runtime_generation} is not current")
 
     @staticmethod
     def _request_deadline(request_json: str) -> int:
@@ -3846,10 +5222,29 @@ class OperationRegistry:
         if outer is None or int(outer["runtime_generation"]) != runtime_generation:
             raise StaleAttemptFence("outer runtime generation fence is stale")
         outer_state = OperationState(outer["state"])
-        if (
-            outer_state not in TERMINAL_STATES
-            and outer_state is not OperationState.INDETERMINATE
-        ):
+        if str(attempt["state"]) == "suspended_external":
+            dispatch = self._connection.execute(
+                """
+                SELECT state, current_attempt_no FROM operation_dispatch
+                WHERE operation_id = ?
+                """,
+                (operation.value,),
+            ).fetchone()
+            job = self._connection.execute(
+                "SELECT phase FROM rlm_workbench_jobs WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            if (
+                outer_state is not OperationState.ACCEPTED
+                or dispatch is None
+                or str(dispatch["state"]) != _DISPATCH_PARKED
+                or int(dispatch["current_attempt_no"]) != attempt_no
+                or job is None
+                or str(job["phase"]) != "waiting_external"
+            ):
+                raise StaleAttemptFence("suspended workbench attempt projection is stale")
+            return
+        if outer_state not in TERMINAL_STATES and outer_state is not OperationState.INDETERMINATE:
             raise StaleAttemptFence("outer operation is not closed")
         dispatch = self._connection.execute(
             """
@@ -3859,9 +5254,7 @@ class OperationRegistry:
             (operation.value,),
         ).fetchone()
         expected_dispatch = (
-            _DISPATCH_PARKED
-            if outer_state is OperationState.INDETERMINATE
-            else _DISPATCH_COMPLETED
+            _DISPATCH_PARKED if outer_state is OperationState.INDETERMINATE else _DISPATCH_COMPLETED
         )
         if (
             dispatch is None
@@ -4004,9 +5397,7 @@ class OperationRegistry:
         operation: OperationRef,
         row: sqlite3.Row,
     ) -> OperationRecoveryPolicyBindingV1:
-        policy = OperationRecoveryPolicyV1.model_validate_json(
-            str(row["policy_json"]), strict=True
-        )
+        policy = OperationRecoveryPolicyV1.model_validate_json(str(row["policy_json"]), strict=True)
         return OperationRecoveryPolicyBindingV1(
             operation=operation,
             operation_kind=str(row["operation_kind"]),
@@ -4037,7 +5428,6 @@ class OperationRegistry:
             attempt_no=int(row["attempt_no"]),
             attempt_id=str(row["attempt_id"]),
         )
-
 
     def _event_envelope(self, operation: OperationRef, row: sqlite3.Row) -> Any:
         payload_json = row["payload_json"]

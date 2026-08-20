@@ -53,7 +53,7 @@ async def asset_documents(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
 
 def _paths(root: Path) -> tuple[Path, Path]:
     return (
-        root / "schemas" / "aar-mcp-tools-v7.json",
+        root / "schemas" / "aar-mcp-tools-v8-combined.json",
         root / "skills" / "aar-operations" / "metadata.json",
     )
 
@@ -88,9 +88,7 @@ def verify_assets(root: Path) -> list[str]:
         errors.append("checked-in operation skill metadata is stale")
 
     declared_tools = {tool["name"] for tool in expected_tool["tools"]}
-    skill_text = (root / "skills" / "aar-operations" / "SKILL.md").read_text(
-        encoding="utf-8"
-    )
+    skill_text = (root / "skills" / "aar-operations" / "SKILL.md").read_text(encoding="utf-8")
     referenced_tools = set(TOOL_TOKEN.findall(skill_text))
     for tool_name in sorted(declared_tools - referenced_tools):
         errors.append(f"operation skill omits public tool: {tool_name}")

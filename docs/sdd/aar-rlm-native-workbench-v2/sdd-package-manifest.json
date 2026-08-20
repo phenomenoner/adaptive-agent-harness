@@ -9,7 +9,7 @@
     "tool_surface": "aar.mcp-tools.v7",
     "version": "0.4.0a6"
   },
-  "contract_manifest_digest": "sha256:e32038ecadc5c3721a33d2bcb545d2bde0f2b6b8f64649da980bc26252c71d25",
+  "contract_manifest_digest": "sha256:4868218f1684f50a6a9dde3afe0f1d6f8661ad0500a8a2249f0a3037a17fa2c5",
   "files": [
     {
       "path": "CONTRACTS.md",
@@ -58,8 +58,8 @@
     },
     {
       "path": "contracts/aar-mcp-tools-v8-combined.json",
-      "sha256": "sha256:f7242315c55867918c524e528ad6ecf6631a04b843dfa8e03f340b371b03a642",
-      "size_bytes": 1006709
+      "sha256": "sha256:b4dc4988d081131bff451e740a29e8df55844c3e160a2142368e2bf77dfb5a6d",
+      "size_bytes": 1006917
     },
     {
       "path": "contracts/aar-mcp-tools-v8.json",
@@ -83,7 +83,7 @@
     },
     {
       "path": "contracts/contract-manifest.json",
-      "sha256": "sha256:42c98bf84fac61be96cc309a211b7f86ddd5ca193636d5adcde21feae582cd3b",
+      "sha256": "sha256:821029c27cda8a3007dddf15ee5410e4233d53469b79a5e043f5bf63665b64b1",
       "size_bytes": 30835
     },
     {
@@ -108,17 +108,17 @@
     },
     {
       "path": "fixtures/invalid-capability-planner-digest.json",
-      "sha256": "sha256:dea162a0c12fb04e235b8258a5af1c73d872cbb6526fe4f07c833c08e93dcf16",
+      "sha256": "sha256:c0a342852b531d0a8a9286eabb26e8b44f718fe0a29e5e97b792a3ceb368c056",
       "size_bytes": 3750
     },
     {
       "path": "fixtures/invalid-capability-reference-only.json",
-      "sha256": "sha256:295d08a5625e80d9201be5389b15521d8355281579de4e69ae06f9744ad3bd91",
+      "sha256": "sha256:094ac2eb8d57049014eba384814cc0b77dcdec89f3e6921fa0f14fd13f477a46",
       "size_bytes": 3718
     },
     {
       "path": "fixtures/invalid-capability-schema-digest.json",
-      "sha256": "sha256:0a3d52ee7fd3ff7960210e2a19a649ec6880291e497e169397e652d4d9ea3c3e",
+      "sha256": "sha256:8211cba59b2fc82d1ec709a23c9b1cc02ae9dfa6660179d0ec73e3f5f287363c",
       "size_bytes": 3750
     },
     {
@@ -638,8 +638,8 @@
     },
     {
       "path": "fixtures/registry-v5-migration-verification.json",
-      "sha256": "sha256:6cc3965021ac8a362dee43e3bbfd5a0335efa70f3631ecca4b785db49cf82354",
-      "size_bytes": 2864
+      "sha256": "sha256:c475bed8e741a0637edced15f146a008c1db7bf26969f741f7607561d640434f",
+      "size_bytes": 2952
     },
     {
       "path": "fixtures/registry-v5.sql",
@@ -713,7 +713,7 @@
     },
     {
       "path": "fixtures/valid-workbench-capabilities.json",
-      "sha256": "sha256:6a0c3f20d47b3a4e2c4ad0c0b93a0a3ed9293b8afb51e1101f862d968bd3cd33",
+      "sha256": "sha256:3ff732ceadcbfa520bb742b1301c4440fc1d808b647b217a02fa07e2779d7a2c",
       "size_bytes": 3750
     },
     {
@@ -818,8 +818,8 @@
     },
     {
       "path": "generate_contracts.py",
-      "sha256": "sha256:89ee77a60bd6e839603d9433cfd67899882bf736fa47e4e2c38841adc056c0cd",
-      "size_bytes": 142933
+      "sha256": "sha256:f274725b9ddac5a3d69fa24a0b43be7141465e12590b1a99ca953c4173e79f77",
+      "size_bytes": 149072
     },
     {
       "path": "generate_package_manifest.py",
@@ -858,8 +858,8 @@
     },
     {
       "path": "validate_sdd.py",
-      "sha256": "sha256:ceabc675e5eac334be1bacc479b566d61203055cb02ae61f31cf1aa6a8c95f30",
-      "size_bytes": 90391
+      "sha256": "sha256:d0cc9ba8835a3a52f0d84fa09e0182e80d1975d96f9ec55f1fa55f458d69e196",
+      "size_bytes": 93128
     },
     {
       "path": "verify_registry_v5_migration.py",
@@ -868,7 +868,7 @@
     }
   ],
   "implementation_status": "planned",
-  "manifest_digest": "sha256:a23102390595b244df7999319786fce9fecb54570c5a19d46efb40d51830c2cc",
+  "manifest_digest": "sha256:a9a2e9df6d9dd2fc0466866d2640a7f6727c4f8ea5d755dbc3ae2512285fd9b3",
   "normative_files": [
     "README.md",
     "CONTRACTS.md",

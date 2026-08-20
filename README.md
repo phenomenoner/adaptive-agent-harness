@@ -1,5 +1,7 @@
 <div align="center">
 
+> **`0.5.0a0`** public alpha · [`phenomenoner/adaptive-agent-harness@v0.5.0a0`](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0)
+
 # Adaptive Agent Harness
 
 ### Give agents a workbench — not just a bigger prompt.
@@ -7,8 +9,8 @@
 **Host-composed RLM + persistent IPython + durable operations + receipt-backed model routing**
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![MCP](https://img.shields.io/badge/MCP-30_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.4.0a6-blue)](docs/RELEASE-v0.4.0a6.md)
+[![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
+[![Release](https://img.shields.io/badge/release-v0.5.0a0-blue)](docs/RELEASE-v0.5.0a0.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#project-status)
 
@@ -209,15 +211,21 @@ See [Why RLM + IPython](docs/WHY-RLM-AND-IPYTHON.md) for the deeper design ratio
 
 ## Quick start
 
-> **Release snapshot:** `0.4.0a6` is pinned by `v0.4.0a6`. Use that pinned source, inspect the
-> capabilities returned by your host, and start with disposable workspaces. This project executes
-> model-authored Python and is **not a security sandbox**.
+> **Current public alpha:** `0.5.0a0`. Install the exact tag, inspect the capabilities returned by your
+> host, and start with disposable workspaces. This project executes model-authored Python and is
+> **not a security sandbox**.
 
-### Install the pinned release
+### Install from an exact local wheel
+
+```bash
+uv tool install --force /path/to/adaptive_agent_runtime-0.5.0a0-py3-none-any.whl
+```
+
+### Install the latest published release snapshot
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a6"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.5.0a0"
 ```
 
 ### Codex App setup
@@ -292,37 +300,41 @@ The MCP frontend is intentionally replaceable. It does not own the continuity da
 
 ## Project status
 
-The current source implements the **`0.4.0a6`** release snapshot. Its stable source reference is
-`phenomenoner/adaptive-agent-harness@v0.4.0a6`, with the corresponding
-[GitHub release page](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6).
-The in-tree machine-readable snapshot is
-[`profiles/release-status-v1.json`](profiles/release-status-v1.json). Exact commit, tree, wheel,
-supported-Python CI, local install, fresh native/RLM, review, tag, and downloaded-asset evidence is
-bound outside the objects it hashes by the release asset
-`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. The preceding `0.4.0a5` candidate is
-**blocked, unreleased, and historical**; it is not the current release.
+The current public alpha is **`0.5.0a0`**, published from the reviewed source tree as annotated tag
+`v0.5.0a0` and a GitHub prerelease. See the [release notes](docs/RELEASE-v0.5.0a0.md).
 
-This release preserves the host-owned RLM boundary: the main agent fixes one callable model and
-optional effort per job, the host performs each actual model call, and AAR stores bounded tickets,
-receipts, and continuation state without provider credentials. The lifecycle repair uses an exact
-native child handle for terminalization, generation-unique endpoint/credential/request paths, and an
-atomically advanced stable discovery pointer with **non-destructive** normal retention. The existing
-database-scoped process lock admits the sole
-active runtime owner and is released automatically when that process exits. The subprocess
-Codex setup route reports
-`NO_ATOMIC_AUTHORITY`, returns an ordered manual plan before any mutation, and does not claim
-automatic installation or rollback.
+The previous published release snapshot is `0.4.0a6`, with stable source reference
+`phenomenoner/adaptive-agent-harness@v0.4.0a6` and the corresponding
+[GitHub release page](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6).
+The in-tree machine-readable published snapshot is
+[`profiles/release-status-v1.json`](profiles/release-status-v1.json). Exact commit, tree, wheel,
+supported-Python CI, local install, fresh native/RLM, review, tag, and downloaded-asset evidence for
+that published snapshot is bound outside the objects it hashes by
+`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. The preceding `0.4.0a5` candidate is
+**blocked, unreleased, and historical**.
+
+The current candidate preserves the host-owned RLM boundary: the main agent fixes one callable model
+and optional effort per job, the host performs each actual model call, and AAR stores bounded tickets,
+receipts, and continuation state without provider credentials. Its additive MCP v8 surface retains the
+frozen 30-tool v7 compatibility projection and appends eight reviewed workbench/caller-work tools.
+The lifecycle repair uses an exact native child handle for terminalization,
+generation-unique endpoint/credential/request paths, and an atomically advanced stable discovery
+pointer with **non-destructive** normal retention. The existing database-scoped process lock admits
+the sole active runtime owner and is released automatically when that process exits. The subprocess
+Codex setup route reports `NO_ATOMIC_AUTHORITY`, returns an ordered manual plan before any mutation,
+and does not claim automatic installation or rollback.
 
 After `aar-codex-setup`, restart Codex Desktop and verify from a fresh task when the current receipt
 reports `restart_required: true` or a preserved manual-plan receipt reports
 `restart_required_after_manual_apply: true`. A later no-op result with `restart_required: false`
 does not erase that handoff.
 
-This GitHub release snapshot does not establish production deployment, official Plugin Directory
-review/publication, OpenAI approval, or provider-signed attestation; those require separate external
-authority. Read [Technical status](TECHNICAL-STATUS.md),
-[Host compatibility](HOST-COMPATIBILITY.md), and the
-[release notes](docs/RELEASE-v0.4.0a6.md) before making production claims.
+The `0.5.0a0` GitHub release does not establish production deployment, official Plugin Directory
+review/publication, OpenAI approval, or provider-signed attestation; neither does the published GitHub
+snapshot. Those claims require separate external authority. Read [Technical status](TECHNICAL-STATUS.md),
+[Host compatibility](HOST-COMPATIBILITY.md), the
+[historical v0.4.0a6 release notes](docs/RELEASE-v0.4.0a6.md), and the
+[current release notes](docs/RELEASE-v0.5.0a0.md) before making production claims.
 
 ---
 

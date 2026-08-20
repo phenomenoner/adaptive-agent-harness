@@ -265,6 +265,42 @@ Subagent submission returns a retained handle; result retrieval is a separate br
 Artifacts remain digest-bound. Effects remain proposal-only: no `effect.execute` tool exists. The
 RLM kernel has no provider credentials and no external or final-delivery path.
 
+### Use the successor RLM-native workbench
+
+The additive v8 workbench is separate from legacy `aar_rlm_execute`. Its MCP descriptor set is
+successor-only: the frozen v7 `aar_capabilities` response remains a compatibility projection and
+does not advertise or authorize these calls.
+
+1. Call `aar_rlm_workbench_capabilities` with a current read context before admission. Verify the
+   v8 tool-surface, broker-catalog and planner-directive digests. Read all six per-method backend
+   rows. `unconfigured` and `reference_only` rows are truthful stop conditions, not permission to
+   substitute a provider or infer an adapter.
+2. Call `aar_rlm_workbench_execute` with the versioned
+   `aar.mcp-rlm-workbench-context.v1`, sorted exact grant IDs, cumulative budgets and one complete
+   workbench spec. Caller-delegated work requires `start_only=true`; service-managed execution may
+   wait boundedly. Preserve the returned operation and exact workbench revision.
+3. Call `aar_rlm_workbench_status` with the bound operation and `expected_revision`. A revision
+   conflict requires a fresh authorized status read; never silently overwrite a stale projection.
+4. A caller driver services only durable tickets belonging to the admitted operation. Reserve one
+   pre-send attempt with `aar_broker_work_claim`, then call
+   `aar_broker_work_mark_send_started` immediately before the physical provider or child send. The
+   latter is the conservative may-have-sent boundary. Never perform the physical send before that
+   durable transition succeeds.
+5. Before the boundary, call `aar_broker_work_cancel_before_send` only when the ticket, claim and
+   revision still prove definitely-unsent. After the boundary, never reuse that tool and never
+   blindly resend.
+6. Commit exactly one canonical host observation with `aar_broker_work_commit`. Preserve the
+   physical-attempt ID, sent-request digest, provider/child request ID and receipt evidence. Reuse an
+   idempotency key only for byte-identical input.
+7. When a may-have-sent result is uncertain, call `aar_broker_work_reconcile` under the durable
+   reconciler identity, generation and fence. A missing authoritative receipt preserves outcome
+   unknown; a stale claimant or reconciler must not settle the ticket.
+
+Every mutating successor call repeats the admitted control, cancellation and suspension revisions,
+cumulative deadline, ticket digest, request identity, exact grant set and cumulative budgets. Do
+not extend them in a successor context. A deadline crossing, cancellation, suspension, stale fence,
+receipt conflict or capability drift fails closed and must not create a second physical send.
+
 ### Use a host-owned model route
 
 - A provider-backed RLM call is available only when the host installs an owner-controlled model

@@ -15,6 +15,7 @@ from mcp import Client
 from mcp.client.stdio import StdioServerParameters, stdio_client
 
 from aar.mcp.server import SERVER_NAME
+from aar.mcp.workbench_surface import is_successor_compatible_tool_order
 
 SMOKE_SCHEMA_VERSION = "aar.compat-smoke.v3"
 
@@ -70,8 +71,10 @@ async def run_scenario(client: Client, scenario_id: str) -> dict[str, Any]:
     observed_tools = [tool.name for tool in tools.tools]
     if capabilities["server_name"] != SERVER_NAME:
         raise RuntimeError("unexpected AAR server identity")
-    if observed_tools != capabilities["tool_names"]:
-        raise RuntimeError("discovered tool order does not match aar_capabilities")
+    if not is_successor_compatible_tool_order(observed_tools, capabilities["tool_names"]):
+        raise RuntimeError(
+            "discovered tool order is not the frozen v7 prefix plus reviewed v8 additions"
+        )
     client_protocol_version = str(client.protocol_version)
     server_protocol_version = capabilities["negotiated_protocol_version"]
     if server_protocol_version != client_protocol_version:
@@ -246,8 +249,7 @@ async def run_scenario(client: Client, scenario_id: str) -> dict[str, Any]:
     program_handle = program_created["handle"]
     if (
         program_created["failure"] is not None
-        or program_handle["workspace"]
-        != {"type": "workspace", "value": program_workspace_id}
+        or program_handle["workspace"] != {"type": "workspace", "value": program_workspace_id}
         or program_handle["backend"]["kind"] != "ipython"
         or program_handle["generation"] != 1
         or program_handle["revision"] != 0
@@ -323,9 +325,7 @@ async def run_scenario(client: Client, scenario_id: str) -> dict[str, Any]:
             },
         )
     )
-    variable_names = {
-        item["name"] for item in program_inspected["snapshot"]["variables"]
-    }
+    variable_names = {item["name"] for item in program_inspected["snapshot"]["variables"]}
     if not {"IPython", "answer", "frame", "np", "pd"}.issubset(variable_names):
         raise RuntimeError("programmable inspection omitted user namespace values")
 

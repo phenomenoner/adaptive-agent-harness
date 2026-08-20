@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SUCCESSOR = "0.4.0a6"
 TAG = "v0.4.0a6"
 MATRIX_ROWS = 63
+CANDIDATE_CODEX_PROFILE_VERSION = "0.5.0-a0+codex.20260820194429"
 EXPECTED_CODEX_PROFILE_VERSION = "0.4.0+codex.20260816122000"
 STATUS_PATH = ROOT / "profiles" / "release-status-v1.json"
 RELEASE_RECEIPT_ASSET = "adaptive-agent-runtime-v0.4.0a6-release-receipt.json"
@@ -239,7 +240,7 @@ def test_translated_quick_starts_preserve_manual_restart_handoff(path: str) -> N
 
 
 def test_generated_codex_profile_matches_source() -> None:
-    assert CODEX_PROFILE_VERSION == EXPECTED_CODEX_PROFILE_VERSION
+    assert CODEX_PROFILE_VERSION == CANDIDATE_CODEX_PROFILE_VERSION
     generated = host_documents(ROOT)
     for relative in (
         Path("profiles/codex/plugins/adaptive-agent-runtime/README.md"),

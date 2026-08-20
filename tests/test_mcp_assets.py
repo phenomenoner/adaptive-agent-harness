@@ -41,7 +41,27 @@ EXPECTED_TOOLS = (
     "aar_operation_reconcile",
     "aar_checkpoint_describe",
     "aar_artifact_resolve",
+    "aar_rlm_workbench_execute",
+    "aar_rlm_workbench_capabilities",
+    "aar_rlm_workbench_status",
+    "aar_broker_work_claim",
+    "aar_broker_work_mark_send_started",
+    "aar_broker_work_cancel_before_send",
+    "aar_broker_work_commit",
+    "aar_broker_work_reconcile",
 )
+SUCCESSOR_MUTATING_TOOLS = {
+    "aar_rlm_workbench_execute",
+    "aar_broker_work_claim",
+    "aar_broker_work_mark_send_started",
+    "aar_broker_work_cancel_before_send",
+    "aar_broker_work_commit",
+    "aar_broker_work_reconcile",
+}
+SUCCESSOR_TOOLS = SUCCESSOR_MUTATING_TOOLS | {
+    "aar_rlm_workbench_capabilities",
+    "aar_rlm_workbench_status",
+}
 
 
 def test_checked_in_mcp_assets_match_executable_surface() -> None:
@@ -69,11 +89,21 @@ def test_tool_schemas_teach_the_exact_flat_context_shape() -> None:
         assert "context" in input_schema["required"]
         assert "mutation_context" not in input_schema["properties"]
         context_schema = input_schema["properties"]["context"]
-        assert 'outer argument name: "context"' in context_schema["description"]
-        context_name = context_schema["$ref"].rsplit("/", 1)[-1]
-        context_definition = input_schema["$defs"][context_name]
+        if tool["name"] not in SUCCESSOR_TOOLS:
+            assert 'outer argument name: "context"' in context_schema["description"]
+        if "$ref" in context_schema:
+            context_name = context_schema["$ref"].rsplit("/", 1)[-1]
+            context_definition = input_schema["$defs"][context_name]
+        else:
+            context_definition = context_schema
         assert context_definition["additionalProperties"] is False
-        assert "schema_version" not in context_definition["properties"]
+        if tool["name"] in SUCCESSOR_MUTATING_TOOLS:
+            assert "schema_version" in context_definition["required"]
+            assert context_definition["properties"]["schema_version"]["const"] == (
+                "aar.mcp-rlm-workbench-context.v1"
+            )
+        else:
+            assert "schema_version" not in context_definition["properties"]
 
     create_schema = next(
         tool["inputSchema"]
@@ -99,20 +129,16 @@ def test_tool_schemas_teach_the_exact_flat_context_shape() -> None:
 
 def test_skill_metadata_binds_exact_skill_and_tool_bytes() -> None:
     metadata = json.loads(
-        (ROOT / "skills" / "aar-operations" / "metadata.json").read_text(
-            encoding="utf-8"
-        )
+        (ROOT / "skills" / "aar-operations" / "metadata.json").read_text(encoding="utf-8")
     )
     skill_bytes = (ROOT / "skills" / "aar-operations" / "SKILL.md").read_bytes()
     tool_manifest = json.loads(
-        (ROOT / "schemas" / "aar-mcp-tools-v7.json").read_text(encoding="utf-8")
+        (ROOT / "schemas" / "aar-mcp-tools-v8-combined.json").read_text(encoding="utf-8")
     )
 
-    assert metadata["skill_digest"] == (
-        f"sha256:{hashlib.sha256(skill_bytes).hexdigest()}"
-    )
+    assert metadata["skill_digest"] == (f"sha256:{hashlib.sha256(skill_bytes).hexdigest()}")
     assert metadata["tool_surface_digest"] == tool_manifest["tool_surface_digest"]
-    assert metadata["skill_version"] == "0.9.6"
+    assert metadata["skill_version"] == "0.10.0"
     skill_text = skill_bytes.decode("utf-8").lower()
     assert "tool use or analysis" in skill_text
     assert "software planning, development, testing, and troubleshooting" in skill_text
@@ -136,9 +162,7 @@ def test_skill_metadata_binds_exact_skill_and_tool_bytes() -> None:
 
 
 def test_runtime_and_packaged_metadata_bind_canonical_schema_and_fixture_assets() -> None:
-    schema = json.loads(
-        (ROOT / "schemas" / "aar-schemas-v1.json").read_text(encoding="utf-8")
-    )
+    schema = json.loads((ROOT / "schemas" / "aar-schemas-v1.json").read_text(encoding="utf-8"))
     fixtures = json.loads(
         (ROOT / "tests" / "fixtures" / "manifest.json").read_text(encoding="utf-8")
     )
