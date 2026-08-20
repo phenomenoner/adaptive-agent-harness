@@ -42,7 +42,6 @@ def test_worker_frame_retry_reuses_sequence_and_broker_identity_exactly_once(
     tmp_path: Path,
 ) -> None:
     from aar.rlm_workbench_models import WorkspaceBrokerFrame
-
     from aar.runtime.ipython_backend import WorkspaceBrokerSession
 
     dispatcher = CountingDispatcher()
@@ -91,7 +90,6 @@ def test_same_frame_sequence_with_divergent_intent_is_protocol_conflict(
     tmp_path: Path,
 ) -> None:
     from aar.rlm_workbench_models import WorkspaceBrokerFrame
-
     from aar.runtime.ipython_backend import WorkerFrameConflict, WorkspaceBrokerSession
 
     dispatcher = CountingDispatcher()
