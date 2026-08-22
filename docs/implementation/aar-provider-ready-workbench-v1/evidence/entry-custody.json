@@ -1,7 +1,7 @@
 {
   "schema_version": "aar.prw-entry-custody.v1",
-  "generated_at": "2026-08-22T18:44:00Z",
-  "result": "generation_10_s0_pass_a1a_rev2_review_pending",
+  "generated_at": "2026-08-22T18:56:07Z",
+  "result": "entry_gate_pass_task_start_pending",
   "requirement": "CUST-001",
   "acceptance_row": "A-CUST-001",
   "canonical_worktree": {
@@ -49,11 +49,14 @@
     "counterfactual_mutation_probes": 4,
     "s0_review_batch": "deleg_a9235660",
     "s0_findings": [],
-    "a1a_packet_status": "rev2_review_pending",
-    "a1a_predecessor_packet_sha256": "92f8f64e538fd8669d28c5ade27649fb61eb8e94f510193b69b149bbc940a6b7"
+    "a1a_packet_status": "independent_pass_batch_complete",
+    "a1a_predecessor_packet_sha256": "92f8f64e538fd8669d28c5ade27649fb61eb8e94f510193b69b149bbc940a6b7",
+    "a1a_review_batch": "deleg_b45d4517",
+    "a1a_findings": [],
+    "entry_gate": "dual_pass"
   },
   "limitations": [
     "The initial canonical status bytes were observed before this receipt but were not retained as a comparable raw digest; this receipt therefore binds the after-state and executed preservation actions rather than claiming byte-for-byte status equality.",
-    "Generation-10 S0 has independent PASS/BATCH_COMPLETE. A1a rev1 was blocked only by a packet test-discriminator gap; rev2 fresh packet PASS, task-start commit, product implementation, wheel candidate and live evidence remain unclaimed."
+    "Generation-10 S0 and A1a rev2 have independent PASS/BATCH_COMPLETE. Reviewed candidate commit exists; exact task-start parent, product implementation, wheel candidate, live evidence, push/tag/release remain unclaimed."
   ]
 }

@@ -1,8 +1,8 @@
 # AR-PRW Implementation Handoff
 
-**Status:** `generation_10_s0_pass_a1a_rev2_review_pending`
+**Status:** `entry_gate_pass_task_start_pending`
 
-**Control epoch:** `2026-08-22T18:44:00Z`
+**Control epoch:** `2026-08-22T18:56:07Z`
 
 ## State
 
@@ -12,7 +12,7 @@
 - Generation-7 exact staged tree `26761c923883088c97e9b75f02f26fc4cdc17ec0` is historical and rejected. Independent batch `deleg_5f4ad782` returned identity PASS and A1a `PASS / BATCH_COMPLETE`, but S0 `BLOCKED / BATCH_COMPLETE` with three findings; the packet PASS is non-transferable and the index was unstaged without deleting worktree bytes.
 - Generation-8 exact staged tree `1e5d511fb70fd80967cf147cd7d7ec81347f71fd` is historical and rejected. Independent batch `deleg_e9f44138` returned identity PASS and A1a `PASS / BATCH_COMPLETE`, but S0 `BLOCKED / BATCH_COMPLETE` with two acceptance contradictions; the packet PASS is non-transferable and the index was unstaged without deleting worktree bytes.
 - Generation-9 exact staged tree `866e05547ec8ddc56f6370e1d05a7b0dbbce2a15` is historical and rejected. Independent batch `deleg_b25672f4` returned identity PASS and A1a `PASS / BATCH_COMPLETE`; S0 returned `BLOCKED / BATCH_COMPLETE` solely because four promised A-ADM-004 validator axes were not independently enforced. The semantic row itself and all prior closures passed; the packet PASS is non-transferable.
-- Generation-10 S0 at semantic tree `sha256:cf6874ee870a1e2bcca3fb83b785213ea8b2f0205e4a54afaf9161b609925ab1`, complete 24-file SDD tree `sha256:fb4dbd69802191f411c6df9281b57e8ca45085012179ff56c403ca940dfbef3a`, and receipt SHA-256 `bd63c52ce6eb88bc6ceac7a5adb1d80f546bfbe2cd7eae08728b39e5ca4154f2` received independent `PASS / BATCH_COMPLETE`, `findings=[]`, with all four mutation probes reproduced and no scope expansion. A1a rev1 packet `sha256:92f8f64e538fd8669d28c5ade27649fb61eb8e94f510193b69b149bbc940a6b7` passed binding/collision but was `BLOCKED / BATCH_COMPLETE` by one packet-only schema-bound discriminator gap. Rev2 packet `sha256:6d2326a68cdbaf7bad0326cd5d28207ffefa9a7f3ceb855b6ecf3d85912798ba` preserves the S0 binding and awaits fresh packet review.
+- Generation-10 S0 at semantic tree `sha256:cf6874ee870a1e2bcca3fb83b785213ea8b2f0205e4a54afaf9161b609925ab1` received independent `PASS / BATCH_COMPLETE`, `findings=[]`, with no scope expansion. A1a rev2 packet `sha256:6d2326a68cdbaf7bad0326cd5d28207ffefa9a7f3ceb855b6ecf3d85912798ba` then received fresh independent `PASS / BATCH_COMPLETE`, collection-schema discriminator PASS, collision PASS and `findings=[]` in `deleg_b45d4517`. Reviewed candidate commit is `06bfdc5702c21d3e81d53cce26b49bd38779870e`; only terminal evidence commit and task-start/collision freeze remain before writer dispatch.
 - Active implementation worktree remains exact product source `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1` on `codex/aar-provider-ready-workbench-v1-impl`; no product source/test change exists yet.
 - Exact-base Linux-native baseline is terminal: `743 passed, 5 skipped, 1 warning`; Ruff `All checks passed!`; sanitized digest-bound receipt `evidence/baseline-linux-native-summary.json`.
 - DrvFS attempt is separately classified `ABORTED_ENVIRONMENT_DIAGNOSTIC`; its launcher/supervisor T3/ENV-5 risk remains open and was not washed out by the Linux-native PASS.
@@ -26,14 +26,13 @@ Generation-10 changes only `validate_spec.py` by adding those four exact discrim
 
 Generation-10 A1a rev1 review found one packet-only gap: empty adapters and seven adapters can be rejected by planner/uniqueness invariants even when emitted collection bounds are missing. Rev2 therefore requires direct `model_json_schema()` assertions after local `$defs/$ref` resolution for all four bounded collections: adapters `1..6`; route profile IDs, principal patterns and capabilities `1..64`. Generic rejection or error typing is explicitly insufficient. Product ownership and focused T0/T1 scope remain unchanged.
 
-The A1a packet still owns exactly `src/aar/provider_ready_models.py` and `tests/test_provider_ready_models.py`. S0 has independently PASSed; no writer may start until exact rev2 packet PASS, reviewed-control commit and task-start allowlist checks.
+The A1a packet still owns exactly `src/aar/provider_ready_models.py` and `tests/test_provider_ready_models.py`. S0 and rev2 packet have independently PASSed; no writer may start until this terminal evidence is committed and the resulting exact task-start parent passes the final allowlist/collision check.
 
 ## Next exact actions
 
-1. Keep the reviewed Generation-10 S0 identities fixed and prove rev2 packet/control staged bytes have zero SDD or product delta.
-2. Obtain independent fixed-byte PASS for exact A1a rev2 packet using its two-path allowlist; the Generation-10 S0 PASS remains separately recorded.
-3. Verify the reviewed public SDD/control-only stage, run staged-candidate hygiene, then commit the reviewed successor generation.
-4. Record the exact task-start commit and two-path allowlist; only then dispatch the Luna/max A1a writer.
+1. Commit terminal S0/A1a PASS evidence without changing SDD or packet bytes.
+2. Freeze that commit as the exact task-start parent and recheck the two exclusive paths remain absent/collision-free with no concurrent owner.
+3. Dispatch one Luna/max A1a writer through Baton on those two paths only.
 
 ## Release boundary
 
@@ -49,4 +48,4 @@ T4 live provider calls and production cutover remain separately gated and are no
 
 ## Resume boundary
 
-Do not dispatch product-code writers while status is `generation_10_s0_pass_a1a_rev2_review_pending` or any later packet-review-pending state. PMO may edit only the packet/control/evidence artifacts needed to close A1a; any SDD-byte change invalidates the preserved S0 PASS and any packet-byte change invalidates the current packet review binding.
+Do not dispatch product-code writers while status is `entry_gate_pass_task_start_pending`. Only terminal control/evidence bytes may change before the task-start commit; any SDD or packet-byte change invalidates the corresponding independent PASS.

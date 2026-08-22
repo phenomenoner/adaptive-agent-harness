@@ -1,6 +1,6 @@
 {
   "schema_version": "aar.prw-evidence-index.v1",
-  "status": "generation_10_s0_pass_a1a_rev2_review_pending",
+  "status": "entry_gate_pass_task_start_pending",
   "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
   "entries": [
     {
@@ -336,8 +336,14 @@
       "s0_receipt_sha256": "sha256:bd63c52ce6eb88bc6ceac7a5adb1d80f546bfbe2cd7eae08728b39e5ca4154f2",
       "s0_review_outcome": "PASS_BATCH_COMPLETE",
       "accepted_product_source_parent": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
-      "outcome": "review_pending"
+      "outcome": "PASS_BATCH_COMPLETE",
+      "status": "independent_pass_batch_complete",
+      "review_batch": "deleg_b45d4517",
+      "finding_set_status": "BATCH_COMPLETE",
+      "collection_schema_discriminator": "PASS",
+      "collision": "PASS",
+      "findings": []
     }
   ],
-  "generated_at": "2026-08-22T18:44:00Z"
+  "generated_at": "2026-08-22T18:56:07Z"
 }

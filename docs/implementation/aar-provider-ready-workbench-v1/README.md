@@ -1,8 +1,8 @@
 # AR-PRW Implementation Control Plane
 
-**Status:** `generation_10_s0_pass_a1a_rev2_review_pending`
+**Status:** `entry_gate_pass_task_start_pending`
 
-**Control epoch:** `2026-08-22T18:44:00Z`
+**Control epoch:** `2026-08-22T18:56:07Z`
 
 **Accepted implementation base:** `adaptive-agent-runtime 0.5.0a0` / `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`
 
