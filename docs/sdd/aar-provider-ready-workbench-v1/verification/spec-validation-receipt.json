@@ -7,7 +7,7 @@
     "ACCEPTANCE.md": "sha256:947aef7bcda6d5b4aaf9925fe84ff46194f1656dd79611f6d2752e66278fc270",
     "ARCHITECTURE.md": "sha256:7bd91e21253624251e4d4fb3cde1ed3dffbdfb07817ed0034a4ed4b0d9018d34",
     "BASELINE.md": "sha256:9e8e3cc2e6af2cf9791794e2a5ab62771970f650c667028681a162800019d9ff",
-    "CONTRACTS.md": "sha256:ab1199c5186441855cf5e696c329245333a8ba8bc366075a643c365f2e228f11",
+    "CONTRACTS.md": "sha256:638cd1ed531ccc5ad0f3930d10fbab6b7f7a790516b71ca4c53759e496ccd591",
     "EVALUATION.md": "sha256:ebb8e7be2698ef512793dcc661f644e9b9e77aad8554eeea04c8b3c7fbe8dd9e",
     "HANDOFF.md": "sha256:a270a9fbbbb330f0257c64fe506bda1716f485b292039c14af403304eafab9b7",
     "IMPLEMENTATION-PLAN.md": "sha256:b6fb2e649549c3261bf946e3a69fc985c02197b815252b831c58c410c7e091f9",
@@ -22,7 +22,7 @@
     "verification/README.md": "sha256:6588017f70af17d45b3f5171bccecf375bd9d86bc4afb2e3ea7631e17c1f91b0",
     "verification/acceptance-matrix.json": "sha256:0bf0d9e7f341282f2db0e22240a43df850e16f302faff97e441a5a01716ecdc1",
     "verification/requirements.json": "sha256:50b41b0552807d92eb209aad4bee61688852cd2a93e88b3deef245dd90870290",
-    "verification/validate_spec.py": "sha256:72ba64aaf2c4fafe5c3b3f0912237f9e499e34b8919e55b44789068992b5e649"
+    "verification/validate_spec.py": "sha256:8a51ed6a86fa9f87c5752ba6f3b146ed3de8891d0d3d7804c97eac400f9c1fdf"
   },
   "frozen_baseline_files": {
     "docs/sdd/aar-rlm-native-workbench-v2/migration-v6.sql": "sha256:8e7080b319aadb4eb98b5e3b9e12efe8c189c0bd12a82dc8ba1eea7c7bfe29b7",
@@ -35,5 +35,5 @@
   "requirement_count": 38,
   "schema_version": "aar.prw-spec-validation.v1",
   "status": "pass",
-  "tree_digest": "sha256:cf6874ee870a1e2bcca3fb83b785213ea8b2f0205e4a54afaf9161b609925ab1"
+  "tree_digest": "sha256:f676ed30a08e3f9cbfe38b091f69c69857fe7da047612a964565a76d0ab702fb"
 }

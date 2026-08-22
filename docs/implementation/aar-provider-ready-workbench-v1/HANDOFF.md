@@ -1,8 +1,8 @@
 # AR-PRW Implementation Handoff
 
-**Status:** `a1b_op1_focused_green_a1b_op2_packet_pending`
+**Status:** `generation_13_op2_review_pending`
 
-**Control epoch:** `2026-08-22T20:30:32Z`
+**Control epoch:** `2026-08-22T22:17:48Z`
 
 ## State
 
@@ -13,6 +13,9 @@
 - Generation-8 exact staged tree `1e5d511fb70fd80967cf147cd7d7ec81347f71fd` is historical and rejected. Independent batch `deleg_e9f44138` returned identity PASS and A1a `PASS / BATCH_COMPLETE`, but S0 `BLOCKED / BATCH_COMPLETE` with two acceptance contradictions; the packet PASS is non-transferable and the index was unstaged without deleting worktree bytes.
 - Generation-9 exact staged tree `866e05547ec8ddc56f6370e1d05a7b0dbbce2a15` is historical and rejected. Independent batch `deleg_b25672f4` returned identity PASS and A1a `PASS / BATCH_COMPLETE`; S0 returned `BLOCKED / BATCH_COMPLETE` solely because four promised A-ADM-004 validator axes were not independently enforced. The semantic row itself and all prior closures passed; the packet PASS is non-transferable.
 - Generation-10 S0 at semantic tree `sha256:cf6874ee870a1e2bcca3fb83b785213ea8b2f0205e4a54afaf9161b609925ab1` received independent `PASS / BATCH_COMPLETE`, `findings=[]`, with no scope expansion. A1a rev2 packet `sha256:6d2326a68cdbaf7bad0326cd5d28207ffefa9a7f3ceb855b6ecf3d85912798ba` then received fresh independent `PASS / BATCH_COMPLETE`, collection-schema discriminator PASS, collision PASS and `findings=[]` in `deleg_b45d4517`. Reviewed candidate commit is `06bfdc5702c21d3e81d53cce26b49bd38779870e`; only terminal evidence commit and task-start/collision freeze remain before writer dispatch.
+- A1b-op2 rev1 packet `sha256:d5e9a2d729ba628f07bc4679c28c67f0bcad6c8b1784d4739585e9bb0d3216d9` was `BLOCKED / BATCH_COMPLETE` by `deleg_57893cc2`: wrong readback backend truth, missing issued-grant timestamp authority, overconstrained source-dependent readback observations and false-pass test seams. Generation-11 minimally amends those not-yet-implemented domains. Deterministic identities are semantic `sha256:feaa05ebecbb935163cfce48a606e00feedbf7a77d2c49cb49ddaa27927a362b`, complete `sha256:cd8998358ace9c8554129b0185b5e700dc453b13084c7ae382c39394cefe8498`, receipt `sha256:8c724dfba6bee39039afb2f4069d9986c1b3b5212dbf0f4fd40c60fa0359be38`; op2 rev2 packet is `sha256:51afade318d70548ebc293027c1e90cb6ffa0407d8f9a78371ce7301159f988e`. Independent fixed-byte review remains pending.
+- Generation-11/op2 rev2 dual review `deleg_ae798557` was `BLOCKED / BATCH_COMPLETE`: configured reference rows contradicted a broad current-generation rule; profile-verified source-backed catalog/tool/route observations were wrongly erased; pure rows claimed external manifest-tier equality; sibling-axis validator probes and positive-witness families were incomplete. Generation-12/rev3 repairs only those findings. Identities: semantic `sha256:090fdfce7aa7d2afd74200c683bd817af8ac525e088e42ea27fc6234b02a3933`, complete `sha256:0785dab4a48c94602580e4fa1ec7d163d2867dc966c96d47d87599c29e524e17`, receipt `sha256:08b5ea13635ff2fee7f00e86963a26d2fb3f66914cfafcc40d75fd6e8d8a73d8`, packet `sha256:17f2db67acda5f7098fa9906eadc3c69ae5c7070df23b0e690fac143faa3ee33`. Fresh fixed-byte review pending.
+- Generation-12 S0 passed, while rev3 packet review found one final migration-required underconstraint. Generation-13/rev4 explicitly requires null capability digest and unconfigured/reference-only method rows, with two one-axis exact-error probes. Identities: semantic `sha256:f676ed30a08e3f9cbfe38b091f69c69857fe7da047612a964565a76d0ab702fb`, complete `sha256:d9373a26bb56e3604b08857eb81b0770bbcfd5f81f8d6174f89e130256330d6d`, receipt `sha256:c416093655ad0d2c311f132ea1e0e6408d8d60222b74cf9ea6cd04a2de2d3d8c`, packet `sha256:30b0eb7f5fad76fccee96c46ad9ca2f69900c6438fcb6d00ea59d7219fd090ac`. Fresh fixed-byte review pending.
 - A1a product slice is focused-green at commit `3ca321fd0df5a20a969965a0c1705fdd02dc83b6`: exactly `src/aar/provider_ready_models.py` and `tests/test_provider_ready_models.py`, assertion-level and behavioral RED evidence, 15 focused tests PASS, full Ruff PASS and W291/W293 PASS. PMO repaired a test-only strict-list false positive and added explicit min/max/max+1 collection checks before final green; production model bytes were unchanged by that central review. This prerequisite slice closes no acceptance row alone.
 - A1b-op1 product slice is focused-green at commit `d03a10f4ac1cc18b43addb0e62245073f7274e3e`: exactly `src/aar/provider_ready_operator_models.py` and `tests/test_provider_ready_operator_models.py`, six operator-authority top-level schemas plus ten nested strict records, assertion and behavioral RED, 15 focused tests PASS, full Ruff PASS and W291/W293 PASS. PMO corrected only formatting/typing and one strict-list collection test seam before final green. No operator I/O/runtime behavior or acceptance-row closure is claimed.
 - Active implementation worktree is on `codex/aar-provider-ready-workbench-v1-impl`; product HEAD is `d03a10f4ac1cc18b43addb0e62245073f7274e3e`, descended from accepted product-source ancestor `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`; A1a and A1b-op1 each remain within exact two-file ownership.
@@ -32,9 +35,9 @@ The A1a packet still owns exactly `src/aar/provider_ready_models.py` and `tests/
 
 ## Next exact actions
 
-1. Derive and independently review the bounded A1b-op2 readback/grant packet; resolve timestamp scalar semantics from frozen authority and do not invent issuer/runtime behavior.
-2. Freeze an exact A1b-op2 task-start parent and exclusive source/test ownership.
-3. Dispatch one Luna/max A1b-op2 writer only after packet completeness and collision gates pass.
+1. Obtain independent fixed-byte Generation-13 S0 and A1b-op2 rev4 PASS/BATCH_COMPLETE without scope expansion.
+2. Commit exact reviewed SDD/control/packet bytes, freeze the task-start parent and repeat exclusive source/test collision checks.
+3. Dispatch one Luna/max A1b-op2 writer only after both review gates pass.
 
 ## Release boundary
 

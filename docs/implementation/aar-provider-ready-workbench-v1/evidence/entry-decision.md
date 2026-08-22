@@ -6,7 +6,7 @@
 
 **Source-baseline gate:** `SATISFIED_BY_FROZEN_EXACT_BASE_EVIDENCE`
 
-**Writer-dispatch gate:** `HOLD_PENDING_S0_AND_PACKET_REVIEW`
+**Writer-dispatch gate:** `HOLD_FOR_GENERATION_13_OP2_REVIEW`
 
 ## Decision
 
@@ -15,7 +15,7 @@
 - frozen `BASELINE.md` binds the exact accepted commit and records `743 passed, 5 skipped, 1 warning` with zero provider-backed contender calls;
 - the reviewed/frozen SDD and structural receipt bind the accepted source identity and requirements/acceptance inventory;
 - the active implementation branch was created from that exact commit;
-- the only current delta is the copied frozen SDD and PMO implementation-control documentation; no product source or test file has changed;
+- at the original entry decision, the only delta was copied frozen SDD and PMO control documentation; subsequently reviewed A1a and A1b-op1 product commits are recorded separately and do not retroactively change that baseline fact;
 - `evidence/entry-custody.json` records the source/worktree/spec identities and preservation boundary.
 
 A fresh full-suite rerun is therefore supplemental evidence, not an unbounded prerequisite for the first contract-model slice. This interpretation follows the plan's recorded-evidence wording and the minimum-sufficient-test cadence; it does not weaken any touched-boundary or final-candidate gate.
@@ -35,4 +35,14 @@ The first Luna/max writer may start only after:
 3. the exact task-start commit and two-path allowlist are frozen in the dispatch;
 4. no shared contract/generator or incompatible writer collides with A1a;
 5. Luna/max receives the packet through Baton with explicit RED → GREEN → focused verification → scoped handoff requirements.
-Luna A0 seam mapping and the exact-base source baseline are complete. Until the remaining conditions hold, status remains `spec_successor_review_pending` and product source remains unchanged.
+Luna A0 seam mapping and the exact-base source baseline are complete. For the current op2 successor, status remains `generation_13_op2_review_pending` and op2 product paths remain absent.
+
+## Current lane-specific successor gate
+
+The original Generation-10/A1a entry gate completed and authorized the focused-green A1a and A1b-op1 commits already recorded in the control plane. It does not authorize A1b-op2 against authority later shown incomplete.
+
+A1b-op2 rev1 `sha256:d5e9a2d729ba628f07bc4679c28c67f0bcad6c8b1784d4739585e9bb0d3216d9` is historical `BLOCKED / BATCH_COMPLETE`. Generation-11 and op2 rev2 now require fresh fixed-byte S0 and packet `PASS / BATCH_COMPLETE` before any op2 writer. Until then, A1a/op1 remain focused-green, op2 product paths remain absent, and the writer gate is HOLD.
+
+Generation-11/op2 rev2 is also historical `BLOCKED / BATCH_COMPLETE`. Generation-12/op2 rev3 is the current fixed-byte successor; it requires fresh dual PASS before exact candidate commit or writer dispatch.
+
+Generation-12 S0 passed, but op2 rev3 remained historical `BLOCKED / BATCH_COMPLETE` by one migration-required underconstraint. Generation-13/op2 rev4 is now the current fixed-byte successor and still requires fresh dual PASS.

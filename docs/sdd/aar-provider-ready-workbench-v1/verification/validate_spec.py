@@ -475,6 +475,21 @@ def validate(root: Path) -> dict[str, Any]:
         "client-supplied context is only a lookup/challenge; it never establishes those values",
         "an `ordinal` field MUST NOT be emitted",
         'method="artifact.put"` plus `backend_kind="caller_driver"` is invalid',
+        "`BackendAvailability.backend_kind` is the readback-only domain",
+        "| `unconfigured` | `false` | `false` | both null | `unknown` |",
+        "`previous_activation_authority_digest` remains nullable in every state",
+        "`candidate` is an independently installed observation",
+        "`issued_at_unix_ms: UnixMs`",
+        "requires `issued_at_unix_ms < expires_at_unix_ms`",
+        "Python-mode tests use tuples; JSON-mode arrays are validated through `model_validate_json`",
+        "| `reference` | `true` | `true` | both null | `unknown` |",
+        "only native/caller-driver executable rows carry the current runtime generation",
+        "all profile-derived nullable values remain source-dependent",
+        "State alone does not make an independently observed operator tuple non-null",
+        "Broker/tool/route observations and validated profile/history/operator evidence remain source-dependent",
+        "Independently validated broker-catalog, tool-surface and route observations remain source-dependent",
+        "every profile/history/runtime/grant/capability binding is null; all six methods are truthful unconfigured/reference rows",
+        "`migration_required` cannot carry `capability_digest` or a configured native/caller-driver method row",
     )
     for phrase in required_contract_phrases:
         if phrase not in contracts:

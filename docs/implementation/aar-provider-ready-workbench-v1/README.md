@@ -1,8 +1,8 @@
 # AR-PRW Implementation Control Plane
 
-**Status:** `a1b_op1_focused_green_a1b_op2_packet_pending`
+**Status:** `generation_13_op2_review_pending`
 
-**Control epoch:** `2026-08-22T20:30:32Z`
+**Control epoch:** `2026-08-22T22:17:48Z`
 
 **Accepted implementation base:** `adaptive-agent-runtime 0.5.0a0` / `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`
 
@@ -43,14 +43,18 @@ Not authorized before that all-phase terminal gate:
 |---|---|
 | Accepted source commit | `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1` |
 | Historical imported SDD complete tree | `sha256:bb0287e1718033c773e763096b202591307458e1524ab8de9ea8d5a29039afee` |
-| Active Generation-10 semantic tree | `sha256:cf6874ee870a1e2bcca3fb83b785213ea8b2f0205e4a54afaf9161b609925ab1` |
-| Active Generation-10 complete tree | `sha256:fb4dbd69802191f411c6df9281b57e8ca45085012179ff56c403ca940dfbef3a` |
+| Historical reviewed Generation-10 semantic tree | `sha256:cf6874ee870a1e2bcca3fb83b785213ea8b2f0205e4a54afaf9161b609925ab1` |
+| Historical blocked Generation-11 semantic tree | `sha256:feaa05ebecbb935163cfce48a606e00feedbf7a77d2c49cb49ddaa27927a362b` |
+| Historical S0-PASS/op2-blocked Generation-12 semantic tree | `sha256:090fdfce7aa7d2afd74200c683bd817af8ac525e088e42ea27fc6234b02a3933` |
+| Active Generation-13 semantic tree | `sha256:f676ed30a08e3f9cbfe38b091f69c69857fe7da047612a964565a76d0ab702fb` |
+| Active Generation-13 complete tree | `sha256:d9373a26bb56e3604b08857eb81b0770bbcfd5f81f8d6174f89e130256330d6d` |
 | `requirements.json` file SHA-256 | `50b41b0552807d92eb209aad4bee61688852cd2a93e88b3deef245dd90870290` |
 | `acceptance-matrix.json` file SHA-256 | `0bf0d9e7f341282f2db0e22240a43df850e16f302faff97e441a5a01716ecdc1` |
-| Generation-10 spec receipt file SHA-256 | `bd63c52ce6eb88bc6ceac7a5adb1d80f546bfbe2cd7eae08728b39e5ca4154f2` |
+| Generation-13 spec receipt file SHA-256 | `c416093655ad0d2c311f132ea1e0e6408d8d60222b74cf9ea6cd04a2de2d3d8c` |
 | A1a rev2 packet SHA-256 | `6d2326a68cdbaf7bad0326cd5d28207ffefa9a7f3ceb855b6ecf3d85912798ba` |
 | A1b-op1 packet SHA-256 | `35a962b1388787ee10390872380a64028074ad5b3afec7bb490f725ab062a7d8` |
 | A1b-op1 product commit | `d03a10f4ac1cc18b43addb0e62245073f7274e3e` |
+| A1b-op2 rev4 packet SHA-256 | `30b0eb7f5fad76fccee96c46ad9ca2f69900c6438fcb6d00ea59d7219fd090ac` |
 | Acceptance inventory | 45 rows: 39 mandatory T0-T3 release gates, 6 non-release T4 rows, and zero T5 rows |
 
 The dirty canonical worktree remains preserved on `codex/public-plugin-marketplace`; the active implementation worktree is the dedicated `aar-provider-ready-workbench-v1` checkout on `codex/aar-provider-ready-workbench-v1-impl`. Local filesystem paths are intentionally omitted from this public control document.
@@ -97,6 +101,9 @@ B and D may later run in separate worktrees only after A freezes and PMO publish
 
 - A1a is focused-green at `3ca321fd0df5a20a969965a0c1705fdd02dc83b6`: its exact two files have 15 focused tests PASS and both Ruff gates PASS after PMO corrected a strict-tuple test false positive. No acceptance row closes from this prerequisite alone.
 - A1b-op1 is focused-green at `d03a10f4ac1cc18b43addb0e62245073f7274e3e`: its exact two files implement six operator-authority top-level schemas plus ten nested strict records, with 15 focused tests PASS and both Ruff gates PASS. PMO corrected only formatting/typing and one strict-list collection test seam before final green. No operator I/O/runtime behavior or acceptance row closure is claimed; A1b-op2 and A1b-eval remain pending.
+- A1b-op2 rev1 review was `BLOCKED / BATCH_COMPLETE`: it exposed the missing readback `unconfigured` backend domain, incorrect reference-row truth, unfrozen issued-grant timestamp fields, overconstrained source-dependent readback nullability and test-oracle false-pass seams. Generation-11 amends only those not-yet-implemented op2 authorities and validator discriminators; A1a/op1 product bytes and evidence remain unchanged. Rev2 independent review is pending.
+- Generation-11/op2 rev2 dual review was also `BLOCKED / BATCH_COMPLETE`: it found the configured-reference/current-generation contradiction, unauthorized profile-verified catalog/tool/route erasure, an external manifest-tier equality claim inside a pure row, missing sibling-axis validator markers and incomplete positive-witness families. Generation-12/rev3 minimally repairs those exact findings; dual review pending.
+- Generation-12 S0 passed, and op2 rev3 closed every prior finding but remained `BLOCKED / BATCH_COMPLETE` by one migration-required underconstraint: capability digest and configured native/caller rows were not explicitly forbidden. Generation-13/rev4 adds only that null/method restriction plus exact one-axis test/validator probes; review pending.
 
 ## Evidence policy
 

@@ -416,20 +416,43 @@ This is the strict output of read-only `aar-admin activation status`; it has a s
 
 Each `methods` row has exactly the frozen fields and domains: `method`, `contract_id`, request/response schema digests, `backend_kind`, `configured`, `reference_only`, nullable `adapter_id`, nullable positive `adapter_generation`, and frozen capability `evidence_tier`. Null `operator_epoch_kind` requires null epoch/receipt; a non-null kind requires its matching prepared/terminal authority, the exact epoch, and null receipt until a matching terminal marker exists. A non-null receipt digest is the nested strict receipt self digest, never the outer marker digest.
 
+`BackendAvailability.backend_kind` is the readback-only domain `unconfigured | native | caller_driver | reference`; it deliberately extends the three-value activation-manifest backend domain with the observed `unconfigured` state. The document-local row matrix is exhaustive:
+
+| `backend_kind` | `configured` | `reference_only` | `adapter_id` / `adapter_generation` | `evidence_tier` |
+|---|---:|---:|---|---|
+| `unconfigured` | `false` | `false` | both null | `unknown` |
+| `reference` | `true` | `true` | both null | `unknown` |
+| `native | caller_driver` | `true` | `false` | both non-null | any `CapabilityEvidenceTier`; exact manifest equality is composition evidence |
+
+No fourth combination is valid. `artifact.put` remains ineligible for `caller_driver`. Manifest-tier equality, current-generation equality and adapter health are observer/composition proofs; the strict row validates only the supplied wire combination. In an `active | degraded` document, only native/caller-driver executable rows carry the current runtime generation; reference and unconfigured rows retain null adapter generation exactly as required by this matrix.
+
 State/nullability rules are exhaustive:
 
 | State | Required bindings |
 |---|---|
 | `unconfigured` | no profile/history/runtime/grant/capability binding; six methods are truthful unconfigured/reference rows; planner is null/not ready |
-| `migration_required` | registry version is `5`, reason is `REGISTRY_VERSION_UNSUPPORTED`, and every profile/history/runtime/grant binding is null |
+| `migration_required` | registry version is `5`, reason is `REGISTRY_VERSION_UNSUPPORTED`; every profile/history/runtime/grant/capability binding is null; all six methods are truthful unconfigured/reference rows and no mutation adapter is configured |
 | `profile_invalid` | registry is `6`; reason is exactly `ACTIVATION_PROFILE_INVALID | ACTIVATION_BINDING_MISMATCH | GRANT_POLICY_INVALID`; candidate/registry observations are non-null, each profile-derived field is non-null iff its owning document validated before the named failure, runtime/grant/capability bindings are null and methods admit no mutation |
 | `profile_verified` | reason is `none`; candidate/attestation/profile/history tip/current equality are non-null; runtime/grant/capability bindings remain null; planner is not ready |
 | `starting` | reason is `none`; all candidate/profile/history bindings and a fresh runtime generation are non-null; grant-set/capability/catalog/tool/route bindings remain null and methods/planner remain non-ready until the single Ready publication transitions directly to `active` |
-| `active` | reason is `none`; registry is `6`; every candidate/profile/history/runtime/grant/capability/catalog/tool/route field is non-null; history tip equals current; configured rows carry the current runtime generation; planner is ready |
+| `active` | reason is `none`; registry is `6`; every candidate/profile/history/runtime/grant/capability/catalog/tool/route field is non-null except the explicitly nullable predecessor-authority and operator tuple; history tip equals current; native/caller-driver executable rows carry the current runtime generation while reference/unconfigured rows retain null generation; planner is ready |
 | `degraded` | a generation that previously reached exact `active` is positively observed but disabled after one runtime health/binding failure; reason is exactly `GRANT_BINDING_MISMATCH | PLANNER_UNAVAILABLE | CAPABILITY_UNAVAILABLE | STALE_ADAPTER_GENERATION`; all prior active candidate/profile/history/runtime/grant/capability/catalog/tool/route facts remain non-null, planner is not ready and issuer rejects/revokes grants |
 | `recovery_required` | reason is exactly `ACTIVATION_HISTORY_CONFLICT | CUTOVER_RECOVERY_REQUIRED | ABORT_OR_APPLY_REQUIRED | RECONCILE_INPUT_REQUIRED`; detection synchronously removes Ready and retires any running generation/issuer before readback, so runtime/grant/capability fields are null and no mutation grant is authoritative |
 
 Observation selection is deterministic and uses the first matching predicate in this precedence: (1) any ambiguous/conflicting/unmatched authority, DB commit, history/current or reconcile tuple → `recovery_required`; (2) exact v5 with no authority conflict → `migration_required`; (3) absent/uninitialized registry and no authority artifact → `unconfigured`; (4) exact current Ready/discovery plus all bindings → `active`; (5) positively observed running generation disabled by one runtime reason → `degraded`; (6) allocated generation without Ready → `starting`; (7) exact v6 profile/history/current with no generation → `profile_verified`; (8) exact v6 whose profile/policy/binding validation fails → `profile_invalid`. No reason belongs to two states. Any row combination outside this table rejects. A nullable observation is non-null only when its named source validates and remains authoritative under the selected state; otherwise it is null. Non-active states cannot publish a mutation grant. `status` performs no file/DB write, token refresh, provider call, grant mint, migration, host construction, or supervisor start.
+
+For strict document-local validation, source-dependent nullability is preserved rather than guessed:
+
+- `candidate` is an independently installed observation and MAY remain non-null in `unconfigured` or `migration_required`; it is required non-null in `profile_invalid | profile_verified | starting | active | degraded`.
+- `migration_required` cannot carry `capability_digest` or a configured native/caller-driver method row; candidate and independently source-backed non-authority observations may still be present.
+- `previous_activation_authority_digest` remains nullable in every state, including first-generation `active | degraded`; it is never used as a proxy for whether current history validated.
+- `operator_epoch_kind`, `operator_epoch` and `latest_operator_receipt_digest` are governed only by their local triple: null kind requires both others null; non-null kind requires non-null epoch and permits a null receipt until a matching terminal exists. State alone does not make an independently observed operator tuple non-null.
+- `profile_invalid` requires candidate plus v6 registry observations, but all profile-derived nullable values remain source-dependent; the pure document MUST NOT infer which owning document validated before the named failure. It only forbids runtime/grant/capability authority, a ready planner and configured mutation rows.
+- `profile_verified` requires the validated profile/history bindings named by its state row and null runtime/grant/capability authority. Independently validated broker-catalog, tool-surface and route observations remain source-dependent and MAY be null or non-null; the pure document does not erase them by state alone.
+- `active | degraded` require every prior-active binding named by their rows except the legitimately nullable predecessor-authority digest and independently nullable operator tuple above.
+- `recovery_required` requires runtime-generation, supervisor, grant-set and capability bindings null. Broker/tool/route observations and validated profile/history/operator evidence remain source-dependent under the selected recovery reason; the pure document MUST NOT erase them merely because recovery is required. Planner readiness and configured mutation rows remain forbidden.
+
+Focused strict-model tests MUST include positive witnesses for each permitted nullable variant above and one-axis negatives whose otherwise-correct root digest is recomputed. Python-mode tests use tuples; JSON-mode arrays are validated through `model_validate_json` so a `tuple_type` failure cannot substitute for the intended state/collection invariant.
 
 ## 6. Operator CLI and mutation ownership
 
@@ -584,7 +607,7 @@ After activation preflight and factory derivation, the supervisor constructs thi
 | `max_ttl_ms` | integer `1000..900000`, no greater than intent `max_deadline_ms`; this lower bound equals the frozen mutation/job wall-time minimum so every active policy can admit at least one bounded request |
 | `grant_set_digest` | self `Digest` |
 
-The issuer stores each minted grant in a server-side strict `IssuedWorkbenchGrant` value with exactly: `grant_id`, `grant_set_digest`, `capability`, `principal_id`, `session_id`, `runtime_generation`, `activation_generation`, `profile_digest`, `activation_authority_digest`, `capability_digest`, `route_catalog_digest`, the six concrete budget ceilings, `issued_at_unix_ms`, `expires_at_unix_ms`, and `revoked`. The record is not client-authored and is not a new MCP wire schema. Its strict package-owned type and focused tests prevent omission or extra fields; because no canonical public shape document exists, v1 deliberately does **not** place a non-recomputable internal-record-shape digest in `aar.workbench-grant-set.v1`.
+The issuer stores each minted grant in a server-side strict `IssuedWorkbenchGrant` value with exactly: `grant_id`, `grant_set_digest`, `capability`, `principal_id`, `session_id`, `runtime_generation`, `activation_generation`, `profile_digest`, `activation_authority_digest`, `capability_digest`, `route_catalog_digest`, the six concrete budget ceilings, `issued_at_unix_ms: UnixMs`, `expires_at_unix_ms: UnixMs`, and `revoked: boolean`. Every concrete ceiling uses the exact matching `GrantBudgetCeiling` scalar domain. The internal record requires `issued_at_unix_ms < expires_at_unix_ms`; live-clock expiry, grant-set `max_ttl_ms`, profile deadline, job deadline and generation-retirement comparisons remain issuer/composition behavior. The record is not client-authored and is not a new MCP wire schema. Its strict package-owned type and focused tests prevent omission or extra fields; because no canonical public shape document exists, v1 deliberately does **not** place a non-recomputable internal-record-shape digest in `aar.workbench-grant-set.v1`.
 
 Mutation validation resolves the frozen workbench context's sorted unique `grant_ids` array (`1..64`) before deriving required methods:
 
