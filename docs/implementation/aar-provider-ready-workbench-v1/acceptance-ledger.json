@@ -1,7 +1,7 @@
 {
   "schema_version": "aar.prw-implementation-ledger.v1",
-  "generated_at": "2026-08-22T18:56:07Z",
-  "status": "entry_gate_pass_task_start_pending",
+  "generated_at": "2026-08-22T19:17:55Z",
+  "status": "a1a_focused_green_a1b_packet_pending",
   "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
   "implementation_branch": "codex/aar-provider-ready-workbench-v1-impl",
   "historical_spec_tree_digest": "sha256:bb0287e1718033c773e763096b202591307458e1524ab8de9ea8d5a29039afee",
@@ -383,5 +383,7 @@
   "s0_review_status": "generation_10_pass_batch_complete",
   "a1a_packet_sha256": "6d2326a68cdbaf7bad0326cd5d28207ffefa9a7f3ceb855b6ecf3d85912798ba",
   "a1a_packet_review_status": "generation_10_rev2_pass_batch_complete",
-  "entry_gate_status": "dual_pass"
+  "entry_gate_status": "dual_pass",
+  "current_product_commit": "3ca321fd0df5a20a969965a0c1705fdd02dc83b6",
+  "current_lane": "A1b_packet_preparation"
 }

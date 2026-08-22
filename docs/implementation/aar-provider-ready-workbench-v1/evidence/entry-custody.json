@@ -1,7 +1,7 @@
 {
   "schema_version": "aar.prw-entry-custody.v1",
-  "generated_at": "2026-08-22T18:56:07Z",
-  "result": "entry_gate_pass_task_start_pending",
+  "generated_at": "2026-08-22T19:17:55Z",
+  "result": "a1a_focused_green_a1b_packet_pending",
   "requirement": "CUST-001",
   "acceptance_row": "A-CUST-001",
   "canonical_worktree": {
@@ -53,10 +53,12 @@
     "a1a_predecessor_packet_sha256": "92f8f64e538fd8669d28c5ade27649fb61eb8e94f510193b69b149bbc940a6b7",
     "a1a_review_batch": "deleg_b45d4517",
     "a1a_findings": [],
-    "entry_gate": "dual_pass"
+    "entry_gate": "dual_pass",
+    "a1a_product_status": "focused_green",
+    "a1a_product_commit": "3ca321fd0df5a20a969965a0c1705fdd02dc83b6"
   },
   "limitations": [
     "The initial canonical status bytes were observed before this receipt but were not retained as a comparable raw digest; this receipt therefore binds the after-state and executed preservation actions rather than claiming byte-for-byte status equality.",
-    "Generation-10 S0 and A1a rev2 have independent PASS/BATCH_COMPLETE. Reviewed candidate commit exists; exact task-start parent, product implementation, wheel candidate, live evidence, push/tag/release remain unclaimed."
+    "A1a focused T0/T1 is green at commit 3ca321f; it is a prerequisite slice and closes no acceptance row alone. A1b+, shared integration, wheel, installed, live, push/tag/release remain unclaimed."
   ]
 }

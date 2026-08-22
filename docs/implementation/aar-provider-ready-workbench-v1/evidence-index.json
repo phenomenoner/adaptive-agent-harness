@@ -1,6 +1,6 @@
 {
   "schema_version": "aar.prw-evidence-index.v1",
-  "status": "entry_gate_pass_task_start_pending",
+  "status": "a1a_focused_green_a1b_packet_pending",
   "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
   "entries": [
     {
@@ -343,7 +343,31 @@
       "collection_schema_discriminator": "PASS",
       "collision": "PASS",
       "findings": []
+    },
+    {
+      "id": "a1a-product-slice",
+      "status": "focused_green",
+      "outcome": "FOCUSED_GREEN",
+      "commit": "3ca321fd0df5a20a969965a0c1705fdd02dc83b6",
+      "owned_paths": [
+        "src/aar/provider_ready_models.py",
+        "tests/test_provider_ready_models.py"
+      ],
+      "source_sha256": "6da479d7460fee05a8adbc78a570180b0d26b6781c955f30b53865e49f268afa",
+      "test_sha256": "351255db3af8075150bcc006c45a58555feea8f51859aabaf3d5fc63f7653f1f",
+      "red_evidence": [
+        "assertion-level module missing: 1 failed",
+        "behavioral strict extra-field failure"
+      ],
+      "verification": [
+        "focused pytest: 15 passed",
+        "ruff full: PASS",
+        "ruff W291,W293: PASS"
+      ],
+      "central_review_note": "PMO added exact-min/max/max+1 behavioral coverage and replaced strict-list false positives with Python-mode tuple payloads before final green; product model bytes unchanged by central review.",
+      "acceptance_rows_closed": [],
+      "scope": "A1a prerequisite only; no shared registry/schema/generator/package/runtime integration claimed."
     }
   ],
-  "generated_at": "2026-08-22T18:56:07Z"
+  "generated_at": "2026-08-22T19:17:55Z"
 }

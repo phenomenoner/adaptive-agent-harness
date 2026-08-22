@@ -1,8 +1,8 @@
 # AR-PRW Implementation Control Plane
 
-**Status:** `entry_gate_pass_task_start_pending`
+**Status:** `a1a_focused_green_a1b_packet_pending`
 
-**Control epoch:** `2026-08-22T18:56:07Z`
+**Control epoch:** `2026-08-22T19:17:55Z`
 
 **Accepted implementation base:** `adaptive-agent-runtime 0.5.0a0` / `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`
 
