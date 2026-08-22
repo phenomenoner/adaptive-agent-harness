@@ -1,8 +1,8 @@
 # AR-PRW Implementation Handoff
 
-**Status:** `a1a_focused_green_a1b_packet_pending`
+**Status:** `a1b_op1_focused_green_a1b_op2_packet_pending`
 
-**Control epoch:** `2026-08-22T19:17:55Z`
+**Control epoch:** `2026-08-22T20:30:32Z`
 
 ## State
 
@@ -14,7 +14,8 @@
 - Generation-9 exact staged tree `866e05547ec8ddc56f6370e1d05a7b0dbbce2a15` is historical and rejected. Independent batch `deleg_b25672f4` returned identity PASS and A1a `PASS / BATCH_COMPLETE`; S0 returned `BLOCKED / BATCH_COMPLETE` solely because four promised A-ADM-004 validator axes were not independently enforced. The semantic row itself and all prior closures passed; the packet PASS is non-transferable.
 - Generation-10 S0 at semantic tree `sha256:cf6874ee870a1e2bcca3fb83b785213ea8b2f0205e4a54afaf9161b609925ab1` received independent `PASS / BATCH_COMPLETE`, `findings=[]`, with no scope expansion. A1a rev2 packet `sha256:6d2326a68cdbaf7bad0326cd5d28207ffefa9a7f3ceb855b6ecf3d85912798ba` then received fresh independent `PASS / BATCH_COMPLETE`, collection-schema discriminator PASS, collision PASS and `findings=[]` in `deleg_b45d4517`. Reviewed candidate commit is `06bfdc5702c21d3e81d53cce26b49bd38779870e`; only terminal evidence commit and task-start/collision freeze remain before writer dispatch.
 - A1a product slice is focused-green at commit `3ca321fd0df5a20a969965a0c1705fdd02dc83b6`: exactly `src/aar/provider_ready_models.py` and `tests/test_provider_ready_models.py`, assertion-level and behavioral RED evidence, 15 focused tests PASS, full Ruff PASS and W291/W293 PASS. PMO repaired a test-only strict-list false positive and added explicit min/max/max+1 collection checks before final green; production model bytes were unchanged by that central review. This prerequisite slice closes no acceptance row alone.
-- Active implementation worktree is on `codex/aar-provider-ready-workbench-v1-impl`; product HEAD is `3ca321fd0df5a20a969965a0c1705fdd02dc83b6`, descended from accepted product-source ancestor `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`, with A1a limited to its exact two-file ownership.
+- A1b-op1 product slice is focused-green at commit `d03a10f4ac1cc18b43addb0e62245073f7274e3e`: exactly `src/aar/provider_ready_operator_models.py` and `tests/test_provider_ready_operator_models.py`, six operator-authority top-level schemas plus ten nested strict records, assertion and behavioral RED, 15 focused tests PASS, full Ruff PASS and W291/W293 PASS. PMO corrected only formatting/typing and one strict-list collection test seam before final green. No operator I/O/runtime behavior or acceptance-row closure is claimed.
+- Active implementation worktree is on `codex/aar-provider-ready-workbench-v1-impl`; product HEAD is `d03a10f4ac1cc18b43addb0e62245073f7274e3e`, descended from accepted product-source ancestor `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`; A1a and A1b-op1 each remain within exact two-file ownership.
 - Exact-base Linux-native baseline is terminal: `743 passed, 5 skipped, 1 warning`; Ruff `All checks passed!`; sanitized digest-bound receipt `evidence/baseline-linux-native-summary.json`.
 - DrvFS attempt is separately classified `ABORTED_ENVIRONMENT_DIAGNOSTIC`; its launcher/supervisor T3/ENV-5 risk remains open and was not washed out by the Linux-native PASS.
 - Luna A0 seam map completed and PMO source-check confirmed A1a's two-path slice does not collide with shared generators/registries/assets.
@@ -31,9 +32,9 @@ The A1a packet still owns exactly `src/aar/provider_ready_models.py` and `tests/
 
 ## Next exact actions
 
-1. Derive and independently review a bounded A1b packet from the frozen SDD; do not invent shared registry/generator/package authority.
-2. Freeze an exact A1b task-start parent and exclusive source/test ownership.
-3. Dispatch one Luna/max A1b writer only after packet completeness and collision gates pass.
+1. Derive and independently review the bounded A1b-op2 readback/grant packet; resolve timestamp scalar semantics from frozen authority and do not invent issuer/runtime behavior.
+2. Freeze an exact A1b-op2 task-start parent and exclusive source/test ownership.
+3. Dispatch one Luna/max A1b-op2 writer only after packet completeness and collision gates pass.
 
 ## Release boundary
 
@@ -49,4 +50,4 @@ T4 live provider calls and production cutover remain separately gated and are no
 
 ## Resume boundary
 
-Do not dispatch A1b until its bounded packet, exact task-start parent and exclusive path collision check pass. A1a evidence may be reused while commit `3ca321f` and its two files remain unchanged; any shared-registry/schema/generator/package need is a stop-and-reopen condition.
+Do not dispatch A1b-op2 until its bounded packet, exact task-start parent and exclusive path collision check pass. A1a and A1b-op1 evidence may be reused while commits `3ca321f` and `d03a10f` plus their exact owned files remain unchanged; any shared-registry/schema/generator/package or issuer/runtime behavior need is a stop-and-reopen condition.

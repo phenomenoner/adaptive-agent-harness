@@ -60,5 +60,15 @@
   "limitations": [
     "The initial canonical status bytes were observed before this receipt but were not retained as a comparable raw digest; this receipt therefore binds the after-state and executed preservation actions rather than claiming byte-for-byte status equality.",
     "A1a focused T0/T1 is green at commit 3ca321f; it is a prerequisite slice and closes no acceptance row alone. A1b+, shared integration, wheel, installed, live, push/tag/release remain unclaimed."
-  ]
+  ],
+  "currentImplementationStatus": "a1b_op1_focused_green_a1b_op2_packet_pending",
+  "a1bOp1ProductCommit": "d03a10f4ac1cc18b43addb0e62245073f7274e3e",
+  "a1bOp1FocusedEvidence": {
+    "pytest": "15 passed",
+    "ruffFull": "PASS",
+    "ruffWhitespace": "PASS",
+    "sourceSha256": "23af271b740bc4dc9409380bea5a3c4d0377b1ae7cf39d152b16b4de083086b4",
+    "testSha256": "12b1000581727c2eb45195bdaa3d677b43b3c204e216d647c0e9e24da0b45ab9",
+    "rowClosure": []
+  }
 }

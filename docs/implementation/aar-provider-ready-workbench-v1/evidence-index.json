@@ -1,6 +1,6 @@
 {
   "schema_version": "aar.prw-evidence-index.v1",
-  "status": "a1a_focused_green_a1b_packet_pending",
+  "status": "a1b_op1_focused_green_a1b_op2_packet_pending",
   "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
   "entries": [
     {
@@ -369,5 +369,19 @@
       "scope": "A1a prerequisite only; no shared registry/schema/generator/package/runtime integration claimed."
     }
   ],
-  "generated_at": "2026-08-22T19:17:55Z"
+  "generated_at": "2026-08-22T19:17:55Z",
+  "items": [
+    {
+      "id": "a1b-op1-focused-green",
+      "kind": "product-commit-and-focused-test",
+      "status": "PASS",
+      "commit": "d03a10f4ac1cc18b43addb0e62245073f7274e3e",
+      "paths": [
+        "src/aar/provider_ready_operator_models.py",
+        "tests/test_provider_ready_operator_models.py"
+      ],
+      "tests": "15 passed; Ruff full and W291/W293 PASS",
+      "note": "Prerequisite strict-model slice only; no acceptance row closed and no operator I/O/runtime behavior implemented."
+    }
+  ]
 }

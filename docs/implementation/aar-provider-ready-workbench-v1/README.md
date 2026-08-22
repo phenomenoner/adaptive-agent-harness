@@ -1,8 +1,8 @@
 # AR-PRW Implementation Control Plane
 
-**Status:** `a1a_focused_green_a1b_packet_pending`
+**Status:** `a1b_op1_focused_green_a1b_op2_packet_pending`
 
-**Control epoch:** `2026-08-22T19:17:55Z`
+**Control epoch:** `2026-08-22T20:30:32Z`
 
 **Accepted implementation base:** `adaptive-agent-runtime 0.5.0a0` / `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`
 
@@ -49,6 +49,8 @@ Not authorized before that all-phase terminal gate:
 | `acceptance-matrix.json` file SHA-256 | `0bf0d9e7f341282f2db0e22240a43df850e16f302faff97e441a5a01716ecdc1` |
 | Generation-10 spec receipt file SHA-256 | `bd63c52ce6eb88bc6ceac7a5adb1d80f546bfbe2cd7eae08728b39e5ca4154f2` |
 | A1a rev2 packet SHA-256 | `6d2326a68cdbaf7bad0326cd5d28207ffefa9a7f3ceb855b6ecf3d85912798ba` |
+| A1b-op1 packet SHA-256 | `35a962b1388787ee10390872380a64028074ad5b3afec7bb490f725ab062a7d8` |
+| A1b-op1 product commit | `d03a10f4ac1cc18b43addb0e62245073f7274e3e` |
 | Acceptance inventory | 45 rows: 39 mandatory T0-T3 release gates, 6 non-release T4 rows, and zero T5 rows |
 
 The dirty canonical worktree remains preserved on `codex/public-plugin-marketplace`; the active implementation worktree is the dedicated `aar-provider-ready-workbench-v1` checkout on `codex/aar-provider-ready-workbench-v1-impl`. Local filesystem paths are intentionally omitted from this public control document.
@@ -88,8 +90,13 @@ B and D may later run in separate worktrees only after A freezes and PMO publish
 - [x] Exact-base pytest terminal: `743 passed, 5 skipped, 1 warning`.
 - [x] Exact-base Ruff terminal: `All checks passed!`.
 - [x] Luna/max Lane A seam map source-checked by PMO.
-- [ ] Reviewer-discovered `SPEC_GAP` is closed by a reviewed deterministic SDD successor.
-- [ ] First RED-first writer packet has exclusive writable paths, named acceptance rows, and independent PASS.
+- [x] Reviewer-discovered `SPEC_GAP` is closed by a reviewed deterministic SDD successor.
+- [x] First RED-first writer packet has exclusive writable paths, named acceptance rows, and independent PASS.
+
+## Current implementation evidence
+
+- A1a is focused-green at `3ca321fd0df5a20a969965a0c1705fdd02dc83b6`: its exact two files have 15 focused tests PASS and both Ruff gates PASS after PMO corrected a strict-tuple test false positive. No acceptance row closes from this prerequisite alone.
+- A1b-op1 is focused-green at `d03a10f4ac1cc18b43addb0e62245073f7274e3e`: its exact two files implement six operator-authority top-level schemas plus ten nested strict records, with 15 focused tests PASS and both Ruff gates PASS. PMO corrected only formatting/typing and one strict-list collection test seam before final green. No operator I/O/runtime behavior or acceptance row closure is claimed; A1b-op2 and A1b-eval remain pending.
 
 ## Evidence policy
 

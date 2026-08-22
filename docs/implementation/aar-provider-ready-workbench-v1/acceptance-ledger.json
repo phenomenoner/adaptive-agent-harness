@@ -1,7 +1,7 @@
 {
   "schema_version": "aar.prw-implementation-ledger.v1",
   "generated_at": "2026-08-22T19:17:55Z",
-  "status": "a1a_focused_green_a1b_packet_pending",
+  "status": "a1b_op1_focused_green_a1b_op2_packet_pending",
   "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
   "implementation_branch": "codex/aar-provider-ready-workbench-v1-impl",
   "historical_spec_tree_digest": "sha256:bb0287e1718033c773e763096b202591307458e1524ab8de9ea8d5a29039afee",
@@ -385,5 +385,26 @@
   "a1a_packet_review_status": "generation_10_rev2_pass_batch_complete",
   "entry_gate_status": "dual_pass",
   "current_product_commit": "3ca321fd0df5a20a969965a0c1705fdd02dc83b6",
-  "current_lane": "A1b_packet_preparation"
+  "current_lane": "A1b_packet_preparation",
+  "implementationEvidence": {
+    "A1b-op1": {
+      "status": "focused_green",
+      "commit": "d03a10f4ac1cc18b43addb0e62245073f7274e3e",
+      "ownedPaths": [
+        "src/aar/provider_ready_operator_models.py",
+        "tests/test_provider_ready_operator_models.py"
+      ],
+      "focusedPytest": {
+        "result": "15 passed",
+        "command": "pytest -q -p no:cacheprovider tests/test_provider_ready_operator_models.py"
+      },
+      "ruff": {
+        "full": "PASS",
+        "whitespace": "PASS"
+      },
+      "sourceSha256": "23af271b740bc4dc9409380bea5a3c4d0377b1ae7cf39d152b16b4de083086b4",
+      "testSha256": "12b1000581727c2eb45195bdaa3d677b43b3c204e216d647c0e9e24da0b45ab9",
+      "acceptanceRowClosure": []
+    }
+  }
 }
