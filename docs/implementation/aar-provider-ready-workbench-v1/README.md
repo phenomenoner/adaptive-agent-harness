@@ -1,6 +1,6 @@
 # AR-PRW Implementation Control Plane
 
-**Status:** `generation_13_op2_review_pending`
+**Status:** `generation_13_op2_dual_pass_writer_pending`
 
 **Control epoch:** `2026-08-22T22:17:48Z`
 
@@ -104,6 +104,7 @@ B and D may later run in separate worktrees only after A freezes and PMO publish
 - A1b-op2 rev1 review was `BLOCKED / BATCH_COMPLETE`: it exposed the missing readback `unconfigured` backend domain, incorrect reference-row truth, unfrozen issued-grant timestamp fields, overconstrained source-dependent readback nullability and test-oracle false-pass seams. Generation-11 amends only those not-yet-implemented op2 authorities and validator discriminators; A1a/op1 product bytes and evidence remain unchanged. Rev2 independent review is pending.
 - Generation-11/op2 rev2 dual review was also `BLOCKED / BATCH_COMPLETE`: it found the configured-reference/current-generation contradiction, unauthorized profile-verified catalog/tool/route erasure, an external manifest-tier equality claim inside a pure row, missing sibling-axis validator markers and incomplete positive-witness families. Generation-12/rev3 minimally repairs those exact findings; dual review pending.
 - Generation-12 S0 passed, and op2 rev3 closed every prior finding but remained `BLOCKED / BATCH_COMPLETE` by one migration-required underconstraint: capability digest and configured native/caller rows were not explicitly forbidden. Generation-13/rev4 adds only that null/method restriction plus exact one-axis test/validator probes; review pending.
+- Generation-13 S0 and op2 rev4 received independent `PASS / BATCH_COMPLETE`, `findings=[]` in `deleg_e07daeda`; exact reviewed candidate commit is `e5f0691a88d27fcb635f663cdf6765dc6cc65f97`. Writer remains pending terminal evidence commit and post-commit collision readback.
 
 ## Evidence policy
 

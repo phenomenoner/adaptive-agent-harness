@@ -6,7 +6,7 @@
 
 **Source-baseline gate:** `SATISFIED_BY_FROZEN_EXACT_BASE_EVIDENCE`
 
-**Writer-dispatch gate:** `HOLD_FOR_GENERATION_13_OP2_REVIEW`
+**Writer-dispatch gate:** `PENDING_TASK_START_AND_COLLISION`
 
 ## Decision
 
@@ -46,3 +46,5 @@ A1b-op2 rev1 `sha256:d5e9a2d729ba628f07bc4679c28c67f0bcad6c8b1784d4739585e9bb0d3
 Generation-11/op2 rev2 is also historical `BLOCKED / BATCH_COMPLETE`. Generation-12/op2 rev3 is the current fixed-byte successor; it requires fresh dual PASS before exact candidate commit or writer dispatch.
 
 Generation-12 S0 passed, but op2 rev3 remained historical `BLOCKED / BATCH_COMPLETE` by one migration-required underconstraint. Generation-13/op2 rev4 is now the current fixed-byte successor and still requires fresh dual PASS.
+
+Generation-13 S0 and op2 rev4 now have independent terminal `PASS / BATCH_COMPLETE`, `findings=[]` in `deleg_e07daeda`; exact reviewed candidate commit is `e5f0691a88d27fcb635f663cdf6765dc6cc65f97`. Writer dispatch remains gated only by a terminal evidence/task-start commit and repeated two-path collision readback.

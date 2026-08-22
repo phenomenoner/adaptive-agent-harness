@@ -1,7 +1,7 @@
 {
   "schema_version": "aar.prw-implementation-ledger.v1",
   "generated_at": "2026-08-22T19:17:55Z",
-  "status": "generation_13_op2_review_pending",
+  "status": "generation_13_op2_dual_pass_writer_pending",
   "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
   "implementation_branch": "codex/aar-provider-ready-workbench-v1-impl",
   "historical_spec_tree_digest": "sha256:bb0287e1718033c773e763096b202591307458e1524ab8de9ea8d5a29039afee",
@@ -407,11 +407,15 @@
       "acceptanceRowClosure": []
     },
     "A1b-op2-packet": {
-      "status": "independent_review_pending",
+      "status": "reviewed_pass",
       "revision": 4,
       "packetSha256": "30b0eb7f5fad76fccee96c46ad9ca2f69900c6438fcb6d00ea59d7219fd090ac",
       "sddSemanticTree": "sha256:f676ed30a08e3f9cbfe38b091f69c69857fe7da047612a964565a76d0ab702fb",
-      "rowClosure": []
+      "rowClosure": [],
+      "reviewBatch": "deleg_e07daeda",
+      "findingSetStatus": "BATCH_COMPLETE",
+      "findings": [],
+      "candidateCommit": "e5f0691a88d27fcb635f663cdf6765dc6cc65f97"
     }
   },
   "generation11": {

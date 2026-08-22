@@ -1,6 +1,6 @@
 {
   "schema_version": "aar.prw-evidence-index.v1",
-  "status": "generation_13_op2_review_pending",
+  "status": "generation_13_op2_dual_pass_writer_pending",
   "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
   "entries": [
     {
@@ -416,7 +416,7 @@
     {
       "id": "generation-13-op2-review-candidate",
       "kind": "sdd-and-packet-fixed-byte-candidate",
-      "status": "REVIEW_PENDING",
+      "status": "PASS",
       "generation": 13,
       "identities": {
         "semanticTree": "sha256:f676ed30a08e3f9cbfe38b091f69c69857fe7da047612a964565a76d0ab702fb",
@@ -426,7 +426,19 @@
         "validatorSha256": "8a51ed6a86fa9f87c5752ba6f3b146ed3de8891d0d3d7804c97eac400f9c1fdf",
         "op2PacketSha256": "30b0eb7f5fad76fccee96c46ad9ca2f69900c6438fcb6d00ea59d7219fd090ac"
       },
-      "note": "Closes the sole Generation-12 migration-required capability/method underconstraint; no scope or product change."
+      "note": "Closes the sole Generation-12 migration-required capability/method underconstraint; no scope or product change.",
+      "reviewBatch": "deleg_e07daeda",
+      "candidateCommit": "e5f0691a88d27fcb635f663cdf6765dc6cc65f97"
+    },
+    {
+      "id": "generation-13-op2-dual-pass",
+      "kind": "terminal-review-evidence",
+      "status": "PASS",
+      "reviewBatch": "deleg_e07daeda",
+      "s0": "PASS/BATCH_COMPLETE/findings=[]",
+      "packet": "PASS/BATCH_COMPLETE/findings=[]",
+      "candidateCommit": "e5f0691a88d27fcb635f663cdf6765dc6cc65f97",
+      "writerGate": "PENDING_TASK_START_AND_COLLISION"
     }
   ],
   "generation11": {
