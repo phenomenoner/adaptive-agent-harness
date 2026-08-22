@@ -1,0 +1,273 @@
+{
+  "schema_version": "aar.prw-requirements.v1",
+  "target_release": "0.6.0a0-provisional",
+  "status": "specification_only",
+  "requirements": [
+    {
+      "id": "CUST-001",
+      "owner": "README.md",
+      "statement": "Implementation uses a clean worktree from the exact accepted v0.5-or-later base and preserves the current dirty canonical branch without reset, clean, rebase, or overwrite.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "NEC-001",
+      "owner": "ARCHITECTURE.md",
+      "statement": "The successor adds no second workbench, broker service, provider client, credential store, daemon, durable database, or MCP inference back-channel.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "MIG-001",
+      "owner": "MIGRATION.md",
+      "statement": "Cutover planning is read-only/query-only, emits one canonical plan on stdout only, executes no WAL checkpoint or other mutation, and binds exact owner, DB/WAL/SHM, schema/state, candidate, intent, profile output, authority-history tip/current pointer, generation, and snapshot intent.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "MIG-002",
+      "owner": "MIGRATION.md",
+      "statement": "Cutover apply/abort/reconcile/restore and runtime-initialize mutations hold the stable runtime-home lock exclusively from final precheck through their named strict prepared-marker, DB/profile/immutable-history/current/terminal-marker writes; supervisor holds it shared for life plus predecessor owner identity. Runtime initialize creates no separate epoch or reconcile namespace.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "MIG-003",
+      "owner": "MIGRATION.md",
+      "statement": "Only an explicit exclusive-lock mutator may use the SQLite backup API; plan only observes DB/WAL/SHM. Backup/restore bind hashes, fsync, integrity/FK, sidecar disposition, and zero-source-mutation failure evidence.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "MIG-004",
+      "owner": "MIGRATION.md",
+      "statement": "Registry-v6 DDL and its exact migration attestation commit in one SQLite transaction after an immutable external prepared marker.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "MIG-005",
+      "owner": "MIGRATION.md",
+      "statement": "runtime initialize idempotently creates or recognizes only canonical empty v5 and then stops. Caught pre/post-commit faults converge, but abrupt process-loss WAL/SHM residue is explicitly not crash-convergent: it fails closed as UNINITIALIZED_RUNTIME_RESIDUE with no delete/checkpoint/adoption/retry authority. The operator separately materializes an ordinary cutover plan; apply/reconcile reruns converge only through that plan and ordinary markers, and reconcile never silently applies or aborts a prepared old DB.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "MIG-006",
+      "owner": "LIFECYCLE.md",
+      "statement": "Every snapshot/prepared/DB/profile/immutable-history/current-pointer/terminal-marker and restore-replacement crash boundary has an explicit exact-input cutover/restore classification and write set; ambiguity or changed inputs preserve recovery-required without blind replay.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "MIG-007",
+      "owner": "MIGRATION.md",
+      "statement": "Restore is allowed only before any committed v6 attestation, immutable activation-history record, runtime generation, workbench admission or v6 write. It requires an exact original cutover_aborted or cutover_recovery_required terminal marker and a later restore_committed receipt/marker that digest-binds and terminally resolves that cutover without rewriting either epoch.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "MIG-008",
+      "owner": "CONTRACTS.md",
+      "statement": "Cutover and restore use strict cycle-free plan→prepared→transaction/receipt→terminal authority, including exact snapshot-before-prepared adoption. Restore preparation and receipt require the original cutover terminal-marker digest; only one exact cutover_recovery_required→restore_committed pair closes a pre-frontier recovery epoch. Missing, duplicate, mismatched or recovery-required restore successors remain startup-blocking.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "ACT-001",
+      "owner": "CONTRACTS.md",
+      "statement": "All fourteen strict operator/profile/evaluation schemas have complete required-property, nullability, bound, cross-field and self-digest authority; marker construction is acyclic, activation/grant/readback state is total, and candidate/route/recovery inputs retain canonical versions, frozen six-method/evidence domains and v6-compatible backends with no secret.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "ACT-002",
+      "owner": "ARCHITECTURE.md",
+      "statement": "A side-effect-free shared-lock preflight validates final profile, attestation, complete unbranched activation history, committed markers, exact derived current pointer, and all factories before host construction/runtime-generation allocation; final recheck gates Ready on v6.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "ACT-003",
+      "owner": "ARCHITECTURE.md",
+      "statement": "Per-method capability truth is derived from exact instantiated current-generation adapters and frozen v8 contracts: native/caller rows may be admission-usable, exact reference rows are configured/reference-only/unknown but never usable, and stale or missing rows are unconfigured; no input boolean creates readiness.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "ACT-004",
+      "owner": "CONTRACTS.md",
+      "statement": "Capability rows derive from package-owned immutable factories bound to implementation, manifest, generation, method contract, backend kind, frozen capability evidence tier and v6 owner compatibility; evaluator route/usage/visibility classification has one separate strict owner and cannot be upgraded from capability metadata.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "AUTH-001",
+      "owner": "ARCHITECTURE.md",
+      "statement": "The supervisor derives a strict server-side grant-set policy only after activation/factory verification; the frozen grant_ids array resolves one coherent current issued-record set binding exact principal/session, budgets/TTL/deadline, runtime/activation/profile/history-tip/capability/route/grant-set digests, and client context is never authority.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "AUTH-002",
+      "owner": "CONTRACTS.md",
+      "statement": "Profile activation alone creates no operation and performs no physical inference.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "AUTH-003",
+      "owner": "CONTRACTS.md",
+      "statement": "Grant resolution rejects missing/revoked/expired/mixed-set/duplicate-capability records, serializes every authority-denied outcome as frozen-v8 GRANT_DENIED, enforces a grant-policy TTL minimum of 1000 ms, and applies authority-before-availability precedence with zero operation/provider side effect. No non-recomputable internal-record-shape digest is published.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "PLAN-001",
+      "owner": "ARCHITECTURE.md",
+      "statement": "Every caller-delegated root-planner phase uses one durable model.request ticket with exact {kind=planner,phase,step_index}, SQL-null cell authority, unique predecessor operation event, and the frozen-v6 cell-free successor-outbox CAS; operation/request/route/directive identities stay in existing owners and synchronous call count is zero.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "PLAN-002",
+      "owner": "LIFECYCLE.md",
+      "statement": "Every caller-delegated workbench execution requires frozen-v8 start_only=true. start_only=false always rejects before operation creation; v1 defines no duplex-driver exception and changes no frozen request schema.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "PLAN-003",
+      "owner": "LIFECYCLE.md",
+      "statement": "External planner wait releases the execution-attempt lease, stays accepted/waiting_external, and resumes only through exact pending-to-prepared or fenced prepared-to-prepared takeover followed by atomic prepared-to-consumed plus one valid directive/correction/certain terminal projection; outcome unknown stays unconsumed and planner never accesses cell-bound authority/rebind tables.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "PLAN-004",
+      "owner": "CONTRACTS.md",
+      "statement": "Only reconciler-settled route, usage, physical-attempt, response-contract, budget and fence evidence can authorize a planner outcome. Frozen caller-work states settled_success, settled_failure and cancelled_certain alone create successor outbox authority; cancelled_before_send uses outer cancellation/finalization, while cancel_requested, outcome_unknown and quarantined have no outbox and remain reconciliation-owned. Absent usage dimensions remain null.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "PLAN-005",
+      "owner": "LIFECYCLE.md",
+      "statement": "Recovery planning starts from a certain pre-cell checkpoint and cannot automatically replay arbitrary Python or the failed source digest.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "PLAN-006",
+      "owner": "CONTRACTS.md",
+      "statement": "Planner settlement maps every valid directive, bounded correction, settled_failure, cancelled_certain, before-send cancellation, deadline and possibly-sent uncertainty to one exact frozen consume/no-consume rule. Only settled_success, settled_failure and cancelled_certain may prepare/consume a successor outbox; no blind resend or synthetic settlement digest is permitted.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "ADM-001",
+      "owner": "ARCHITECTURE.md",
+      "statement": "Required methods are a pure pre-operation function of normalized job/profile planner mode, frozen budgets/features, the effective capability union from a coherent server-validated grant_ids set, and matching package-owned model.request/method factories; the full separately-profiled native/caller cross-product is mandatory T2 release evidence.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "ADM-002",
+      "owner": "CONTRACTS.md",
+      "statement": "Unavailable optional methods are omitted and fail certain before send; feature-implied ungranted or retired/stale factory authority serializes as frozen-v8 GRANT_DENIED, while a valid current-grant same-generation instantiated-adapter health loss is CAPABILITY_UNAVAILABLE, with mandatory discriminating evidence.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "ROUTE-001",
+      "owner": "EVALUATION.md",
+      "statement": "AAR/Prime qualification uses one strict evaluator evidence-classification record per arm/attempt; provider, model, reasoning, fallback and cache each retain their own attested/observed/requested_only/contradicted tier, and Prime alias normalization never exceeds native evidence.",
+      "tier": "T4",
+      "status": "planned"
+    },
+    {
+      "id": "ROUTE-002",
+      "owner": "EVALUATION.md",
+      "statement": "Qualification joins exact operation/owner/suspension/ticket/claim/physical-attempt/request/route/response/time/adapter fields and deterministically derives per-component tiers plus aar_live_qualified/prime_live_qualified/insufficient/contradicted with source digests; capability evidence cannot upgrade it.",
+      "tier": "T4",
+      "status": "planned"
+    },
+    {
+      "id": "ROUTE-003",
+      "owner": "EVALUATION.md",
+      "statement": "Usage classification deterministically projects request_receipt/session_aggregate/partial_events/unavailable and complete/aggregate_only/unknown; request_receipt requires provider-reported rows for every physical attempt, exact arithmetic and no zero imputation.",
+      "tier": "T4",
+      "status": "planned"
+    },
+    {
+      "id": "ROUTE-004",
+      "owner": "LIFECYCLE.md",
+      "statement": "Send-start, claim, physical-attempt, receipt, retry/recovery, deadline and reconciliation lineage prevents duplicate or blind replay spend; possibly-sent outcome_unknown/quarantined work never becomes a certain deadline terminal without authoritative evidence.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "COMP-001",
+      "owner": "ARCHITECTURE.md",
+      "statement": "Frozen v7 capability bytes, v8 38-tool names/order/schemas, caller-work owner/request bytes, operation-event/attempt/lease/dispatch owners, and registry-v6 nullable suspension, successor-outbox, cell-only attempt-authority/rebind-transfer DDL remain byte-identical while planner uses only the existing cell-free owners.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "COMP-002",
+      "owner": "ARCHITECTURE.md",
+      "statement": "Without an activation-profile path, the successor preserves v0.5 startup and publishes only truthful unconfigured/reference capability rows with no mutation grants or migration. A supplied-but-absent, malformed, stale or binding-invalid profile fails before host construction, runtime-generation allocation, listener, Ready, grant or operation.",
+      "tier": "T3",
+      "status": "planned"
+    },
+    {
+      "id": "OPS-001",
+      "owner": "CONTRACTS.md",
+      "statement": "One explicit aar-admin surface separates stdout-only zero-write/zero-checkpoint plan/status/verify from explicit apply/abort/reconcile/restore/runtime-initialize mutations, names every mutator write set, and never silently owns service stop/start.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "SEC-001",
+      "owner": "CONTRACTS.md",
+      "statement": "Activation intent/final profile, plans, receipts, logs, DB rows, package assets, and evidence contain no provider credential or semantic command/endpoint/import field; allowed identifier values are never expanded, resolved, imported, executed, or content-classified as credentials.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "TEST-001",
+      "owner": "ACCEPTANCE.md",
+      "statement": "One immutable candidate passes every mandatory T0-T3 row, including all fourteen schema fixtures, crash-convergent cell-free planner outcomes, append-only history/reconcile, grant_ids resolution and all admission cross-products, plus exact-wheel preserved-v5 and empty-runtime-v5-bootstrap-to-v6 hosts and independent current-byte review before implementation_verified.",
+      "tier": "T3",
+      "status": "planned"
+    },
+    {
+      "id": "LIVE-001",
+      "owner": "EVALUATION.md",
+      "statement": "T4 live_qualified requires AAR attested request-level route/usage and Prime stock-native observation of effective canonical provider/model/fallback/cache with no contradiction; Prime reasoning may remain explicitly requested_only with null effective reasoning when stock output exposes no effort field, while requested_treatment_qualified alone cannot admit T5.",
+      "tier": "T4",
+      "status": "planned"
+    },
+    {
+      "id": "EVAL-001",
+      "owner": "EVALUATION.md",
+      "statement": "No paired instrumentation block, physical attempt, machine stop action, rerun, score, comparison, winner or expansion is admitted by v1/0.6.0. Future paired protocol categories are planning bytes only and require a separately reviewed launcher-authority SDD before they can become executable authority.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "EVAL-002",
+      "owner": "CONTRACTS.md",
+      "statement": "A strict paired-evaluation-admission document binds live-qualified classifications and exact candidate/profile/alias/case/protocol/budget/stop-matrix bytes, explicit operator planning authority and arm order. It is planning evidence only: it allocates no physical attempt, proves no request count and cannot authorize T5 spend in v1/0.6.0.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "REL-001",
+      "owner": "README.md",
+      "statement": "Specification, implementation, verification, live qualification, and benchmark-ready statuses remain separate and cannot be promoted by inference.",
+      "tier": "T0",
+      "status": "planned"
+    }
+  ]
+}

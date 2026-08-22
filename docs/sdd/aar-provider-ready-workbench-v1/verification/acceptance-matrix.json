@@ -1,0 +1,745 @@
+{
+  "schema_version": "aar.prw-acceptance-matrix.v1",
+  "status": "planned_not_executed",
+  "rows": [
+    {
+      "id": "A-CUST-001",
+      "tier": "T0",
+      "requirements": [
+        "CUST-001"
+      ],
+      "title": "Clean accepted implementation base",
+      "setup": "Dirty canonical branch plus exact accepted executable commit.",
+      "stimulus": "Create the implementation worktree through the authorized repository workflow.",
+      "expected": "Worktree HEAD equals accepted base and source-delta receipt names imported SDD bytes.",
+      "wrong_effect_absent": "No reset, clean, rebase, overwrite, or mutation of user dirty work.",
+      "evidence_class": "git custody receipt",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-NEC-001",
+      "tier": "T0",
+      "requirements": [
+        "NEC-001"
+      ],
+      "title": "Complexity-budget inventory",
+      "setup": "Exact candidate source and package manifest.",
+      "stimulus": "Inventory processes, entry points, dependencies, durable stores, provider SDKs, and MCP tools against v0.5.",
+      "expected": "Only the allowed operator/profile/planner/admission additions exist.",
+      "wrong_effect_absent": "No new daemon, state DB, credential store, provider client, broker, or MCP back-channel.",
+      "evidence_class": "static inventory plus independent review",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-MIG-001",
+      "tier": "T1",
+      "requirements": [
+        "MIG-001"
+      ],
+      "title": "Cutover plan is read-only",
+      "setup": "Disposable v5 DB with absent/present WAL/SHM plus filesystem and SQLite-authorizer write/checkpoint canaries; stopped owner.",
+      "stimulus": "Run stdout-only cutover plan and all read-only status/verify commands while capturing stdout, stderr and every canary.",
+      "expected": "Exactly one canonical plan plus trailing newline appears on stdout, diagnostics stay on stderr, observations/target are bound, and SQLite/runtime-home remain read-only/query-only.",
+      "wrong_effect_absent": "No --output path, WAL checkpoint, temp/snapshot/authority file, DB/WAL/SHM create/delete/truncate, service/token/network/provider mutation by the command; operator shell redirection is external and its bytes are revalidated by apply.",
+      "evidence_class": "deterministic seam test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-MIG-002",
+      "tier": "T1",
+      "requirements": [
+        "MIG-002"
+      ],
+      "title": "Owner and nonterminal admission",
+      "setup": "Rows for active supervisor, replacement owner, live operation, live ticket, and clean terminal baseline.",
+      "stimulus": "Apply the same valid plan to each variant.",
+      "expected": "Exclusive cutover lock excludes supervisor startup; replacement owner must reconcile an unmatched prepared/DB/marker tuple before any apply, restore, or Ready publication.",
+      "wrong_effect_absent": "No shared/exclusive overlap, raw-PID authority, lock gap, second owner, DB write, or Ready record.",
+      "evidence_class": "atomic variant matrix",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-MIG-003",
+      "tier": "T1",
+      "requirements": [
+        "MIG-003"
+      ],
+      "title": "SQLite snapshot and WAL assurance",
+      "setup": "V5 DB under WAL mode with committed WAL and SHM variants; plan canaries followed by exclusive-lock apply.",
+      "stimulus": "Run zero-write plan, then explicit apply through SQLite backup completion; open and compare backup.",
+      "expected": "Plan only observes sidecars; verified standalone backup includes committed WAL pages; restore receipt carries strict DB/WAL/SHM disposition and integrity/FK.",
+      "wrong_effect_absent": "No plan checkpoint/write, raw live-file copy, SHM-as-business-evidence, silent sidecar deletion, partial snapshot/marker, or source mutation.",
+      "evidence_class": "SQLite-instance test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-MIG-004",
+      "tier": "T1",
+      "requirements": [
+        "MIG-004"
+      ],
+      "title": "Atomic v6 DDL and attestation",
+      "setup": "Valid prepared marker and exact v5 fixture.",
+      "stimulus": "Inject faults before DDL, between objects, before attestation, and before/after commit.",
+      "expected": "Observed DB is complete v5 or complete attested v6 only.",
+      "wrong_effect_absent": "No partial v6 objects or unattested committed v6 state.",
+      "evidence_class": "transaction fault injection",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-MIG-005",
+      "tier": "T1",
+      "requirements": [
+        "MIG-005"
+      ],
+      "title": "Cutover idempotency and conflict",
+      "setup": "Committed receipt and prepared-old-DB images plus exact/mutated command, plan, profile, candidate, history-tip/current variants.",
+      "stimulus": "Rerun exact apply/initialize/reconcile and every changed binding.",
+      "expected": "Exact completed rerun returns existing bytes; prepared-old-DB reconcile returns ABORT_OR_APPLY_REQUIRED with zero write; changed/forked bindings conflict.",
+      "wrong_effect_absent": "No silent apply/abort, duplicate migration/history/attestation/marker, current overwrite, or changed-byte acceptance.",
+      "evidence_class": "idempotency contract test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-MIG-006",
+      "tier": "T1",
+      "requirements": [
+        "MIG-006"
+      ],
+      "title": "Cutover crash reconciliation",
+      "setup": "Crash images at prepared, DB transaction/commit, profile, immutable-history publication, derived-current replacement and terminal-marker boundaries.",
+      "stimulus": "Run exact-input and changed-input cutover/runtime status and reconcile; use explicit abort/apply only at classified pre-DB state.",
+      "expected": "Reconcile writes only the deterministic missing suffix after proof; history-committed states repair current/marker once; ambiguity/changed input remains recovery-required.",
+      "wrong_effect_absent": "No blind migration/init replay, implicit abort/apply, history fork/deletion, supervisor start, downgrade, duplicate generation/epoch, or lost evidence.",
+      "evidence_class": "restart/fault matrix",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-MIG-007",
+      "tier": "T1",
+      "requirements": [
+        "MIG-007"
+      ],
+      "title": "Rollback frontier",
+      "setup": "Prepared-only, DB-committed, history-published, current-repaired, Ready-published and first-v6-write states.",
+      "stimulus": "Request snapshot restore in each state.",
+      "expected": "Restore is accepted only before DB/history/runtime frontier; snapshot replacement and sidecar disposition are verified.",
+      "wrong_effect_absent": "No restore after v6/history commit or use, history/current rewind/deletion, raw copy over live DB, stale WAL replay, premature sidecar deletion, or erased evidence.",
+      "evidence_class": "temporal ownership matrix",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-ACT-001",
+      "tier": "T0",
+      "requirements": [
+        "ACT-001"
+      ],
+      "title": "All fourteen strict documents validate canonically",
+      "setup": "Generate valid and invalid fixtures for fourteen operator/profile/evaluation schemas, including prepared/terminal markers and paired admission.",
+      "stimulus": "Validate required fields, bounds, canonical order, self digests, acyclic inner/outer construction, mode/backend cross-fields and duplicate-key rejection with project and independent Draft 2020-12 validators.",
+      "expected": "Both validators agree; every valid fixture round-trips byte-stably and plan→prepared→receipt→terminal construction is acyclic.",
+      "wrong_effect_absent": "No omitted/extra/defaulted property, digest fixed point, marker/receipt swap, invalid backend/reference pair, zero deadline policy, or duplicate-key acceptance.",
+      "evidence_class": "contract fixture matrix",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-ACT-002",
+      "tier": "T2",
+      "requirements": [
+        "ACT-002"
+      ],
+      "title": "Fail-closed Ready publication",
+      "setup": "Exact v6 profile plus absent/stale/malformed history chain/current/marker/registry/profile/intent/adapter/route/grant variants and runtime/listener/discovery/grant/operation canaries.",
+      "stimulus": "Run activation preflight and attempt supervisor startup.",
+      "expected": "Only an unbranched history whose tip equals current and committed markers permits host construction/runtime allocation; Ready follows final recheck.",
+      "wrong_effect_absent": "No runtime increment, pointer repair outside reconcile, listener, Ready, issuer, grant, operation, credential access or provider send on rejection.",
+      "evidence_class": "supervisor integration test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-ACT-003",
+      "tier": "T2",
+      "requirements": [
+        "ACT-003",
+        "ACT-004"
+      ],
+      "title": "Capability truth derives from runtime objects",
+      "setup": "Complete profile plus native/caller/reference, missing, stale, contract-mismatching and forbidden artifact-put caller factory variants.",
+      "stimulus": "Instantiate factories and derive capability/readback rows.",
+      "expected": "Exact allowed native/caller factories project configured/admission-usable rows; exact reference projects configured/reference-only/null identity+generation/unknown but is unusable; artifact-put caller registration rejects; missing/stale/factory-unbound projects unconfigured.",
+      "wrong_effect_absent": "No configured truth from profile booleans, arbitrary import, fake identity, stale generation, reference admission, observation-tier mapping, or v6-owner-incompatible method/backend pair.",
+      "evidence_class": "capability projection test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-ACT-004",
+      "tier": "T2",
+      "requirements": [
+        "ACT-002"
+      ],
+      "title": "Activation status is read-only exact readback",
+      "setup": "Unconfigured/active/degraded/recovery roots with absent, stale, exact, forked, missing or rolled-back activation history, derived current pointer and committed markers plus canaries.",
+      "stimulus": "Run activation status repeatedly.",
+      "expected": "Strict self-digested readback names the exact known profile/intent/attestation/history tip/current equality, activation/runtime generations, grant/factory/capability evidence and reason state.",
+      "wrong_effect_absent": "No DB/file write, current repair outside explicit reconcile, grant mint, service start, token refresh, credential lookup or provider call.",
+      "evidence_class": "black-box CLI test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-ACT-005",
+      "tier": "T1",
+      "requirements": [
+        "ACT-001",
+        "MIG-002",
+        "MIG-005",
+        "MIG-006"
+      ],
+      "title": "Per-profile activation history has one durable CAS tip",
+      "setup": "Cutover/fresh roots with absent history, generation N/N+1/equal/lower, stale prior, concurrent epochs, ABA, fork/missing/partially deleted records with retained marker/current evidence, stale/rolled-back current, marker disagreement, and crashes around history/current/marker publication.",
+      "stimulus": "Run apply/initialize/status/exact reconcile under stable lock; restart operators/supervisors at every boundary.",
+      "expected": "Immutable history publication commits one strict successor; current is derived/repaired to the unique tip; exact replay converges; terminal marker follows once; cold start rejects every visible fork/partial-deletion/pointer-rollback inconsistency.",
+      "wrong_effect_absent": "No equal/lower reuse, stale-tip overwrite, fork, missing-link acceptance, history deletion, current rollback authority, Ready/grant before chain/current/marker equality, or blind CAS replay.",
+      "evidence_class": "fault-injected local-file authority CAS integration matrix",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-AUTH-001",
+      "tier": "T2",
+      "requirements": [
+        "AUTH-001"
+      ],
+      "title": "Scoped grant publication",
+      "setup": "Inactive/active profiles, strict grant-set policies, issued server records, and changed principal/session/generation/profile/history/capability/route/grant-set/budget/TTL client contexts.",
+      "stimulus": "Mint bounded grants then validate every exact and mutated mutation context through issuer lookup.",
+      "expected": "Only an active current server-issued record matching all host/context bindings authorizes the exact capability and bounded budgets/deadline.",
+      "wrong_effect_absent": "No client self-asserted digest authority, wildcard principal/session, stale runtime/history, wrong session/capability, over-budget/expired/revoked grant, or operation row.",
+      "evidence_class": "authority matrix",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-AUTH-002",
+      "tier": "T2",
+      "requirements": [
+        "AUTH-002"
+      ],
+      "title": "Activation performs no inference",
+      "setup": "Provider-send canary and valid activation profile.",
+      "stimulus": "Verify/start/status/stop activated supervisor without job submission.",
+      "expected": "Activation/readback completes locally.",
+      "wrong_effect_absent": "No operation, ticket, model journal row, credential access, or provider send.",
+      "evidence_class": "negative effect canary",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-AUTH-003",
+      "tier": "T2",
+      "requirements": [
+        "AUTH-003",
+        "AUTH-001",
+        "ADM-001"
+      ],
+      "title": "Frozen grant_ids resolution, TTL domain and v8 wire precedence",
+      "setup": "Generate coherent sorted-unique multi-grant contexts plus missing/revoked/expired/mixed-set/identity/ceiling/duplicate-capability variants; test max_ttl_ms 999, 1000 and 900000; include current adapter-health loss and retired factory drift.",
+      "stimulus": "Validate grant-set policy, resolve issuer records and run pre-operation admission.",
+      "expected": "Only TTL 1000..900000 and coherent records produce one capability union and bounded deadline/budgets; authority mismatches serialize as frozen-v8 GRANT_DENIED before availability; only same-generation health loss is CAPABILITY_UNAVAILABLE; no issued_grant_record_shape_digest field exists.",
+      "wrong_effect_absent": "No impossible policy, client-authored authority, last-record wins, mixed union, duplicate ambiguity, AUTHORITY_DENIED wire literal, non-recomputable shape digest, operation row or provider send.",
+      "evidence_class": "mandatory grant resolver property/cross-product test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-PLAN-001",
+      "tier": "T2",
+      "requirements": [
+        "PLAN-001"
+      ],
+      "title": "Durable root planner phases",
+      "setup": "Caller-delegated initial/correction/recovery/finalizer null-cell suspensions; unique waiting-external operation events; deterministic receipts; owner-schema and cell-table access canaries.",
+      "stimulus": "Advance each phase through settlement, pending→prepared, crash/rebind via prepared→prepared, then atomic prepared→consumed plus directive mutation.",
+      "expected": "Each predecessor event/owner/ticket is exact; a current attempt/fence/generation may take over only after the old lease/dispatch authority is dead, then consumption and directive projection commit exactly once; synchronous planner and both cell-bound-table canaries stay zero.",
+      "wrong_effect_absent": "No latest-attempt inference, inline call, ordinal alias, synthetic cell, planner cell-bound access, live-owner takeover, consumed-without-projection, duplicate directive, frozen-DDL edit or sidecar authority.",
+      "evidence_class": "runtime integration test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-PLAN-002",
+      "tier": "T2",
+      "requirements": [
+        "PLAN-002"
+      ],
+      "title": "Caller start-only deadlock prevention without schema exception",
+      "setup": "Caller-delegated job under the frozen v8 execute schema.",
+      "stimulus": "Submit start_only=false and start_only=true variants.",
+      "expected": "False always rejects before operation creation; true returns durable accepted/waiting state. No duplex-driver exception exists.",
+      "wrong_effect_absent": "No blocking deadlock, hidden ticket, schema widening, duplex escape hatch or operation on rejected input.",
+      "evidence_class": "API contract test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-PLAN-003",
+      "tier": "T2",
+      "requirements": [
+        "PLAN-003"
+      ],
+      "title": "External wait releases attempt lease",
+      "setup": "Fake clock and pending planner ticket longer than attempt lease but within total deadline; instrument unique predecessor event, operation lease/dispatch and all outbox tuples.",
+      "stimulus": "Commit waiting_external/release lease, settle, crash after prepare, then race old/current successors through prepared takeover and atomic consumption.",
+      "expected": "No live wait lease; operation stays accepted; active old owner blocks takeover, dead old owner is fenced by one generation-advancing prepared→prepared CAS, and only the exact current tuple atomically consumes/applies once.",
+      "wrong_effect_absent": "No false success, stuck lease, takeover while lease/dispatch is live, old-owner consume, consumed row without directive projection, duplicate attempt/directive, or cell-bound planner authority.",
+      "evidence_class": "simulated-clock lifecycle test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-PLAN-004",
+      "tier": "T2",
+      "requirements": [
+        "PLAN-004"
+      ],
+      "title": "Settled planner receipt authorizes directive",
+      "setup": "Fixtures for exact frozen caller states settled_success, settled_failure, cancelled_certain, cancelled_before_send, cancel_requested, outcome_unknown and quarantined, plus route/usage/owner/digest/budget/fence mutations.",
+      "stimulus": "Project caller settlement, inspect suspension and successor outbox, then attempt planner preparation/consumption.",
+      "expected": "Only settled_success, settled_failure and cancelled_certain create one outbox; eligible exact evidence may project once and absent usage stays null. Before-send cancellation uses outer finalization; uncertain/parked states remain outbox-free and reconcile-owned.",
+      "wrong_effect_absent": "No outbox for cancelled_before_send/cancel_requested/outcome_unknown/quarantined, no workspace mutation from stale/invalid evidence, no synthetic settlement digest and no null-usage zero-imputation.",
+      "evidence_class": "receipt validation matrix",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-PLAN-005",
+      "tier": "T2",
+      "requirements": [
+        "PLAN-005"
+      ],
+      "title": "Recovery planner no-replay",
+      "setup": "Certain pre-cell checkpoint and committed worker loss with failed source digest.",
+      "stimulus": "Return same-source and new continuation directives.",
+      "expected": "Same source conflicts; new bounded continuation may proceed.",
+      "wrong_effect_absent": "No arbitrary stack serialization or automatic failed-cell replay.",
+      "evidence_class": "recovery seam test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-PLAN-006",
+      "tier": "T2",
+      "requirements": [
+        "PLAN-006",
+        "PLAN-003",
+        "PLAN-004"
+      ],
+      "title": "Exhaustive planner non-success convergence",
+      "setup": "Fixtures for valid/invalid settled_success, settled_failure, cancelled_certain, cancelled_before_send, cancel_requested, outcome_unknown, quarantined, cancel/deadline races and dead prepared owners.",
+      "stimulus": "Attempt outbox creation, successor prepare/takeover/consume, outer cancellation finalization and reconciliation for every frozen state.",
+      "expected": "Only settled_success/settled_failure/cancelled_certain create and consume one successor outbox; cancelled_before_send finalizes outside planner successor; cancel_requested/outcome_unknown/quarantined remain outbox-free reconcile-only; takeover fences stale owners.",
+      "wrong_effect_absent": "No ineligible outbox, invalid directive mutation, unknown-to-certain promotion, blind resend, synthetic settlement digest, duplicate event, stuck eligible known outcome or cell-bound planner access.",
+      "evidence_class": "mandatory planner outcome state-machine/fault-injection test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-ADM-001",
+      "tier": "T2",
+      "requirements": [
+        "ADM-001"
+      ],
+      "title": "Method-scoped admission",
+      "setup": "Partial profiles and model-only, artifact, and subagent budget variants.",
+      "stimulus": "Submit each job against each profile.",
+      "expected": "Model-only accepts on model profile; artifact/subagent variants require their exact methods.",
+      "wrong_effect_absent": "No global all-six requirement and no admission missing a required method.",
+      "evidence_class": "admission cross-product",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-ADM-002",
+      "tier": "T2",
+      "requirements": [
+        "ADM-002"
+      ],
+      "title": "Optional unavailable call containment",
+      "setup": "Admitted profile omits optional evidence/effect method; planner attempts the call.",
+      "stimulus": "Execute through broker facade.",
+      "expected": "Certain capability-unavailable failure before caller ticket/send.",
+      "wrong_effect_absent": "No physical call, proposal, or hidden fallback adapter.",
+      "evidence_class": "negative broker seam test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-ROUTE-001",
+      "tier": "T4",
+      "requirements": [
+        "ROUTE-001"
+      ],
+      "title": "Exact Luna/max positive qualification",
+      "setup": "Frozen activated candidate and separately authorized trivial qualification request.",
+      "stimulus": "Service exactly one AAR model.request ticket.",
+      "expected": "AAR route_qualification is aar_live_qualified only when provider/model/reasoning/fallback/cache are all attested and usage is request_receipt/complete from exact lineage; alias or capability metadata alone leaves individual components requested_only and insufficient.",
+      "wrong_effect_absent": "No capability-tier promotion, component collapse, fallback/effort drift, second send, estimated usage, or benchmark admission without classification digest.",
+      "evidence_class": "live request receipt",
+      "release_gate": false,
+      "live_inference": true,
+      "status": "planned"
+    },
+    {
+      "id": "A-ROUTE-002",
+      "tier": "T4",
+      "requirements": [
+        "ROUTE-002"
+      ],
+      "title": "Route receipt negative matrix",
+      "setup": "Provider/model/effort/profile/catalog/fallback/adapter drift observations.",
+      "stimulus": "Project strict evaluator classifications from each receipt/native observation variant.",
+      "expected": "Each component independently yields attested, observed, requested_only or contradicted with exact effective/null and source rules; route qualification derives deterministically, including the valid Prime observed-provider/model plus requested-only-reasoning mix.",
+      "wrong_effect_absent": "No inferred effective component, whole-route collapse, capability evidence upgrade, omitted contradiction component, directive, or success from contradicted/insufficient evidence.",
+      "evidence_class": "live/synthetic receipt negatives",
+      "release_gate": false,
+      "live_inference": true,
+      "status": "planned"
+    },
+    {
+      "id": "A-ROUTE-003",
+      "tier": "T4",
+      "requirements": [
+        "ROUTE-003"
+      ],
+      "title": "Usage evidence and null semantics",
+      "setup": "Provider-reported, estimated, missing, partial reasoning/cache, and arithmetic mismatch observations.",
+      "stimulus": "Project strict usage/visibility classifications and benchmark rows.",
+      "expected": "request_receipt requires provider-reported complete per-attempt rows; aggregate/partial/unavailable remain lower tiers and nullable.",
+      "wrong_effect_absent": "No estimated-as-authoritative usage, partial-to-request promotion, invented zero, hidden retry, or double counting.",
+      "evidence_class": "receipt adapter matrix",
+      "release_gate": false,
+      "live_inference": true,
+      "status": "planned"
+    },
+    {
+      "id": "A-ROUTE-004",
+      "tier": "T2",
+      "requirements": [
+        "ROUTE-004"
+      ],
+      "title": "Send-start and unknown outcome",
+      "setup": "Crashes before send-start, after send-start, after provider response, after candidate commit, plus deadline sweeps of outcome_unknown and quarantined tickets.",
+      "stimulus": "Restart and reconcile with lookup supported/unsupported variants, then advance the cumulative deadline.",
+      "expected": "Only certain pre-send work retries; sent ambiguity looks up, settles, or remains outcome-unknown/quarantined until authoritative evidence.",
+      "wrong_effect_absent": "No blind duplicate send, stale late-writer terminal overwrite, or deadline conversion of possibly-sent work into certain terminal truth.",
+      "evidence_class": "incident-shaped lifecycle test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-COMP-001",
+      "tier": "T0",
+      "requirements": [
+        "COMP-001"
+      ],
+      "title": "Frozen capability/caller-work/registry-v6 byte compatibility",
+      "setup": "The four predecessor inputs: v7 capability schema, v8 broker catalog, caller-work schema and migration-v6 SQL; plus operation-event/attempt/lease/dispatch and planner field-access canaries.",
+      "stimulus": "Byte/digest compare and inspect suspension/outbox/event/attempt/lease/dispatch/attempt-authority/rebind owners; exercise pending prepare, prepared takeover and atomic consume.",
+      "expected": "All predecessor bytes remain exact; suspension cell stays nullable, outbox legally supports full prepared tuple replacement/generation advance and atomic consume, predecessor maps through one existing waiting event, cell authority/rebind cells stay NOT NULL, and planner uses only existing cell-free owners.",
+      "wrong_effect_absent": "No schema/DDL/tool mutation, synthetic cell, invented predecessor key, planner cell-bound access, sidecar authority, reordered/extra tool or omitted takeover fence.",
+      "evidence_class": "content-addressed contract comparison",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-COMP-002",
+      "tier": "T3",
+      "requirements": [
+        "COMP-002"
+      ],
+      "title": "Compatibility startup versus supplied-invalid activated startup",
+      "setup": "Exact wheel on v5 and v6 roots with no activation-profile path, then with supplied absent/malformed/stale/mismatching profile bytes.",
+      "stimulus": "Start supervisor/MCP through compatibility and activated-start paths; inspect construction, generation, listener, Ready, grants, capabilities and operations.",
+      "expected": "No-profile startup preserves v0.5 behavior and truthful unconfigured/reference rows with no auto-migration or mutation grant; any supplied-invalid profile rejects before host construction, generation, listener or Ready.",
+      "wrong_effect_absent": "No compatibility regression, profile synthesis, migration, runtime-generation allocation on supplied-invalid input, grant, operation, ticket or provider call.",
+      "evidence_class": "fresh-host exact-wheel test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-OPS-001",
+      "tier": "T1",
+      "requirements": [
+        "OPS-001"
+      ],
+      "title": "CLI mutation boundary",
+      "setup": "Command parser and filesystem/service/DB canaries.",
+      "stimulus": "Run every aar-admin subcommand with help, valid, invalid, and interrupted inputs.",
+      "expected": "Plan/status/verify are stdout/read-only; only explicit apply, abort, reconcile, permitted pre-frontier restore and runtime initialize reach their named mutation paths after final validation.",
+      "wrong_effect_absent": "No implicit service control, prompt-default mutation, plan --output write, or mutation by status/plan/verify.",
+      "evidence_class": "black-box CLI contract test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-SEC-001",
+      "tier": "T0",
+      "requirements": [
+        "SEC-001"
+      ],
+      "title": "Credential and secret canaries",
+      "setup": "Canary secrets in environment/driver; prohibited semantic command/endpoint/import/credential fields; allowed opaque identifiers containing punctuation; all generated profiles/receipts/logs/package assets.",
+      "stimulus": "Run contract/activation/failure paths; inspect recursive schema-property inventories and imports; scan bounded outputs for known canary bytes without classifying permitted identifier contents.",
+      "expected": "No prohibited semantic field, runtime/provider transport import, expansion/execution behavior, or canary credential byte appears; permitted identifiers remain inert data.",
+      "wrong_effect_absent": "No token/key/cookie, credential-bearing command or endpoint field, environment expansion, URL/import resolution, execution behavior, or false rejection based only on permitted identifier contents.",
+      "evidence_class": "security scan plus negative fixtures",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-TEST-001",
+      "tier": "T3",
+      "requirements": [
+        "TEST-001"
+      ],
+      "title": "Immutable exact-wheel acceptance batch",
+      "setup": "Frozen source/wheel/profile/skill/contracts, preserved-v5 root, absent/uninitialized empty-runtime bootstrap root, independent reviewer.",
+      "stimulus": "Run all mandatory T0-T3 rows and compatibility/full-suite policy once on final bytes.",
+      "expected": "Every mandatory row and provenance/readback reconciles, both roots end through the same truthful frozen-v6 attestation/cutover receipt authority, and review threshold passes.",
+      "wrong_effect_absent": "No source import leakage, drift, selective rerun overwrite, T4 inference, publish, or release claim beyond evidence.",
+      "evidence_class": "dependency-closed acceptance bundle",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-LIVE-001",
+      "tier": "T4",
+      "requirements": [
+        "LIVE-001"
+      ],
+      "title": "Qualification accounting separation",
+      "setup": "Explicit T4 authority, frozen candidate, qualification IDs, empty benchmark runs.",
+      "stimulus": "Run the authorized positive/negative route qualifications.",
+      "expected": "AAR is aar_live_qualified with five attested route components and request-level usage; Prime is prime_live_qualified only with native-observed provider/model/fallback/cache, no contradiction, and reasoning explicitly requested_only/null or stronger. Requested-only Prime provider/model remains blocked from T5.",
+      "wrong_effect_absent": "No benchmark attempt ID, formal score, silent rerun, or release T0-T3 promotion.",
+      "evidence_class": "live qualification manifest",
+      "release_gate": false,
+      "live_inference": true,
+      "status": "planned"
+    },
+    {
+      "id": "A-REL-001",
+      "tier": "T0",
+      "requirements": [
+        "REL-001"
+      ],
+      "title": "Claim-state separation",
+      "setup": "All possible combinations of spec, implementation, T0-T3, T4, and T5 evidence.",
+      "stimulus": "Render status/readme/roadmap/release claims.",
+      "expected": "Only the highest fully evidenced status is shown with blockers and non-claims.",
+      "wrong_effect_absent": "No planning-as-implementation, tests-as-live-route, qualification-as-benchmark, or historical receipt rewrite.",
+      "evidence_class": "status contract review",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-ADM-003",
+      "tier": "T2",
+      "requirements": [
+        "ADM-001"
+      ],
+      "title": "Native and caller planner separation",
+      "setup": "Two separately digested activation profiles: caller_delegated_ticketed with a caller_driver model.request manifest and service_managed with a native model.request manifest; caller_delegated/service_managed matching and cross-mismatching jobs.",
+      "stimulus": "Resolve each profile through the immutable method factory registry, normalize job execution mode, project planner readback, then run both matches and cross-mismatches.",
+      "expected": "Only caller_delegated→caller_delegated_ticketed and service_managed→service_managed accept the exact profile-bound model.request factory/manifest; caller mode also requires start_only.",
+      "wrong_effect_absent": "No raw-string equality bug, per-request mode switching, second constructor namespace, arbitrary import, cross-kind false green, borrowed liveness, operation creation on mismatch, or provider send.",
+      "evidence_class": "mandatory component runtime cross-product",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-ADM-004",
+      "tier": "T2",
+      "requirements": [
+        "ADM-001",
+        "ADM-002"
+      ],
+      "title": "Complete budget/grant/method implication cross-product",
+      "setup": "Both separately digested caller_delegated_ticketed/caller_driver and service_managed/native model.request profiles; table rows vary max_artifact_count, max_artifact_bytes, require_named_artifacts, max_subagent_calls, model.request/artifact.put/subagent.submit/subagent.result/evidence.query/effect.propose grant subsets, zero/nonzero budgets, coherent/conflicting grant unions, retired factory/profile/digest and same-generation instantiated-adapter health.",
+      "stimulus": "Before operation creation, normalize planner mode, resolve the coherent grant union, derive the exact required executable-method set for every row, and test missing, reference-only, stale, contract-mismatched and unhealthy method owners.",
+      "expected": "Mode requires the matching model.request owner; any artifact count/bytes/named-artifact trigger requires artifact.put; any subagent budget or either subagent capability requires both subagent.submit and subagent.result; evidence.query/effect.propose are required exactly when granted; zero budget adds no authority. Missing/implied-ungranted, conflicting union, mode or retired factory/profile/digest fails GRANT_DENIED; only valid-current-grant same-generation instantiated-adapter health loss is CAPABILITY_UNAVAILABLE.",
+      "wrong_effect_absent": "No raw mode-only false green, omitted artifact/subagent implication, one-sided subagent owner, optional-grant borrowing, zero-budget authority expansion, cross-profile/factory borrowing, operation creation, provider send or unrelated method requirement.",
+      "evidence_class": "mandatory table-driven budget/grant/method implication cross-product",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-ADM-005",
+      "tier": "T2",
+      "requirements": [
+        "ADM-001",
+        "AUTH-001",
+        "AUTH-003"
+      ],
+      "title": "Authority-versus-current adapter availability discriminator",
+      "setup": "Job feature implies a method under absent capability; then use valid current grants while the instantiated same-generation adapter health becomes unavailable; separately drift factory/profile bytes so generation is retired.",
+      "stimulus": "Run pre-operation admission in each state.",
+      "expected": "Missing entitlement and retired/stale factory authority serialize as frozen-v8 GRANT_DENIED; valid current authority plus same-generation instantiated-adapter health loss is CAPABILITY_UNAVAILABLE.",
+      "wrong_effect_absent": "No AUTHORITY_DENIED wire literal, impossible stale-factory/current-grant state, operation row, ticket, workspace mutation, grant widening or provider send.",
+      "evidence_class": "mandatory negative authority discriminator",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-ROUTE-005",
+      "tier": "T4",
+      "requirements": [
+        "ROUTE-001",
+        "LIVE-001"
+      ],
+      "title": "Prime provider alias qualification",
+      "setup": "Frozen Prime executable/config/model registry and credential-resolver identity; no credential bytes.",
+      "stimulus": "Build and validate provider-alias attestation, then launch one authorized Luna/max qualification.",
+      "expected": "Digest-bound alias attestation normalizes requested provider identity only; absent stock effective provider/model leaves those components requested_only and route_qualification=insufficient, not prime_live_qualified.",
+      "wrong_effect_absent": "No automatic hermes-codex=openai-codex claim, hidden fallback, credential capture, or effective-effort promotion from flags.",
+      "evidence_class": "live_prime_route",
+      "release_gate": false,
+      "live_inference": true,
+      "status": "planned"
+    },
+    {
+      "id": "A-ROUTE-006",
+      "tier": "T4",
+      "requirements": [
+        "ROUTE-003",
+        "LIVE-001"
+      ],
+      "title": "Prime usage scope and arithmetic",
+      "setup": "One authorized Prime qualification with stock JSON/events preserved.",
+      "stimulus": "Classify request rows or session aggregate and verify nonnegative values, scope, totals, and null dimensions.",
+      "expected": "Evidence is request_receipt, session_aggregate, partial_events, or unavailable exactly as stock data supports.",
+      "wrong_effect_absent": "No synthetic request IDs, zero-imputed missing dimensions, aggregate-to-request promotion, or hidden retry claim.",
+      "evidence_class": "live_prime_usage",
+      "release_gate": false,
+      "live_inference": true,
+      "status": "planned"
+    },
+    {
+      "id": "A-EVAL-007",
+      "tier": "T0",
+      "requirements": [
+        "EVAL-001",
+        "EVAL-002",
+        "LIVE-001"
+      ],
+      "title": "Sole paired-planning machine row; no T5 execution authority",
+      "setup": "Exact planning fixtures for both classified arms plus candidate/profile/alias/case/protocol/budget/stop-matrix digests, planning authority and arm order; mutate every binding and probe every package surface.",
+      "stimulus": "Validate/build benchmark_ready_planned and attempt any paired launch, attempt allocation, machine stop action, score, rerun or expansion.",
+      "expected": "Only exact planning bytes validate; no T5 rows or launcher consumer exist, no attempt is allocated, and all provider/contender send canaries remain zero.",
+      "wrong_effect_absent": "No executable paired block, benchmark_ready_authorized status, attempt allocation, machine stop action, max-request claim, hidden rerun, score, comparison, winner, provider call or contender start.",
+      "evidence_class": "sole paired-planning no-launch schema negative gate",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-MIG-008",
+      "tier": "T1",
+      "requirements": [
+        "MIG-003",
+        "MIG-005",
+        "MIG-008",
+        "ACT-001"
+      ],
+      "title": "Empty-runtime v5 bootstrap then separately materialized ordinary cutover",
+      "setup": "Absent, exact uninitialized and canonical-empty-v5 disposable registries; caught pre/post-commit fault injection; abrupt pre-commit SIGKILL residue fixture; exact candidate/intent and separately emitted ordinary cutover plan.",
+      "stimulus": "Run runtime initialize through caught faults and reruns; classify abrupt crash-left WAL/SHM residue; then separately plan/apply only from a clean canonical empty-v5 root.",
+      "expected": "Caught faults converge to canonical empty v5 and stop with migration_required. Abrupt residue fails UNINITIALIZED_RUNTIME_RESIDUE with zero delete/checkpoint/adoption/retry. Only a separately retained plan enters ordinary cutover.",
+      "wrong_effect_absent": "No abrupt-crash convergence claim, automatic sidecar recovery, in-memory cutover plan, initialization epoch/marker/receipt, direct-v6 path, non-empty-v5 acceptance, history fork or Ready before terminal equality.",
+      "evidence_class": "fresh initialization contract/integration test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-MIG-009",
+      "tier": "T1",
+      "requirements": [
+        "MIG-003",
+        "MIG-007"
+      ],
+      "title": "Pre-frontier restore with cross-epoch terminal closure",
+      "setup": "Verified snapshot, original cutover prepared marker and exact cutover_aborted or cutover_recovery_required terminal marker, plus allowed/forbidden frontier and WAL/SHM variants.",
+      "stimulus": "Attempt restore under exclusive lock; vary original terminal digest, duplicate/missing successor and crash before/after restore terminal publication.",
+      "expected": "Allowed restore preparation/receipt binds the exact original cutover terminal digest and restore_committed closes one matching recovery-required cutover; forbidden, missing, duplicate or mismatched closure remains startup-blocking.",
+      "wrong_effect_absent": "No dangling unmatched cutover, stale sidecar, success receipt on failure, marker rewrite, down migration or post-frontier replacement.",
+      "evidence_class": "restore fault/integration test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    },
+    {
+      "id": "A-MIG-010",
+      "tier": "T1",
+      "requirements": [
+        "MIG-008"
+      ],
+      "title": "Acyclic prepared/receipt/terminal marker authority",
+      "setup": "Generate cutover and restore plan/snapshot/prepared/receipt/terminal fixtures plus snapshot-before-prepared crash fixtures.",
+      "stimulus": "Recompute inner/outer digests, swap/tamper receipts and markers, reuse epoch with changed bytes, and exercise exact snapshot adoption versus mismatch.",
+      "expected": "Only plan→prepared→transaction/receipt→terminal validates; exact orphan snapshot can be adopted once; every cycle, swap, duplicate terminal or changed-input epoch conflicts.",
+      "wrong_effect_absent": "No self-digest fixed point, receipt that embeds its terminal marker, ambiguous snapshot deletion/overwrite, DB mutation, or false committed status.",
+      "evidence_class": "mandatory operator authority schema/fault-injection test",
+      "release_gate": true,
+      "live_inference": false,
+      "status": "planned"
+    }
+  ]
+}

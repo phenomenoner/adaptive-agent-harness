@@ -1,0 +1,39 @@
+{
+  "acceptance_row_count": 45,
+  "artifact_file_count": 19,
+  "covered_requirement_count": 38,
+  "failures": [],
+  "files": {
+    "ACCEPTANCE.md": "sha256:947aef7bcda6d5b4aaf9925fe84ff46194f1656dd79611f6d2752e66278fc270",
+    "ARCHITECTURE.md": "sha256:7bd91e21253624251e4d4fb3cde1ed3dffbdfb07817ed0034a4ed4b0d9018d34",
+    "BASELINE.md": "sha256:9e8e3cc2e6af2cf9791794e2a5ab62771970f650c667028681a162800019d9ff",
+    "CONTRACTS.md": "sha256:ab1199c5186441855cf5e696c329245333a8ba8bc366075a643c365f2e228f11",
+    "EVALUATION.md": "sha256:ebb8e7be2698ef512793dcc661f644e9b9e77aad8554eeea04c8b3c7fbe8dd9e",
+    "HANDOFF.md": "sha256:a270a9fbbbb330f0257c64fe506bda1716f485b292039c14af403304eafab9b7",
+    "IMPLEMENTATION-PLAN.md": "sha256:b6fb2e649549c3261bf946e3a69fc985c02197b815252b831c58c410c7e091f9",
+    "LIFECYCLE.md": "sha256:8332e62b327b1b888209c927607981b03e9ee3dfc7fbc44019678df283c67a97",
+    "MIGRATION.md": "sha256:c2505534b06db7ce0b36fd3093f6755423a0904506fcf6afcbb70f2446cf28ef",
+    "README.md": "sha256:c0dc6061bb83df787939b9b959035503c2c012c435593aa21a03fb48dd4917a8",
+    "TEST-STRATEGY-AND-GAP-ANALYSIS.md": "sha256:a0586173dce6eff67ffa1e592a1b521a9435d2b579812e91db52556237236d77",
+    "decisions/ADR-001-activate-existing-authorities.md": "sha256:c9c4a8f56926f9cd9679c5eb497fbba3555481c03ebf423c6337527d67362260",
+    "decisions/ADR-002-ticket-root-planner.md": "sha256:0315106f7d45542895d06d2ac4ce34db4167d21583f16f5251b0fe62aa01180d",
+    "decisions/ADR-003-preserve-v8-method-scoped-admission.md": "sha256:9424c849320baf37111d9045fee7df499a882ba8a960e016ba17d0ed9bbc01f4",
+    "decisions/ADR-004-freeze-activation-contract-domains.md": "sha256:776232a4bc676d697510aefc6c3689e6c821df88adb72ccca45927bc112d1fd5",
+    "verification/README.md": "sha256:6588017f70af17d45b3f5171bccecf375bd9d86bc4afb2e3ea7631e17c1f91b0",
+    "verification/acceptance-matrix.json": "sha256:0bf0d9e7f341282f2db0e22240a43df850e16f302faff97e441a5a01716ecdc1",
+    "verification/requirements.json": "sha256:50b41b0552807d92eb209aad4bee61688852cd2a93e88b3deef245dd90870290",
+    "verification/validate_spec.py": "sha256:72ba64aaf2c4fafe5c3b3f0912237f9e499e34b8919e55b44789068992b5e649"
+  },
+  "frozen_baseline_files": {
+    "docs/sdd/aar-rlm-native-workbench-v2/migration-v6.sql": "sha256:8e7080b319aadb4eb98b5e3b9e12efe8c189c0bd12a82dc8ba1eea7c7bfe29b7",
+    "schemas/aar-broker-catalog-v2.json": "sha256:88099616e61f41c7d72d5e1c81fba8ebfe29995467fd583acc9da0bb15aeadbc",
+    "schemas/aar-caller-work-v1.schema.json": "sha256:5e539d439c7d4a765fb4285a805d90950748e8c5d43a7ce74f147655d7760dfb",
+    "schemas/aar-rlm-workbench-v1.schema.json": "sha256:0d52527f9019cae724459e3eb36a0165b91822771ae64f815f1c2fd18d3054ef"
+  },
+  "markdown_file_count": 20,
+  "non_claim": "This receipt proves specification structure only; it proves no implementation or runtime behavior.",
+  "requirement_count": 38,
+  "schema_version": "aar.prw-spec-validation.v1",
+  "status": "pass",
+  "tree_digest": "sha256:cf6874ee870a1e2bcca3fb83b785213ea8b2f0205e4a54afaf9161b609925ab1"
+}
