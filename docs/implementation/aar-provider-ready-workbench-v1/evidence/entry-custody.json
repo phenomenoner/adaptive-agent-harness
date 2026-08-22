@@ -71,7 +71,7 @@
     "testSha256": "12b1000581727c2eb45195bdaa3d677b43b3c204e216d647c0e9e24da0b45ab9",
     "rowClosure": []
   },
-  "status": "generation_13_op2_dual_pass_writer_pending",
+  "status": "a1b_op2_focused_green_a1b_eval_pending",
   "generation11": {
     "semanticTree": "sha256:feaa05ebecbb935163cfce48a606e00feedbf7a77d2c49cb49ddaa27927a362b",
     "completeTree": "sha256:cd8998358ace9c8554129b0185b5e700dc453b13084c7ae382c39394cefe8498",
@@ -99,5 +99,11 @@
     "s0Verdict": "PASS",
     "packetVerdict": "PASS",
     "candidateCommit": "e5f0691a88d27fcb635f663cdf6765dc6cc65f97"
+  },
+  "a1bOp2Product": {
+    "status": "focused_green",
+    "productCommit": "d9e0705fc80d46adf48ae1b9112ce1f05a11e089",
+    "sourceSha256": "0146cc4d31aa472e51c615d2bd3cfa6124ed0b4a6eae5f6fba107f1a2cafb9b6",
+    "testSha256": "3e66f35d9c58129e35ffb7a4f1eef1f23b9779ad503862aefb566efbe0192e7b"
   }
 }

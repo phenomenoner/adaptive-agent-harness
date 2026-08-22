@@ -1,7 +1,7 @@
 {
   "schema_version": "aar.prw-implementation-ledger.v1",
   "generated_at": "2026-08-22T19:17:55Z",
-  "status": "generation_13_op2_dual_pass_writer_pending",
+  "status": "a1b_op2_focused_green_a1b_eval_pending",
   "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
   "implementation_branch": "codex/aar-provider-ready-workbench-v1-impl",
   "historical_spec_tree_digest": "sha256:bb0287e1718033c773e763096b202591307458e1524ab8de9ea8d5a29039afee",
@@ -416,6 +416,14 @@
       "findingSetStatus": "BATCH_COMPLETE",
       "findings": [],
       "candidateCommit": "e5f0691a88d27fcb635f663cdf6765dc6cc65f97"
+    },
+    "A1b-op2-product": {
+      "status": "focused_green",
+      "productCommit": "d9e0705fc80d46adf48ae1b9112ce1f05a11e089",
+      "evidence": "evidence/A1b-op2-completion.json",
+      "focusedPytest": "22 passed in 1.31s",
+      "ruff": "PASS",
+      "rowClosure": []
     }
   },
   "generation11": {

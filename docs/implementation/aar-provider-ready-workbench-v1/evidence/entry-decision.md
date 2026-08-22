@@ -6,7 +6,7 @@
 
 **Source-baseline gate:** `SATISFIED_BY_FROZEN_EXACT_BASE_EVIDENCE`
 
-**Writer-dispatch gate:** `PENDING_TASK_START_AND_COLLISION`
+**Writer-dispatch gate:** `A1B_OP2_SATISFIED_A1B_EVAL_PENDING`
 
 ## Decision
 
@@ -48,3 +48,5 @@ Generation-11/op2 rev2 is also historical `BLOCKED / BATCH_COMPLETE`. Generation
 Generation-12 S0 passed, but op2 rev3 remained historical `BLOCKED / BATCH_COMPLETE` by one migration-required underconstraint. Generation-13/op2 rev4 is now the current fixed-byte successor and still requires fresh dual PASS.
 
 Generation-13 S0 and op2 rev4 now have independent terminal `PASS / BATCH_COMPLETE`, `findings=[]` in `deleg_e07daeda`; exact reviewed candidate commit is `e5f0691a88d27fcb635f663cdf6765dc6cc65f97`. Writer dispatch remains gated only by a terminal evidence/task-start commit and repeated two-path collision readback.
+
+A1b-op2 subsequently reached focused-green at `d9e0705fc80d46adf48ae1b9112ce1f05a11e089`, with 22 focused tests and both Ruff gates PASS after central oracle/witness corrections. The next writer gate is A1b-eval packet review; op2 closes no acceptance row by itself.

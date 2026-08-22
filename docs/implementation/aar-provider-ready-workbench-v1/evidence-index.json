@@ -1,6 +1,6 @@
 {
   "schema_version": "aar.prw-evidence-index.v1",
-  "status": "generation_13_op2_dual_pass_writer_pending",
+  "status": "a1b_op2_focused_green_a1b_eval_pending",
   "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
   "entries": [
     {
@@ -439,6 +439,14 @@
       "packet": "PASS/BATCH_COMPLETE/findings=[]",
       "candidateCommit": "e5f0691a88d27fcb635f663cdf6765dc6cc65f97",
       "writerGate": "PENDING_TASK_START_AND_COLLISION"
+    },
+    {
+      "id": "a1b-op2-focused-green",
+      "kind": "focused-product-evidence",
+      "status": "PASS",
+      "path": "evidence/A1b-op2-completion.json",
+      "productCommit": "d9e0705fc80d46adf48ae1b9112ce1f05a11e089",
+      "acceptanceRowsClosed": []
     }
   ],
   "generation11": {

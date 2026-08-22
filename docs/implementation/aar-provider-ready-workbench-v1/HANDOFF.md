@@ -1,6 +1,6 @@
 # AR-PRW Implementation Handoff
 
-**Status:** `generation_13_op2_dual_pass_writer_pending`
+**Status:** `a1b_op2_focused_green_a1b_eval_pending`
 
 **Control epoch:** `2026-08-22T22:17:48Z`
 
@@ -17,9 +17,10 @@
 - Generation-11/op2 rev2 dual review `deleg_ae798557` was `BLOCKED / BATCH_COMPLETE`: configured reference rows contradicted a broad current-generation rule; profile-verified source-backed catalog/tool/route observations were wrongly erased; pure rows claimed external manifest-tier equality; sibling-axis validator probes and positive-witness families were incomplete. Generation-12/rev3 repairs only those findings. Identities: semantic `sha256:090fdfce7aa7d2afd74200c683bd817af8ac525e088e42ea27fc6234b02a3933`, complete `sha256:0785dab4a48c94602580e4fa1ec7d163d2867dc966c96d47d87599c29e524e17`, receipt `sha256:08b5ea13635ff2fee7f00e86963a26d2fb3f66914cfafcc40d75fd6e8d8a73d8`, packet `sha256:17f2db67acda5f7098fa9906eadc3c69ae5c7070df23b0e690fac143faa3ee33`. Fresh fixed-byte review pending.
 - Generation-12 S0 passed, while rev3 packet review found one final migration-required underconstraint. Generation-13/rev4 explicitly requires null capability digest and unconfigured/reference-only method rows, with two one-axis exact-error probes. Identities: semantic `sha256:f676ed30a08e3f9cbfe38b091f69c69857fe7da047612a964565a76d0ab702fb`, complete `sha256:d9373a26bb56e3604b08857eb81b0770bbcfd5f81f8d6174f89e130256330d6d`, receipt `sha256:c416093655ad0d2c311f132ea1e0e6408d8d60222b74cf9ea6cd04a2de2d3d8c`, packet `sha256:30b0eb7f5fad76fccee96c46ad9ca2f69900c6438fcb6d00ea59d7219fd090ac`. Fresh fixed-byte review pending.
 - `deleg_e07daeda` returned Generation-13 S0 `PASS / BATCH_COMPLETE` and op2 rev4 `PASS / BATCH_COMPLETE`, both `findings=[]`; every rev1-rev3 closure was retained. Exact reviewed candidate commit: `e5f0691a88d27fcb635f663cdf6765dc6cc65f97`. Only terminal evidence/task-start commit and repeated two-path collision gate remain before writer dispatch.
+- A1b-op2 product commit `d9e0705fc80d46adf48ae1b9112ce1f05a11e089` is focused-green with 22 focused tests and both Ruff gates PASS. PMO centrally repaired stale-root negative seams, a missing degraded operator witness, direct max/max+1 and bool discriminators, and source-dependent unconfigured observations, all within the exact two owned files. No acceptance row is closed by this prerequisite slice.
 - A1a product slice is focused-green at commit `3ca321fd0df5a20a969965a0c1705fdd02dc83b6`: exactly `src/aar/provider_ready_models.py` and `tests/test_provider_ready_models.py`, assertion-level and behavioral RED evidence, 15 focused tests PASS, full Ruff PASS and W291/W293 PASS. PMO repaired a test-only strict-list false positive and added explicit min/max/max+1 collection checks before final green; production model bytes were unchanged by that central review. This prerequisite slice closes no acceptance row alone.
 - A1b-op1 product slice is focused-green at commit `d03a10f4ac1cc18b43addb0e62245073f7274e3e`: exactly `src/aar/provider_ready_operator_models.py` and `tests/test_provider_ready_operator_models.py`, six operator-authority top-level schemas plus ten nested strict records, assertion and behavioral RED, 15 focused tests PASS, full Ruff PASS and W291/W293 PASS. PMO corrected only formatting/typing and one strict-list collection test seam before final green. No operator I/O/runtime behavior or acceptance-row closure is claimed.
-- Active implementation worktree is on `codex/aar-provider-ready-workbench-v1-impl`; product HEAD is `d03a10f4ac1cc18b43addb0e62245073f7274e3e`, descended from accepted product-source ancestor `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`; A1a and A1b-op1 each remain within exact two-file ownership.
+- Active implementation worktree is on `codex/aar-provider-ready-workbench-v1-impl`; product HEAD is `d9e0705fc80d46adf48ae1b9112ce1f05a11e089`, descended from accepted product-source ancestor `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`; A1a, A1b-op1 and A1b-op2 each remain within exact two-file ownership.
 - Exact-base Linux-native baseline is terminal: `743 passed, 5 skipped, 1 warning`; Ruff `All checks passed!`; sanitized digest-bound receipt `evidence/baseline-linux-native-summary.json`.
 - DrvFS attempt is separately classified `ABORTED_ENVIRONMENT_DIAGNOSTIC`; its launcher/supervisor T3/ENV-5 risk remains open and was not washed out by the Linux-native PASS.
 - Luna A0 seam map completed and PMO source-check confirmed A1a's two-path slice does not collide with shared generators/registries/assets.
@@ -36,9 +37,9 @@ The A1a packet still owns exactly `src/aar/provider_ready_models.py` and `tests/
 
 ## Next exact actions
 
-1. Commit terminal dual-PASS evidence and freeze the exact task-start parent.
-2. Repeat exclusive source/test collision checks against that parent.
-3. Dispatch one Luna/max A1b-op2 writer with exact rev4 scope.
+1. Freeze and independently review the A1b-eval three-schema packet against current focused-green A1a/op1/op2 bytes.
+2. Dispatch one Luna/max A1b-eval writer only after packet PASS and collision gates.
+3. Then converge A1c canonical registry/generator/schema/fixture joins.
 
 ## Release boundary
 
