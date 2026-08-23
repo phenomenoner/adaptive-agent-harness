@@ -71,7 +71,7 @@
     "testSha256": "12b1000581727c2eb45195bdaa3d677b43b3c204e216d647c0e9e24da0b45ab9",
     "rowClosure": []
   },
-  "status": "a1c_r_packet_pass_writer_pending",
+  "status": "a1c_r_focused_green_gf_pending",
   "generation11": {
     "semanticTree": "sha256:feaa05ebecbb935163cfce48a606e00feedbf7a77d2c49cb49ddaa27927a362b",
     "completeTree": "sha256:cd8998358ace9c8554129b0185b5e700dc453b13084c7ae382c39394cefe8498",
@@ -131,5 +131,14 @@
     "packetCommit": "84088a36d55ec40588c3cfde75fdc81f5cb09502",
     "writerGate": "PENDING_TASK_START_AND_COLLISION",
     "schemaProfile": "EXCLUDED_KNOWN_INCOMPATIBLE"
+  },
+  "a1cR": {
+    "status": "focused_green",
+    "finalHead": "0048d4110d9a272b67a05ce5b9360a28036a5de2",
+    "ownedPaths": [
+      "src/aar/provider_ready_contract.py",
+      "tests/test_provider_ready_contract.py"
+    ],
+    "acceptanceRowsClosed": []
   }
 }

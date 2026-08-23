@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "aar.implementation-evidence.v1",
+  "slice": "A1c-R",
+  "status": "focused_green",
+  "packet": {
+    "sha256": "c0d703b30c04524f9b60521cc5427b4633e9fce40fe4cff4b1f7849f49bfb1af",
+    "reviewBatch": "deleg_c288c446",
+    "reviewVerdict": "PASS/BATCH_COMPLETE/findings=[]",
+    "packetCommit": "84088a36d55ec40588c3cfde75fdc81f5cb09502"
+  },
+  "taskStartParent": "b4e29d5a53d373be722368e44a52bf333d561d89",
+  "workerBatch": "deleg_81821074",
+  "workerProductCommit": "51a09742105bbc040bfe9e626aff8e9f86dc7563",
+  "centralTestOracleCommit": "0048d4110d9a272b67a05ce5b9360a28036a5de2",
+  "ownedPaths": [
+    {
+      "path": "src/aar/provider_ready_contract.py",
+      "sha256": "11b2a125bd5324b05a0c8cb75a1fb1d5cc3462596a7fd19b16b092ca8785d90f"
+    },
+    {
+      "path": "tests/test_provider_ready_contract.py",
+      "sha256": "5c9dcccf02e8a8f218b95971e5f516b09f923e6d8be074131c4a1879f645c8f5"
+    }
+  ],
+  "focusedVerification": {
+    "pytest": "27 passed in 1.43s",
+    "ruff": "PASS",
+    "ruffW291W293": "PASS",
+    "scope": "source plus test-only follow-up",
+    "secretScan": "PASS"
+  },
+  "centralCorrection": "recompute manifest_digest for expected-mismatch, extra-field and strict-bool non-digest negatives",
+  "claims": {
+    "canonicalRegistryModels": 14,
+    "publicLoaderErrorCodes": 13,
+    "duplicateKeyLoader": true,
+    "legacySchemaProfilePassed": false,
+    "legacySchemaProfileDisposition": "excluded_known_incompatible",
+    "generatedAssets": false,
+    "runtimeOrLiveAuthority": false,
+    "acceptanceRowsClosed": [],
+    "t2PlusRun": false
+  }
+}
