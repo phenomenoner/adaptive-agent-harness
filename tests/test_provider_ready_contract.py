@@ -402,6 +402,7 @@ def test_loader_dispatch_precedence_is_raw_first_then_schema_then_pydantic() -> 
 
     mismatch = _manifest().model_dump(mode="json")
     mismatch["unexpected"] = True
+    mismatch = _redigest(mismatch, "manifest_digest")
     _assert_dispatch_error(
         _json_bytes(mismatch),
         ProviderReadySchemaMismatchError,
@@ -512,6 +513,7 @@ def test_json_arrays_are_reserialized_without_sorting_or_deduplication() -> None
 def test_unknown_field_and_strict_scalar_errors_are_pydantic_and_precise() -> None:
     extra = _manifest().model_dump(mode="json")
     extra["unexpected"] = True
+    extra = _redigest(extra, "manifest_digest")
     with pytest.raises(ValidationError) as extra_error:
         validate_provider_ready_document_bytes(_json_bytes(extra))
     assert extra_error.value.errors()[0]["loc"] == ("unexpected",)
@@ -519,6 +521,7 @@ def test_unknown_field_and_strict_scalar_errors_are_pydantic_and_precise() -> No
 
     strict_bool = _manifest().model_dump(mode="json")
     strict_bool["reference_only"] = "false"
+    strict_bool = _redigest(strict_bool, "manifest_digest")
     with pytest.raises(ValidationError) as bool_error:
         validate_provider_ready_document_bytes(_json_bytes(strict_bool))
     assert bool_error.value.errors()[0]["loc"] == ("reference_only",)
