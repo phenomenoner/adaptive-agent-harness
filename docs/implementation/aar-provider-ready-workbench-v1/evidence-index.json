@@ -1,6 +1,6 @@
 {
   "schema_version": "aar.prw-evidence-index.v1",
-  "status": "a1b_op2_focused_green_a1b_eval_pending",
+  "status": "a1b_eval_packet_pass_writer_pending",
   "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
   "entries": [
     {
@@ -446,6 +446,16 @@
       "status": "PASS",
       "path": "evidence/A1b-op2-completion.json",
       "productCommit": "d9e0705fc80d46adf48ae1b9112ce1f05a11e089",
+      "acceptanceRowsClosed": []
+    },
+    {
+      "id": "a1b-eval-rev2-pass",
+      "kind": "terminal-review-evidence",
+      "status": "PASS",
+      "packetSha256": "b29c453f2bbda7cb3f48081cc18c6ea5f10459261dde489a259e5f93603889cb",
+      "reviewBatch": "deleg_c40c636e",
+      "packetCommit": "0b91f748cda1573621166c4020b1027345a30356",
+      "verdict": "PASS/BATCH_COMPLETE/findings=[]",
       "acceptanceRowsClosed": []
     }
   ],

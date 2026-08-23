@@ -1,7 +1,7 @@
 {
   "schema_version": "aar.prw-implementation-ledger.v1",
   "generated_at": "2026-08-22T19:17:55Z",
-  "status": "a1b_op2_focused_green_a1b_eval_pending",
+  "status": "a1b_eval_packet_pass_writer_pending",
   "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
   "implementation_branch": "codex/aar-provider-ready-workbench-v1-impl",
   "historical_spec_tree_digest": "sha256:bb0287e1718033c773e763096b202591307458e1524ab8de9ea8d5a29039afee",
@@ -423,6 +423,16 @@
       "evidence": "evidence/A1b-op2-completion.json",
       "focusedPytest": "22 passed in 1.31s",
       "ruff": "PASS",
+      "rowClosure": []
+    },
+    "A1b-eval-packet": {
+      "status": "reviewed_pass",
+      "revision": 2,
+      "packetSha256": "b29c453f2bbda7cb3f48081cc18c6ea5f10459261dde489a259e5f93603889cb",
+      "reviewBatch": "deleg_c40c636e",
+      "findingSetStatus": "BATCH_COMPLETE",
+      "findings": [],
+      "packetCommit": "0b91f748cda1573621166c4020b1027345a30356",
       "rowClosure": []
     }
   },

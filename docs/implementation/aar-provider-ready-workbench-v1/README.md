@@ -1,6 +1,6 @@
 # AR-PRW Implementation Control Plane
 
-**Status:** `a1b_op2_focused_green_a1b_eval_pending`
+**Status:** `a1b_eval_packet_pass_writer_pending`
 
 **Control epoch:** `2026-08-22T22:17:48Z`
 
@@ -106,6 +106,7 @@ B and D may later run in separate worktrees only after A freezes and PMO publish
 - Generation-12 S0 passed, and op2 rev3 closed every prior finding but remained `BLOCKED / BATCH_COMPLETE` by one migration-required underconstraint: capability digest and configured native/caller rows were not explicitly forbidden. Generation-13/rev4 adds only that null/method restriction plus exact one-axis test/validator probes; review pending.
 - Generation-13 S0 and op2 rev4 received independent `PASS / BATCH_COMPLETE`, `findings=[]` in `deleg_e07daeda`; exact reviewed candidate commit is `e5f0691a88d27fcb635f663cdf6765dc6cc65f97`. Writer remains pending terminal evidence commit and post-commit collision readback.
 - A1b-op2 is focused-green at product commit `d9e0705fc80d46adf48ae1b9112ce1f05a11e089`: exactly the runtime readback source/test files, 22 focused tests PASS, full Ruff PASS and W291/W293 PASS after PMO repaired digest-oracle and witness-completeness seams. No runtime observer, issuer, I/O, T2+ execution or acceptance-row closure is claimed. A1b-eval remains pending.
+- A1b-eval rev1 was `BLOCKED / BATCH_COMPLETE`; rev2 packet `sha256:b29c453f2bbda7cb3f48081cc18c6ea5f10459261dde489a259e5f93603889cb` closed all five findings and received independent `PASS / BATCH_COMPLETE`, `findings=[]` in `deleg_c40c636e`. Exact packet commit is `0b91f748cda1573621166c4020b1027345a30356`; writer task-start/collision gate pending.
 
 ## Evidence policy
 

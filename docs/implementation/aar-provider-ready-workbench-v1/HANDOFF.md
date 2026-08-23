@@ -1,6 +1,6 @@
 # AR-PRW Implementation Handoff
 
-**Status:** `a1b_op2_focused_green_a1b_eval_pending`
+**Status:** `a1b_eval_packet_pass_writer_pending`
 
 **Control epoch:** `2026-08-22T22:17:48Z`
 
@@ -18,6 +18,7 @@
 - Generation-12 S0 passed, while rev3 packet review found one final migration-required underconstraint. Generation-13/rev4 explicitly requires null capability digest and unconfigured/reference-only method rows, with two one-axis exact-error probes. Identities: semantic `sha256:f676ed30a08e3f9cbfe38b091f69c69857fe7da047612a964565a76d0ab702fb`, complete `sha256:d9373a26bb56e3604b08857eb81b0770bbcfd5f81f8d6174f89e130256330d6d`, receipt `sha256:c416093655ad0d2c311f132ea1e0e6408d8d60222b74cf9ea6cd04a2de2d3d8c`, packet `sha256:30b0eb7f5fad76fccee96c46ad9ca2f69900c6438fcb6d00ea59d7219fd090ac`. Fresh fixed-byte review pending.
 - `deleg_e07daeda` returned Generation-13 S0 `PASS / BATCH_COMPLETE` and op2 rev4 `PASS / BATCH_COMPLETE`, both `findings=[]`; every rev1-rev3 closure was retained. Exact reviewed candidate commit: `e5f0691a88d27fcb635f663cdf6765dc6cc65f97`. Only terminal evidence/task-start commit and repeated two-path collision gate remain before writer dispatch.
 - A1b-op2 product commit `d9e0705fc80d46adf48ae1b9112ce1f05a11e089` is focused-green with 22 focused tests and both Ruff gates PASS. PMO centrally repaired stale-root negative seams, a missing degraded operator witness, direct max/max+1 and bool discriminators, and source-dependent unconfigured observations, all within the exact two owned files. No acceptance row is closed by this prerequisite slice.
+- A1b-eval rev2 exact packet `sha256:b29c453f2bbda7cb3f48081cc18c6ea5f10459261dde489a259e5f93603889cb` received `PASS / BATCH_COMPLETE`, `findings=[]` in `deleg_c40c636e`; schema counts 13/25/24, component/usage/composition/digest/test/scope gates all PASS. Exact packet commit `0b91f748cda1573621166c4020b1027345a30356`; writer task-start and repeated collision gate pending.
 - A1a product slice is focused-green at commit `3ca321fd0df5a20a969965a0c1705fdd02dc83b6`: exactly `src/aar/provider_ready_models.py` and `tests/test_provider_ready_models.py`, assertion-level and behavioral RED evidence, 15 focused tests PASS, full Ruff PASS and W291/W293 PASS. PMO repaired a test-only strict-list false positive and added explicit min/max/max+1 collection checks before final green; production model bytes were unchanged by that central review. This prerequisite slice closes no acceptance row alone.
 - A1b-op1 product slice is focused-green at commit `d03a10f4ac1cc18b43addb0e62245073f7274e3e`: exactly `src/aar/provider_ready_operator_models.py` and `tests/test_provider_ready_operator_models.py`, six operator-authority top-level schemas plus ten nested strict records, assertion and behavioral RED, 15 focused tests PASS, full Ruff PASS and W291/W293 PASS. PMO corrected only formatting/typing and one strict-list collection test seam before final green. No operator I/O/runtime behavior or acceptance-row closure is claimed.
 - Active implementation worktree is on `codex/aar-provider-ready-workbench-v1-impl`; product HEAD is `d9e0705fc80d46adf48ae1b9112ce1f05a11e089`, descended from accepted product-source ancestor `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`; A1a, A1b-op1 and A1b-op2 each remain within exact two-file ownership.
@@ -37,9 +38,9 @@ The A1a packet still owns exactly `src/aar/provider_ready_models.py` and `tests/
 
 ## Next exact actions
 
-1. Freeze and independently review the A1b-eval three-schema packet against current focused-green A1a/op1/op2 bytes.
-2. Dispatch one Luna/max A1b-eval writer only after packet PASS and collision gates.
-3. Then converge A1c canonical registry/generator/schema/fixture joins.
+1. Commit terminal A1b-eval packet PASS evidence and freeze task-start parent.
+2. Repeat exact two-path collision checks and dispatch one Luna/max A1b-eval writer.
+3. After focused-green, converge A1c canonical registry/generator/schema/fixture joins.
 
 ## Release boundary
 
