@@ -71,7 +71,7 @@
     "testSha256": "12b1000581727c2eb45195bdaa3d677b43b3c204e216d647c0e9e24da0b45ab9",
     "rowClosure": []
   },
-  "status": "a1b_focused_green_a1c_pending",
+  "status": "a1c_r_packet_pass_writer_pending",
   "generation11": {
     "semanticTree": "sha256:feaa05ebecbb935163cfce48a606e00feedbf7a77d2c49cb49ddaa27927a362b",
     "completeTree": "sha256:cd8998358ace9c8554129b0185b5e700dc453b13084c7ae382c39394cefe8498",
@@ -122,5 +122,14 @@
       "tests/test_provider_ready_evaluation_models.py"
     ],
     "acceptanceRowsClosed": []
+  },
+  "a1cRPacket": {
+    "status": "PASS",
+    "revision": 2,
+    "packetSha256": "c0d703b30c04524f9b60521cc5427b4633e9fce40fe4cff4b1f7849f49bfb1af",
+    "reviewBatch": "deleg_c288c446",
+    "packetCommit": "84088a36d55ec40588c3cfde75fdc81f5cb09502",
+    "writerGate": "PENDING_TASK_START_AND_COLLISION",
+    "schemaProfile": "EXCLUDED_KNOWN_INCOMPATIBLE"
   }
 }

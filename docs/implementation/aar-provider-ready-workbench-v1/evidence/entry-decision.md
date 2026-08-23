@@ -6,7 +6,7 @@
 
 **Source-baseline gate:** `SATISFIED_BY_FROZEN_EXACT_BASE_EVIDENCE`
 
-**Writer-dispatch gate:** `A1B_SATISFIED_A1C_PENDING`
+**Writer-dispatch gate:** `A1C_R_PENDING_TASK_START_AND_COLLISION`
 
 ## Decision
 
@@ -54,3 +54,5 @@ A1b-op2 subsequently reached focused-green at `d9e0705fc80d46adf48ae1b9112ce1f05
 A1b-eval rev2 packet `sha256:b29c453f2bbda7cb3f48081cc18c6ea5f10459261dde489a259e5f93603889cb` now has independent terminal `PASS / BATCH_COMPLETE`, `findings=[]`; exact packet commit is `0b91f748cda1573621166c4020b1027345a30356`. Writer remains gated by terminal evidence/task-start commit and repeated two-path collision readback.
 
 A1b-eval subsequently reached focused-green at product commit `d406f4d0c6c5997e72beb7c9733a7955367ce836`, with 50 focused tests and both Ruff gates PASS after central composition/self-digest and authority-consumer corrections. A1b prerequisites are now focused-green; A1c packet/collision review is the next writer gate. No acceptance row is closed by A1b alone.
+
+A1c-R rev2 packet `sha256:c0d703b30c04524f9b60521cc5427b4633e9fce40fe4cff4b1f7849f49bfb1af` now has independent `PASS / BATCH_COMPLETE`, `findings=[]`; packet commit `84088a36d55ec40588c3cfde75fdc81f5cb09502`. Legacy `schema_profile.py` remains excluded as known-incompatible, not passed. Writer remains gated by terminal evidence/task-start commit and exact two-path collision readback.

@@ -1,6 +1,6 @@
 # AR-PRW Implementation Handoff
 
-**Status:** `a1b_focused_green_a1c_pending`
+**Status:** `a1c_r_packet_pass_writer_pending`
 
 **Control epoch:** `2026-08-22T22:17:48Z`
 
@@ -20,6 +20,7 @@
 - A1b-op2 product commit `d9e0705fc80d46adf48ae1b9112ce1f05a11e089` is focused-green with 22 focused tests and both Ruff gates PASS. PMO centrally repaired stale-root negative seams, a missing degraded operator witness, direct max/max+1 and bool discriminators, and source-dependent unconfigured observations, all within the exact two owned files. No acceptance row is closed by this prerequisite slice.
 - A1b-eval rev2 exact packet `sha256:b29c453f2bbda7cb3f48081cc18c6ea5f10459261dde489a259e5f93603889cb` received `PASS / BATCH_COMPLETE`, `findings=[]` in `deleg_c40c636e`; schema counts 13/25/24, component/usage/composition/digest/test/scope gates all PASS. Exact packet commit `0b91f748cda1573621166c4020b1027345a30356`; writer task-start and repeated collision gate pending.
 - A1b-eval product commit `d406f4d0c6c5997e72beb7c9733a7955367ce836` is focused-green with 50 tests and both Ruff gates PASS. PMO additionally enforced composition input revalidation/self-digests, re-digested unknown-field negatives and cross-module authority-consumer scans. No live evaluator, usage collection, physical launcher or acceptance-row closure is claimed.
+- A1c-R rev2 exact packet `sha256:c0d703b30c04524f9b60521cc5427b4633e9fce40fe4cff4b1f7849f49bfb1af` received independent `PASS / BATCH_COMPLETE`, `findings=[]`; packet commit `84088a36d55ec40588c3cfde75fdc81f5cb09502`. The legacy bounded schema profile rejects all fourteen current schemas and remains explicitly excluded; Draft 2020-12 independent validation belongs to later A1c-GF.
 - A1a product slice is focused-green at commit `3ca321fd0df5a20a969965a0c1705fdd02dc83b6`: exactly `src/aar/provider_ready_models.py` and `tests/test_provider_ready_models.py`, assertion-level and behavioral RED evidence, 15 focused tests PASS, full Ruff PASS and W291/W293 PASS. PMO repaired a test-only strict-list false positive and added explicit min/max/max+1 collection checks before final green; production model bytes were unchanged by that central review. This prerequisite slice closes no acceptance row alone.
 - A1b-op1 product slice is focused-green at commit `d03a10f4ac1cc18b43addb0e62245073f7274e3e`: exactly `src/aar/provider_ready_operator_models.py` and `tests/test_provider_ready_operator_models.py`, six operator-authority top-level schemas plus ten nested strict records, assertion and behavioral RED, 15 focused tests PASS, full Ruff PASS and W291/W293 PASS. PMO corrected only formatting/typing and one strict-list collection test seam before final green. No operator I/O/runtime behavior or acceptance-row closure is claimed.
 - Active implementation worktree is on `codex/aar-provider-ready-workbench-v1-impl`; product HEAD is `d406f4d0c6c5997e72beb7c9733a7955367ce836`, descended from accepted product-source ancestor `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`; A1a, A1b-op1, A1b-op2 and A1b-eval each remain within exact two-file ownership.
@@ -39,9 +40,9 @@ The A1a packet still owns exactly `src/aar/provider_ready_models.py` and `tests/
 
 ## Next exact actions
 
-1. Map and freeze A1c canonical registry/generator/schema/fixture ownership and affected test boundary.
-2. Independently review the A1c packet and collision set before writer dispatch.
-3. After A1c focused-green, perform the first affected T2 integration checkpoint.
+1. Commit A1c-R terminal evidence/task-start parent and repeat two-path collision checks.
+2. Dispatch one Luna/max A1c-R writer with exact two-file ownership.
+3. After A1c-R focused-green, freeze/review A1c-GF; then run the first affected T2 checkpoint.
 
 ## Release boundary
 
