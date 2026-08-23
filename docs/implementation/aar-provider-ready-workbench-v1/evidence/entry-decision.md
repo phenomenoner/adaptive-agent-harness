@@ -6,7 +6,7 @@
 
 **Source-baseline gate:** `SATISFIED_BY_FROZEN_EXACT_BASE_EVIDENCE`
 
-**Writer-dispatch gate:** `A1C_R_SATISFIED_A1C_GF_PENDING`
+**Writer-dispatch gate:** `A1C_GF_PENDING_TASK_START_AND_COLLISION`
 
 ## Decision
 
@@ -58,3 +58,5 @@ A1b-eval subsequently reached focused-green at product commit `d406f4d0c6c5997e7
 A1c-R rev2 packet `sha256:c0d703b30c04524f9b60521cc5427b4633e9fce40fe4cff4b1f7849f49bfb1af` now has independent `PASS / BATCH_COMPLETE`, `findings=[]`; packet commit `84088a36d55ec40588c3cfde75fdc81f5cb09502`. Legacy `schema_profile.py` remains excluded as known-incompatible, not passed. Writer remains gated by terminal evidence/task-start commit and exact two-path collision readback.
 
 A1c-R subsequently reached focused-green at worker product `51a09742105bbc040bfe9e626aff8e9f86dc7563` plus PMO test-only oracle `0048d4110d9a272b67a05ce5b9360a28036a5de2`, with 27 focused tests and both Ruff gates PASS. A1c-GF bundle/manifest/fixture packet is the next writer gate; no T0 row is closed by R alone.
+
+A1c-GF rev3 exact packet/spec now has Terra/high terminal `PASS / BATCH_COMPLETE`, `findings=[]`; packet commit `ea6254f11abb2c108f5c4e8233dc991484998d7c`, packet `sha256:ce11b9de0a85938b892becc93e24e1d2a4f4fea935813475ae6756a372292092`, spec raw `sha256:a49428b890f0c8e612fe677b24ca4fd3decc83ad71674a699eddc8f7403605a8`, self `sha256:1b45466190c7b54d493ef3d68857633f5b8f2643cd827a602faa976aafc85379`. Writer remains gated by terminal evidence/task-start commit and repeated broad collision readback; no T0 row is closed by packet review.

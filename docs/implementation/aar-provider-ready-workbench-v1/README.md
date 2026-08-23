@@ -1,6 +1,6 @@
 # AR-PRW Implementation Control Plane
 
-**Status:** `a1c_r_focused_green_gf_pending`
+**Status:** `a1c_gf_packet_pass_writer_pending`
 
 **Control epoch:** `2026-08-22T22:17:48Z`
 
@@ -110,6 +110,7 @@ B and D may later run in separate worktrees only after A freezes and PMO publish
 - A1b-eval is focused-green at product commit `d406f4d0c6c5997e72beb7c9733a7955367ce836`: exact two-file ownership, 50 focused tests PASS and both Ruff gates PASS after PMO closed composition-revalidation, re-digested-extra and authority-consumer-scan seams. It is pure planning/evidence only and closes no acceptance row alone. A1c is next.
 - A1c-R rev1 was `BLOCKED / BATCH_COMPLETE`; rev2 packet `sha256:c0d703b30c04524f9b60521cc5427b4633e9fce40fe4cff4b1f7849f49bfb1af` closed all five findings and received independent `PASS / BATCH_COMPLETE`, `findings=[]` in `deleg_c288c446`. Exact packet commit `84088a36d55ec40588c3cfde75fdc81f5cb09502`; legacy `schema_profile.py` is truthfully excluded as known-incompatible, not represented as PASS.
 - A1c-R is focused-green: worker product `51a09742105bbc040bfe9e626aff8e9f86dc7563`, PMO test-oracle follow-up `0048d4110d9a272b67a05ce5b9360a28036a5de2`, 27 focused tests and both Ruff gates PASS. Production registry/loader bytes were unchanged by the follow-up; no generated asset or acceptance-row closure is claimed. A1c-GF is next.
+- A1c-GF rev1 and rev2 remain historical `BLOCKED / BATCH_COMPLETE` candidates. Rev3 packet `sha256:ce11b9de0a85938b892becc93e24e1d2a4f4fea935813475ae6756a372292092` plus normative spec raw `sha256:a49428b890f0c8e612fe677b24ca4fd3decc83ad71674a699eddc8f7403605a8` / self `sha256:1b45466190c7b54d493ef3d68857633f5b8f2643cd827a602faa976aafc85379` received Terra/high `PASS / BATCH_COMPLETE`, `findings=[]` in `deleg_462ba005`; packet commit `ea6254f11abb2c108f5c4e8233dc991484998d7c`. Writer task-start/collision gate pending.
 
 ## Evidence policy
 

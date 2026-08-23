@@ -1,6 +1,6 @@
 {
   "schema_version": "aar.prw-evidence-index.v1",
-  "status": "a1c_r_focused_green_gf_pending",
+  "status": "a1c_gf_packet_pass_writer_pending",
   "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
   "entries": [
     {
@@ -483,6 +483,19 @@
       "status": "focused_green",
       "path": "docs/implementation/aar-provider-ready-workbench-v1/evidence/A1c-R-completion.json",
       "finalHead": "0048d4110d9a272b67a05ce5b9360a28036a5de2",
+      "acceptanceRowsClosed": []
+    },
+    {
+      "id": "a1c-gf-rev3-pass",
+      "kind": "terminal-review-evidence",
+      "status": "PASS",
+      "packetSha256": "ce11b9de0a85938b892becc93e24e1d2a4f4fea935813475ae6756a372292092",
+      "specRawSha256": "a49428b890f0c8e612fe677b24ca4fd3decc83ad71674a699eddc8f7403605a8",
+      "specDigest": "sha256:1b45466190c7b54d493ef3d68857633f5b8f2643cd827a602faa976aafc85379",
+      "reviewBatch": "deleg_462ba005",
+      "reviewRoute": "Terra/high",
+      "packetCommit": "ea6254f11abb2c108f5c4e8233dc991484998d7c",
+      "verdict": "PASS/BATCH_COMPLETE/findings=[]",
       "acceptanceRowsClosed": []
     }
   ],
