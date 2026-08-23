@@ -6,7 +6,7 @@
 
 **Source-baseline gate:** `SATISFIED_BY_FROZEN_EXACT_BASE_EVIDENCE`
 
-**Writer-dispatch gate:** `A1B_EVAL_PENDING_TASK_START_AND_COLLISION`
+**Writer-dispatch gate:** `A1B_SATISFIED_A1C_PENDING`
 
 ## Decision
 
@@ -52,3 +52,5 @@ Generation-13 S0 and op2 rev4 now have independent terminal `PASS / BATCH_COMPLE
 A1b-op2 subsequently reached focused-green at `d9e0705fc80d46adf48ae1b9112ce1f05a11e089`, with 22 focused tests and both Ruff gates PASS after central oracle/witness corrections. The next writer gate is A1b-eval packet review; op2 closes no acceptance row by itself.
 
 A1b-eval rev2 packet `sha256:b29c453f2bbda7cb3f48081cc18c6ea5f10459261dde489a259e5f93603889cb` now has independent terminal `PASS / BATCH_COMPLETE`, `findings=[]`; exact packet commit is `0b91f748cda1573621166c4020b1027345a30356`. Writer remains gated by terminal evidence/task-start commit and repeated two-path collision readback.
+
+A1b-eval subsequently reached focused-green at product commit `d406f4d0c6c5997e72beb7c9733a7955367ce836`, with 50 focused tests and both Ruff gates PASS after central composition/self-digest and authority-consumer corrections. A1b prerequisites are now focused-green; A1c packet/collision review is the next writer gate. No acceptance row is closed by A1b alone.

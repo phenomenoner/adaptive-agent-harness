@@ -1,6 +1,6 @@
 # AR-PRW Implementation Handoff
 
-**Status:** `a1b_eval_packet_pass_writer_pending`
+**Status:** `a1b_focused_green_a1c_pending`
 
 **Control epoch:** `2026-08-22T22:17:48Z`
 
@@ -19,9 +19,10 @@
 - `deleg_e07daeda` returned Generation-13 S0 `PASS / BATCH_COMPLETE` and op2 rev4 `PASS / BATCH_COMPLETE`, both `findings=[]`; every rev1-rev3 closure was retained. Exact reviewed candidate commit: `e5f0691a88d27fcb635f663cdf6765dc6cc65f97`. Only terminal evidence/task-start commit and repeated two-path collision gate remain before writer dispatch.
 - A1b-op2 product commit `d9e0705fc80d46adf48ae1b9112ce1f05a11e089` is focused-green with 22 focused tests and both Ruff gates PASS. PMO centrally repaired stale-root negative seams, a missing degraded operator witness, direct max/max+1 and bool discriminators, and source-dependent unconfigured observations, all within the exact two owned files. No acceptance row is closed by this prerequisite slice.
 - A1b-eval rev2 exact packet `sha256:b29c453f2bbda7cb3f48081cc18c6ea5f10459261dde489a259e5f93603889cb` received `PASS / BATCH_COMPLETE`, `findings=[]` in `deleg_c40c636e`; schema counts 13/25/24, component/usage/composition/digest/test/scope gates all PASS. Exact packet commit `0b91f748cda1573621166c4020b1027345a30356`; writer task-start and repeated collision gate pending.
+- A1b-eval product commit `d406f4d0c6c5997e72beb7c9733a7955367ce836` is focused-green with 50 tests and both Ruff gates PASS. PMO additionally enforced composition input revalidation/self-digests, re-digested unknown-field negatives and cross-module authority-consumer scans. No live evaluator, usage collection, physical launcher or acceptance-row closure is claimed.
 - A1a product slice is focused-green at commit `3ca321fd0df5a20a969965a0c1705fdd02dc83b6`: exactly `src/aar/provider_ready_models.py` and `tests/test_provider_ready_models.py`, assertion-level and behavioral RED evidence, 15 focused tests PASS, full Ruff PASS and W291/W293 PASS. PMO repaired a test-only strict-list false positive and added explicit min/max/max+1 collection checks before final green; production model bytes were unchanged by that central review. This prerequisite slice closes no acceptance row alone.
 - A1b-op1 product slice is focused-green at commit `d03a10f4ac1cc18b43addb0e62245073f7274e3e`: exactly `src/aar/provider_ready_operator_models.py` and `tests/test_provider_ready_operator_models.py`, six operator-authority top-level schemas plus ten nested strict records, assertion and behavioral RED, 15 focused tests PASS, full Ruff PASS and W291/W293 PASS. PMO corrected only formatting/typing and one strict-list collection test seam before final green. No operator I/O/runtime behavior or acceptance-row closure is claimed.
-- Active implementation worktree is on `codex/aar-provider-ready-workbench-v1-impl`; product HEAD is `d9e0705fc80d46adf48ae1b9112ce1f05a11e089`, descended from accepted product-source ancestor `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`; A1a, A1b-op1 and A1b-op2 each remain within exact two-file ownership.
+- Active implementation worktree is on `codex/aar-provider-ready-workbench-v1-impl`; product HEAD is `d406f4d0c6c5997e72beb7c9733a7955367ce836`, descended from accepted product-source ancestor `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`; A1a, A1b-op1, A1b-op2 and A1b-eval each remain within exact two-file ownership.
 - Exact-base Linux-native baseline is terminal: `743 passed, 5 skipped, 1 warning`; Ruff `All checks passed!`; sanitized digest-bound receipt `evidence/baseline-linux-native-summary.json`.
 - DrvFS attempt is separately classified `ABORTED_ENVIRONMENT_DIAGNOSTIC`; its launcher/supervisor T3/ENV-5 risk remains open and was not washed out by the Linux-native PASS.
 - Luna A0 seam map completed and PMO source-check confirmed A1a's two-path slice does not collide with shared generators/registries/assets.
@@ -38,9 +39,9 @@ The A1a packet still owns exactly `src/aar/provider_ready_models.py` and `tests/
 
 ## Next exact actions
 
-1. Commit terminal A1b-eval packet PASS evidence and freeze task-start parent.
-2. Repeat exact two-path collision checks and dispatch one Luna/max A1b-eval writer.
-3. After focused-green, converge A1c canonical registry/generator/schema/fixture joins.
+1. Map and freeze A1c canonical registry/generator/schema/fixture ownership and affected test boundary.
+2. Independently review the A1c packet and collision set before writer dispatch.
+3. After A1c focused-green, perform the first affected T2 integration checkpoint.
 
 ## Release boundary
 

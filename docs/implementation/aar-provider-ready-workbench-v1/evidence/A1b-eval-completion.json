@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "aar.implementation-evidence.v1",
+  "slice": "A1b-eval",
+  "status": "focused_green",
+  "packet": {
+    "path": "docs/implementation/aar-provider-ready-workbench-v1/work-packages/A1b-eval-evidence-planning-models.md",
+    "sha256": "b29c453f2bbda7cb3f48081cc18c6ea5f10459261dde489a259e5f93603889cb",
+    "reviewBatch": "deleg_c40c636e",
+    "reviewVerdict": "PASS/BATCH_COMPLETE/findings=[]",
+    "packetCommit": "0b91f748cda1573621166c4020b1027345a30356"
+  },
+  "taskStartParent": "612f7d3bf2c7d0cf88b4f5c264d2f2698eb053c3",
+  "workerBatch": "deleg_2993b98b",
+  "productCommit": "d406f4d0c6c5997e72beb7c9733a7955367ce836",
+  "ownedPaths": [
+    {
+      "path": "src/aar/provider_ready_evaluation_models.py",
+      "sha256": "a368ca804b2ad54c3505ed6f8de9e148f957bbaf97a3494f11f669c7d07f996a"
+    },
+    {
+      "path": "tests/test_provider_ready_evaluation_models.py",
+      "sha256": "5cd2fa0053e24e8fab412d638a124fea0efcfa11f93b50cbfb69e1bc0ec9b781"
+    }
+  ],
+  "focusedVerification": {
+    "pytest": "50 passed in 1.50s",
+    "ruff": "PASS",
+    "ruffW291W293": "PASS",
+    "scope": "exact two paths",
+    "secretScan": "PASS"
+  },
+  "centralCorrections": [
+    "revalidate current composition input bytes and self-digests",
+    "re-digest unknown-field negatives and assert exact extra_forbidden location",
+    "scan existing authority-named modules for forbidden evaluation-model consumption"
+  ],
+  "claims": {
+    "topLevelSchemas": 3,
+    "fieldCounts": [13, 25, 24],
+    "purePlanningOnly": true,
+    "physicalLaunchAuthority": false,
+    "runtimeProviderMcpCliAuthority": false,
+    "acceptanceRowsClosed": [],
+    "t2PlusRun": false,
+    "liveProviderUsed": false
+  }
+}

@@ -71,7 +71,7 @@
     "testSha256": "12b1000581727c2eb45195bdaa3d677b43b3c204e216d647c0e9e24da0b45ab9",
     "rowClosure": []
   },
-  "status": "a1b_eval_packet_pass_writer_pending",
+  "status": "a1b_focused_green_a1c_pending",
   "generation11": {
     "semanticTree": "sha256:feaa05ebecbb935163cfce48a606e00feedbf7a77d2c49cb49ddaa27927a362b",
     "completeTree": "sha256:cd8998358ace9c8554129b0185b5e700dc453b13084c7ae382c39394cefe8498",
@@ -113,5 +113,14 @@
     "reviewBatch": "deleg_c40c636e",
     "packetCommit": "0b91f748cda1573621166c4020b1027345a30356",
     "writerGate": "PENDING_TASK_START_AND_COLLISION"
+  },
+  "a1bEval": {
+    "status": "focused_green",
+    "productCommit": "d406f4d0c6c5997e72beb7c9733a7955367ce836",
+    "ownedPaths": [
+      "src/aar/provider_ready_evaluation_models.py",
+      "tests/test_provider_ready_evaluation_models.py"
+    ],
+    "acceptanceRowsClosed": []
   }
 }
