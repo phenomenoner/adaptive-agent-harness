@@ -1,273 +1,854 @@
 {
-  "schema_version": "aar.prw-requirements.v1",
-  "target_release": "0.6.0a0-provisional",
+  "schema_version": "aar.prw-requirements.v2-clean-install-rev2",
+  "target_release": "0.6.0a0-clean-install-only",
   "status": "specification_only",
+  "product_contract": {
+    "release_mode": "clean_install_only",
+    "sole_public_mutation": "aar-admin runtime install --runtime-home <absolute-runtime-home> --intent <exact-intent> --candidate-receipt <absolute-json> --wheel <absolute-wheel>",
+    "preservation": false,
+    "adoption": false,
+    "downgrade": false,
+    "old_root_product_mutation": false,
+    "transition_mutators": [],
+    "planned_receipt_schema": "aar.install-candidate-receipt.v1",
+    "implementation_architecture": "standalone_installer_with_thin_adapters",
+    "c1_phase": "prepublication_generation_independent",
+    "c2_phase": "postpublication_runtime_activation",
+    "grant_set_owner": "aar.runtime.provider_ready_activation.ProviderReadyActivationStore"
+  },
+  "frozen_compatibility_manifest": {
+    "schema_version": "aar.prw-frozen-compatibility-manifest.v1",
+    "schemas": [
+      {
+        "path": "schemas/aar-acceptance-evidence-v1.schema.json",
+        "size_bytes": 52583,
+        "sha256": "sha256:54dcd741bcbacaa88ec22736d2ce2667730c0b3ef44867bc2d9eca8597b2c1ef"
+      },
+      {
+        "path": "schemas/aar-artifact-publication-v1.schema.json",
+        "size_bytes": 13168,
+        "sha256": "sha256:cdbdebc999fd9f09ad554c856aa18dcbe7794f99b41315e0e07d0c58ec88c59c"
+      },
+      {
+        "path": "schemas/aar-broker-catalog-v2.json",
+        "size_bytes": 2074,
+        "sha256": "sha256:88099616e61f41c7d72d5e1c81fba8ebfe29995467fd583acc9da0bb15aeadbc"
+      },
+      {
+        "path": "schemas/aar-caller-work-v1.schema.json",
+        "size_bytes": 229120,
+        "sha256": "sha256:76deb95fb89081c7ec90734821689e14a893040696af6727725b059676c2b7e3"
+      },
+      {
+        "path": "schemas/aar-mcp-tools-v4.json",
+        "size_bytes": 427694,
+        "sha256": "sha256:29a557bc865ceac0f1c66885628f5f78ab4add014abc7289dd40710569cb5937"
+      },
+      {
+        "path": "schemas/aar-mcp-tools-v5.json",
+        "size_bytes": 471933,
+        "sha256": "sha256:9d7e8c7cc58d60790f71426c8fffdae57a01fe54aefd06e509ca53b9e20602b0"
+      },
+      {
+        "path": "schemas/aar-mcp-tools-v7.json",
+        "size_bytes": 503083,
+        "sha256": "sha256:6ebf848eee74795771af23dfaaeb70fd5030cb88878327f76ffc10d1c4639ab8"
+      },
+      {
+        "path": "schemas/aar-mcp-tools-v8-combined.json",
+        "size_bytes": 1036635,
+        "sha256": "sha256:36b41abbcab2e5b3a60dff6a1de85e7a3168cc01135d42c5a88b416abfbca424"
+      },
+      {
+        "path": "schemas/aar-mcp-tools-v8.json",
+        "size_bytes": 4857,
+        "sha256": "sha256:41e97f76f8f371ad2c12d1c4bcba0131491a903cfdf6760430bdeffe4ab2e82f"
+      },
+      {
+        "path": "schemas/aar-migration-cutover-v1.schema.json",
+        "size_bytes": 31469,
+        "sha256": "sha256:18c9ba0031707d544277075c558d715567619584e2bb8810e4684a7364b12ed7"
+      },
+      {
+        "path": "schemas/aar-provider-ready-schemas-v1.json",
+        "size_bytes": 143853,
+        "sha256": "sha256:2ae2ff879ebcb232df2b0a1990e7e37a44abdac177a074a5e14dff6c6b8761d0"
+      },
+      {
+        "path": "schemas/aar-rlm-workbench-v1.schema.json",
+        "size_bytes": 248396,
+        "sha256": "sha256:0d52527f9019cae724459e3eb36a0165b91822771ae64f815f1c2fd18d3054ef"
+      },
+      {
+        "path": "schemas/aar-schemas-v1.json",
+        "size_bytes": 255747,
+        "sha256": "sha256:02b894c6a1396c2a3f3d3238e44a3f26a5f1e3126bc3e3e4bac5946cd13c33ca"
+      },
+      {
+        "path": "schemas/aar-workspace-broker-frame-v1.schema.json",
+        "size_bytes": 150416,
+        "sha256": "sha256:88637fd2246ff1c66401dd5a1dfbad6282e2523cdf2648cd4c492cdc3c171983"
+      }
+    ],
+    "fixture_manifest": {
+      "path": "tests/fixtures/provider-ready/manifest.json",
+      "size_bytes": 50286,
+      "sha256": "sha256:4d5521b349d102e3aa2f22623f391f309a68a3a598c8af0a84d91938dd853f48"
+    },
+    "fixtures": [
+      {
+        "path": "tests/fixtures/provider-ready/invalid/activation-intent-artifact-put-caller-driver.json",
+        "size_bytes": 7563,
+        "sha256": "sha256:b6aeb7ae1078a103ccb635437c3d150aa9dffb64bbdcd701ec6d19e6f4822c6e"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/alias-constant-tamper.json",
+        "size_bytes": 899,
+        "sha256": "sha256:632d7ecaacd56126be66ec793820314297b5bd1fb04d075f7e6054a66d36e8b1"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/authority-generation-prior-mismatch.json",
+        "size_bytes": 650,
+        "sha256": "sha256:a2bd48c7a801265ffc8b0620c3755f771c807990b247ed9cca1bd4ef33f17504"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/cutover-outcome-mapping.json",
+        "size_bytes": 1905,
+        "sha256": "sha256:54ba75cba85270c8fd51a6bbd37c9998a916086e661552657c6eadd2ef6ec64f"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/evaluation-tier-effective-mismatch.json",
+        "size_bytes": 1031,
+        "sha256": "sha256:34d9045f8c9571bb10969ffd7774cb82bb6edb30606407abd863314472411a8a"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/grant-set-unsorted-principals.json",
+        "size_bytes": 1096,
+        "sha256": "sha256:21b91b411fbe3c57b86981b741da51ce2b6fe620973ee881df1444cbd50727c7"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/method-adapter-reference-truth.json",
+        "size_bytes": 834,
+        "sha256": "sha256:96adc3b6506e15b0c1ffdbefd66bc76831f3e285a92a53d949893d15c300c1ad"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/paired-expiry-overflow.json",
+        "size_bytes": 1930,
+        "sha256": "sha256:bbcc6c01a21c5a075d33773e35f649768852cc0b73c7850dd20b25dd2d2cf485"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/plan-owner-authority-mismatch.json",
+        "size_bytes": 2616,
+        "sha256": "sha256:c6c1c460e9f33a285c11d78bb02ae4eeaf2f581dc8090d5acd6e0d91db0895f7"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/prepared-union-mismatch.json",
+        "size_bytes": 3922,
+        "sha256": "sha256:7561031e3c66b6ff5c533d3682403196aed405b5a01366b44b890c93f9b4c428"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/profile-intent-digest-mismatch.json",
+        "size_bytes": 8199,
+        "sha256": "sha256:fb68044485497e15c871aaa1633b164d1745347d5b134b7ad713536d21a54b6b"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/raw-bom.json",
+        "size_bytes": 5,
+        "sha256": "sha256:aa25e978046d680ef8740d837e6de5bc1e2a2dc6089dbda1012544b538d53f65"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/raw-duplicate-nested.json",
+        "size_bytes": 80,
+        "sha256": "sha256:55c2a1a671994f602cd4f42dc7c942f3d86da6ca8a2d8c0f11011bab227ebdc7"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/raw-duplicate-root.json",
+        "size_bytes": 101,
+        "sha256": "sha256:a33f1f1f895037636c19e3ff271bed8357a28aa9b9e50d243c8e1154c355273b"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/raw-float.json",
+        "size_bytes": 40,
+        "sha256": "sha256:acfcf2235b55e5e05e876333ae092b6811e4d658f3951e2f9de1ffe8ba899c95"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/raw-invalid-utf8.json",
+        "size_bytes": 13,
+        "sha256": "sha256:161f0360f615fb47c59dd14d9ae01eb6449378d169c1532b10ebe3abafb30b04"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/raw-nonfinite.json",
+        "size_bytes": 40,
+        "sha256": "sha256:b6aca9c8395d3b4e0f30454513266e857deb78ba8e5a8e99d80ba641eb1e8e09"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/raw-nonobject.json",
+        "size_bytes": 2,
+        "sha256": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/raw-trailing-data.json",
+        "size_bytes": 5,
+        "sha256": "sha256:2cec2bbf1a64ea5249e8a7ab9ecc782fa48be13f0b35ad5f52bdea741841a230"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/readback-active-null-binding.json",
+        "size_bytes": 5994,
+        "sha256": "sha256:968ba77f09b6ca7af8dd9e19c8bb6a00cc867ce9da7452f8a1293ac57f90ac1a"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/restore-frontier-proof-false.json",
+        "size_bytes": 2227,
+        "sha256": "sha256:ed6f7f83c9073c2e47d472843b41b98628cbf9f592521676267a0d71d81a7d31"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-activation-generation-authority.json",
+        "size_bytes": 650,
+        "sha256": "sha256:1c85c932688a8524bed8fd87a904fdbdeb520531231e213bb10597af2ae40f05"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-activation-intent.json",
+        "size_bytes": 7556,
+        "sha256": "sha256:487956b32a90f76e3c930a7bb61eac89498fdcc9cc8540371230b222a64f4bff"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-activation-readback.json",
+        "size_bytes": 5991,
+        "sha256": "sha256:edaa11306721f36c25e1d629fa4479a60b5b1aad5c23a8c5943520c90c2f9301"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-cutover-plan.json",
+        "size_bytes": 2626,
+        "sha256": "sha256:cceb74f1f50a8d8061bed56c951446e6a89e5d56e8d95c4298fafb668d986950"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-cutover-receipt.json",
+        "size_bytes": 2244,
+        "sha256": "sha256:fb45876927ff154a7ccb316004daaf72f164fa5ab516cfc161de5a86bea21e39"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-evaluation-classification.json",
+        "size_bytes": 1031,
+        "sha256": "sha256:80f9a4d73e59d0458f556515f99ffc565d48168faade46dbfe41edc005b4fdce"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-final-profile.json",
+        "size_bytes": 8146,
+        "sha256": "sha256:3c444391ecdc2c13666d220ca25a61dca8acba85fb7e9db038a0d8ecf490acd5"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-method-adapter.json",
+        "size_bytes": 838,
+        "sha256": "sha256:557df204c21d07ec2d877c90ab1d19d70c6a3152f44a2030bc8140ee9721b9f0"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-operator-prepared-marker.json",
+        "size_bytes": 3922,
+        "sha256": "sha256:c10f0adba44ff04bacb389aad18bace037da385d0fbc3edf0866eec4d2dc59da"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-operator-terminal-marker.json",
+        "size_bytes": 2630,
+        "sha256": "sha256:000bbbf3d478c6d267484bc537f6a279ecea076d629603d03ebf9c233a59a613"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-paired-admission.json",
+        "size_bytes": 1930,
+        "sha256": "sha256:2406e640e341682991a3e7d86edf7de9f8dde1286c923686f05fd59ec5aaf916"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-provider-alias-attestation.json",
+        "size_bytes": 892,
+        "sha256": "sha256:9cf084e02e6bad79f13045c8ca4cbb0e3140a0ac66d41b7f0a3ace277d778cf2"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-restore-receipt.json",
+        "size_bytes": 2226,
+        "sha256": "sha256:4b695bc4568684b0e38da8b1a0a8cfc7a10a8e602e2cd489c7a0b706bd17c2bf"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/stale-workbench-grant-set.json",
+        "size_bytes": 1087,
+        "sha256": "sha256:1e3696f29db81e5dd7ef63043f8232d56284c90450a914f7da1d3edbbade4029"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/strict-bool.json",
+        "size_bytes": 840,
+        "sha256": "sha256:a146c3a7cc62f7de8fc2045ffd42beba3a13890b56e2d558a65f173de63bd9d9"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/terminal-receipt-kind-swap.json",
+        "size_bytes": 2628,
+        "sha256": "sha256:8bf823ecb9dded00331386af35d2e2f9329a4a4d18e61def6bad2b9a72747b82"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/unknown-field.json",
+        "size_bytes": 860,
+        "sha256": "sha256:6be8816195a43c02e8b3f6edee8c431e96924fc7ac20eff0fc23dc287ae2effc"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/invalid/wrong-schema-version.json",
+        "size_bytes": 837,
+        "sha256": "sha256:fc4f07acd6c484bdd23f8058f02a8068b5332b5e2230e5608f351b13634bc6f5"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/activation-generation-authority-first.json",
+        "size_bytes": 650,
+        "sha256": "sha256:79206e9db7392c85b363e0ee198f9c476ba9c68b74ae71d53e43b18173f6f2c2"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/activation-intent.json",
+        "size_bytes": 7556,
+        "sha256": "sha256:d9088b58e34e1b4a2b311fbb4e0d1950172e4fe3c0d032bf97a5c3417828a962"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/activation-readback-active.json",
+        "size_bytes": 5991,
+        "sha256": "sha256:bb2b6066ce76975b4de5bb221423a9f0416e27899595702a41375267af149019"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/activation-readback-unconfigured.json",
+        "size_bytes": 4228,
+        "sha256": "sha256:a00de87f165b25b0b90171263a43d9373ef92fba0ffa47080cdd5b598b89d166"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/cutover-plan.json",
+        "size_bytes": 2626,
+        "sha256": "sha256:f24186fc67606e4813767a90c207d74b57a38536eac5dd79fdc0ed7a2db0e8ac"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/cutover-receipt-aborted.json",
+        "size_bytes": 1920,
+        "sha256": "sha256:9ef8b664edda2550a19978d17724ec59ba827162e28f6b0b1578e648bd86de57"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/cutover-receipt-committed.json",
+        "size_bytes": 2244,
+        "sha256": "sha256:bfbf6bca84ad9676236c7aed50867c97336e66569d8daca1db848e0c7b63ca6d"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/cutover-receipt-recovery-required.json",
+        "size_bytes": 1913,
+        "sha256": "sha256:54aaa219bc54553ea02b4c76175e9193cb2091730c195e6d3915def75a4f6068"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/evaluation-classification-aar.json",
+        "size_bytes": 1031,
+        "sha256": "sha256:893224236c3aea6db76440a0fafb613617a3b72dfd6eb63092bb1a40a0b79c1f"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/evaluation-classification-insufficient.json",
+        "size_bytes": 1043,
+        "sha256": "sha256:a22001322ba9ed886f280878d390249aee4878276f0c9babcf82e139f851673b"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/evaluation-classification-prime.json",
+        "size_bytes": 1039,
+        "sha256": "sha256:86a550ef8668052b1cfcba2149f805baaff53a18e9b52a833c0268591cde4293"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/final-profile.json",
+        "size_bytes": 8146,
+        "sha256": "sha256:de1d923cda70e850e0f57b89fc974c767cef4908849bd104369a3df5398dd0d1"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/method-adapter.json",
+        "size_bytes": 838,
+        "sha256": "sha256:98135ee71bd6810a6083ffe81b8fb1c17a8f632a8047443f8e1fcc62bcadbb2d"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/operator-prepared-cutover.json",
+        "size_bytes": 3922,
+        "sha256": "sha256:41387536161b099d51b15000c7261e92ee72563c117402ff8b02e20f95185176"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/operator-prepared-restore.json",
+        "size_bytes": 1628,
+        "sha256": "sha256:048bfc0b1eb8d7f3b243bfe5bb135251c185c59de5d9150f9ba0b330c230cde5"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/operator-terminal-cutover-aborted.json",
+        "size_bytes": 2298,
+        "sha256": "sha256:726f019746c284d8b38b0ff3dc88075cf4f9fd76d25d31cc8a596bf80187bdc2"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/operator-terminal-cutover-committed.json",
+        "size_bytes": 2630,
+        "sha256": "sha256:08848b214e4b51af27a8af77891b2ae141046d9a356a6d243d4bc1f87df8b1c5"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/operator-terminal-cutover-recovery-required.json",
+        "size_bytes": 2301,
+        "sha256": "sha256:73d6c1fc42577709c85d380b09d60dc226a8cb9b24cb1b98e31a3443d85703cc"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/operator-terminal-restore-committed.json",
+        "size_bytes": 2636,
+        "sha256": "sha256:b7ba6af7da42f4a5c41ceaef3e63296e199474017baf1b2dcb66723127b3b049"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/operator-terminal-restore-recovery-required.json",
+        "size_bytes": 2496,
+        "sha256": "sha256:7ff46441fb064a5f4ace44b60ec2420805fdd4924e1dee58c52ff997b5497477"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/paired-admission.json",
+        "size_bytes": 1930,
+        "sha256": "sha256:40d5a958436973716c72000ea93ff31dbe65c3c44436e8e1a2c3bc4c04fa8ec0"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/provider-alias-attestation.json",
+        "size_bytes": 892,
+        "sha256": "sha256:9380fba09ccd9812e62cc0ca57ef5e6c960afd73b1917ef78930a655547682e7"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/restore-receipt-committed.json",
+        "size_bytes": 2226,
+        "sha256": "sha256:5dadfc5c191f8782f9a7d6e1a1f5c3b538026159f821825739dccf4bce81374b"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/restore-receipt-recovery-required.json",
+        "size_bytes": 2084,
+        "sha256": "sha256:00cc0eb644e7f18b97ff9c5b70a9c29c986ee9cadb95dff7aaf48e745025ec86"
+      },
+      {
+        "path": "tests/fixtures/provider-ready/valid/workbench-grant-set.json",
+        "size_bytes": 1087,
+        "sha256": "sha256:41f764883efb5a4dccf032402d08519cfd92f1c890163a0b159a5d4964ae539e"
+      }
+    ],
+    "bundle_digest": "sha256:456541435a17eb0277861761f0749794c81405d19f14dbf35491010e4fbb3b48"
+  },
   "requirements": [
-    {
-      "id": "CUST-001",
-      "owner": "README.md",
-      "statement": "Implementation uses a clean worktree from the exact accepted v0.5-or-later base and preserves the current dirty canonical branch without reset, clean, rebase, or overwrite.",
-      "tier": "T0",
-      "status": "planned"
-    },
-    {
-      "id": "NEC-001",
-      "owner": "ARCHITECTURE.md",
-      "statement": "The successor adds no second workbench, broker service, provider client, credential store, daemon, durable database, or MCP inference back-channel.",
-      "tier": "T0",
-      "status": "planned"
-    },
-    {
-      "id": "MIG-001",
-      "owner": "MIGRATION.md",
-      "statement": "Cutover planning is read-only/query-only, emits one canonical plan on stdout only, executes no WAL checkpoint or other mutation, and binds exact owner, DB/WAL/SHM, schema/state, candidate, intent, profile output, authority-history tip/current pointer, generation, and snapshot intent.",
-      "tier": "T1",
-      "status": "planned"
-    },
-    {
-      "id": "MIG-002",
-      "owner": "MIGRATION.md",
-      "statement": "Cutover apply/abort/reconcile/restore and runtime-initialize mutations hold the stable runtime-home lock exclusively from final precheck through their named strict prepared-marker, DB/profile/immutable-history/current/terminal-marker writes; supervisor holds it shared for life plus predecessor owner identity. Runtime initialize creates no separate epoch or reconcile namespace.",
-      "tier": "T1",
-      "status": "planned"
-    },
-    {
-      "id": "MIG-003",
-      "owner": "MIGRATION.md",
-      "statement": "Only an explicit exclusive-lock mutator may use the SQLite backup API; plan only observes DB/WAL/SHM. Backup/restore bind hashes, fsync, integrity/FK, sidecar disposition, and zero-source-mutation failure evidence.",
-      "tier": "T1",
-      "status": "planned"
-    },
-    {
-      "id": "MIG-004",
-      "owner": "MIGRATION.md",
-      "statement": "Registry-v6 DDL and its exact migration attestation commit in one SQLite transaction after an immutable external prepared marker.",
-      "tier": "T1",
-      "status": "planned"
-    },
-    {
-      "id": "MIG-005",
-      "owner": "MIGRATION.md",
-      "statement": "runtime initialize idempotently creates or recognizes only canonical empty v5 and then stops. Caught pre/post-commit faults converge, but abrupt process-loss WAL/SHM residue is explicitly not crash-convergent: it fails closed as UNINITIALIZED_RUNTIME_RESIDUE with no delete/checkpoint/adoption/retry authority. The operator separately materializes an ordinary cutover plan; apply/reconcile reruns converge only through that plan and ordinary markers, and reconcile never silently applies or aborts a prepared old DB.",
-      "tier": "T1",
-      "status": "planned"
-    },
-    {
-      "id": "MIG-006",
-      "owner": "LIFECYCLE.md",
-      "statement": "Every snapshot/prepared/DB/profile/immutable-history/current-pointer/terminal-marker and restore-replacement crash boundary has an explicit exact-input cutover/restore classification and write set; ambiguity or changed inputs preserve recovery-required without blind replay.",
-      "tier": "T1",
-      "status": "planned"
-    },
-    {
-      "id": "MIG-007",
-      "owner": "MIGRATION.md",
-      "statement": "Restore is allowed only before any committed v6 attestation, immutable activation-history record, runtime generation, workbench admission or v6 write. It requires an exact original cutover_aborted or cutover_recovery_required terminal marker and a later restore_committed receipt/marker that digest-binds and terminally resolves that cutover without rewriting either epoch.",
-      "tier": "T1",
-      "status": "planned"
-    },
-    {
-      "id": "MIG-008",
-      "owner": "CONTRACTS.md",
-      "statement": "Cutover and restore use strict cycle-free plan→prepared→transaction/receipt→terminal authority, including exact snapshot-before-prepared adoption. Restore preparation and receipt require the original cutover terminal-marker digest; only one exact cutover_recovery_required→restore_committed pair closes a pre-frontier recovery epoch. Missing, duplicate, mismatched or recovery-required restore successors remain startup-blocking.",
-      "tier": "T1",
-      "status": "planned"
-    },
     {
       "id": "ACT-001",
       "owner": "CONTRACTS.md",
-      "statement": "All fourteen strict operator/profile/evaluation schemas have complete required-property, nullability, bound, cross-field and self-digest authority; marker construction is acyclic, activation/grant/readback state is total, and candidate/route/recovery inputs retain canonical versions, frozen six-method/evidence domains and v6-compatible backends with no secret.",
+      "statement": "The existing 14 strict schemas and 64 fixtures remain byte-identical frozen compatibility/evidence assets and are not regenerated; one planned receipt schema is additive future work, not a live 15th asset.",
       "tier": "T0",
       "status": "planned"
     },
     {
       "id": "ACT-002",
       "owner": "ARCHITECTURE.md",
-      "statement": "A side-effect-free shared-lock preflight validates final profile, attestation, complete unbranched activation history, committed markers, exact derived current pointer, and all factories before host construction/runtime-generation allocation; final recheck gates Ready on v6.",
+      "statement": "C1 performs generation-independent prepublication verification only; C2 performs postpublication runtime-generation, factory, capability, durable grant-set, and Ready readback only.",
       "tier": "T2",
       "status": "planned"
     },
     {
       "id": "ACT-003",
       "owner": "ARCHITECTURE.md",
-      "statement": "Per-method capability truth is derived from exact instantiated current-generation adapters and frozen v8 contracts: native/caller rows may be admission-usable, exact reference rows are configured/reference-only/unknown but never usable, and stale or missing rows are unconfigured; no input boolean creates readiness.",
+      "statement": "Capability truth comes from exact instantiated package-owned factories and current runtime generation: executable rows may be usable, reference rows are configured/reference-only with null adapter identity/generation and unknown evidence, and unconfigured rows are unusable.",
       "tier": "T2",
       "status": "planned"
     },
     {
       "id": "ACT-004",
       "owner": "CONTRACTS.md",
-      "statement": "Capability rows derive from package-owned immutable factories bound to implementation, manifest, generation, method contract, backend kind, frozen capability evidence tier and v6 owner compatibility; evaluator route/usage/visibility classification has one separate strict owner and cannot be upgraded from capability metadata.",
-      "tier": "T2",
-      "status": "planned"
-    },
-    {
-      "id": "AUTH-001",
-      "owner": "ARCHITECTURE.md",
-      "statement": "The supervisor derives a strict server-side grant-set policy only after activation/factory verification; the frozen grant_ids array resolves one coherent current issued-record set binding exact principal/session, budgets/TTL/deadline, runtime/activation/profile/history-tip/capability/route/grant-set digests, and client context is never authority.",
-      "tier": "T2",
-      "status": "planned"
-    },
-    {
-      "id": "AUTH-002",
-      "owner": "CONTRACTS.md",
-      "statement": "Profile activation alone creates no operation and performs no physical inference.",
-      "tier": "T2",
-      "status": "planned"
-    },
-    {
-      "id": "AUTH-003",
-      "owner": "CONTRACTS.md",
-      "statement": "Grant resolution rejects missing/revoked/expired/mixed-set/duplicate-capability records, serializes every authority-denied outcome as frozen-v8 GRANT_DENIED, enforces a grant-policy TTL minimum of 1000 ms, and applies authority-before-availability precedence with zero operation/provider side effect. No non-recomputable internal-record-shape digest is published.",
-      "tier": "T2",
-      "status": "planned"
-    },
-    {
-      "id": "PLAN-001",
-      "owner": "ARCHITECTURE.md",
-      "statement": "Every caller-delegated root-planner phase uses one durable model.request ticket with exact {kind=planner,phase,step_index}, SQL-null cell authority, unique predecessor operation event, and the frozen-v6 cell-free successor-outbox CAS; operation/request/route/directive identities stay in existing owners and synchronous call count is zero.",
-      "tier": "T2",
-      "status": "planned"
-    },
-    {
-      "id": "PLAN-002",
-      "owner": "LIFECYCLE.md",
-      "statement": "Every caller-delegated workbench execution requires frozen-v8 start_only=true. start_only=false always rejects before operation creation; v1 defines no duplex-driver exception and changes no frozen request schema.",
-      "tier": "T2",
-      "status": "planned"
-    },
-    {
-      "id": "PLAN-003",
-      "owner": "LIFECYCLE.md",
-      "statement": "External planner wait releases the execution-attempt lease, stays accepted/waiting_external, and resumes only through exact pending-to-prepared or fenced prepared-to-prepared takeover followed by atomic prepared-to-consumed plus one valid directive/correction/certain terminal projection; outcome unknown stays unconsumed and planner never accesses cell-bound authority/rebind tables.",
-      "tier": "T2",
-      "status": "planned"
-    },
-    {
-      "id": "PLAN-004",
-      "owner": "CONTRACTS.md",
-      "statement": "Only reconciler-settled route, usage, physical-attempt, response-contract, budget and fence evidence can authorize a planner outcome. Frozen caller-work states settled_success, settled_failure and cancelled_certain alone create successor outbox authority; cancelled_before_send uses outer cancellation/finalization, while cancel_requested, outcome_unknown and quarantined have no outbox and remain reconciliation-owned. Absent usage dimensions remain null.",
-      "tier": "T2",
-      "status": "planned"
-    },
-    {
-      "id": "PLAN-005",
-      "owner": "LIFECYCLE.md",
-      "statement": "Recovery planning starts from a certain pre-cell checkpoint and cannot automatically replay arbitrary Python or the failed source digest.",
-      "tier": "T2",
-      "status": "planned"
-    },
-    {
-      "id": "PLAN-006",
-      "owner": "CONTRACTS.md",
-      "statement": "Planner settlement maps every valid directive, bounded correction, settled_failure, cancelled_certain, before-send cancellation, deadline and possibly-sent uncertainty to one exact frozen consume/no-consume rule. Only settled_success, settled_failure and cancelled_certain may prepare/consume a successor outbox; no blind resend or synthetic settlement digest is permitted.",
+      "statement": "Evaluator-owned provider/model/reasoning/fallback/cache, usage, and attempt-visibility classification remains separate from runtime capability evidence and cannot be upgraded by capability metadata.",
       "tier": "T2",
       "status": "planned"
     },
     {
       "id": "ADM-001",
       "owner": "ARCHITECTURE.md",
-      "statement": "Required methods are a pure pre-operation function of normalized job/profile planner mode, frozen budgets/features, the effective capability union from a coherent server-validated grant_ids set, and matching package-owned model.request/method factories; the full separately-profiled native/caller cross-product is mandatory T2 release evidence.",
+      "statement": "Required methods are a pure pre-operation function of normalized job/profile planner mode, frozen budgets/features, coherent server grant union, and matching package-owned model.request and method factories.",
       "tier": "T2",
       "status": "planned"
     },
     {
       "id": "ADM-002",
       "owner": "CONTRACTS.md",
-      "statement": "Unavailable optional methods are omitted and fail certain before send; feature-implied ungranted or retired/stale factory authority serializes as frozen-v8 GRANT_DENIED, while a valid current-grant same-generation instantiated-adapter health loss is CAPABILITY_UNAVAILABLE, with mandatory discriminating evidence.",
+      "statement": "Feature-implied authority or retired/stale/reference factory state is GRANT_DENIED, current same-generation instantiated-adapter health loss is CAPABILITY_UNAVAILABLE, and optional unavailable calls fail before send.",
       "tier": "T2",
       "status": "planned"
     },
     {
-      "id": "ROUTE-001",
-      "owner": "EVALUATION.md",
-      "statement": "AAR/Prime qualification uses one strict evaluator evidence-classification record per arm/attempt; provider, model, reasoning, fallback and cache each retain their own attested/observed/requested_only/contradicted tier, and Prime alias normalization never exceeds native evidence.",
-      "tier": "T4",
+      "id": "AUTH-001",
+      "owner": "ARCHITECTURE.md",
+      "statement": "After runtime_generation allocation and exact factory projection, aar.runtime.provider_ready_activation.ProviderReadyActivationStore atomically publishes the generation-bound WorkbenchGrantSet at authority/runtime-generations/<20-digit-generation>/workbench-grant-set.json; exact replay is idempotent, conflicting bytes fail, prior-generation session grants are invalid after restart, and session grants are memory-only/current-generation/revocable.",
+      "tier": "T2",
       "status": "planned"
     },
     {
-      "id": "ROUTE-002",
-      "owner": "EVALUATION.md",
-      "statement": "Qualification joins exact operation/owner/suspension/ticket/claim/physical-attempt/request/route/response/time/adapter fields and deterministically derives per-component tiers plus aar_live_qualified/prime_live_qualified/insufficient/contradicted with source digests; capability evidence cannot upgrade it.",
-      "tier": "T4",
+      "id": "AUTH-002",
+      "owner": "CONTRACTS.md",
+      "statement": "Activation verification and grant construction create no operation, ticket, credential access, physical inference, or provider call.",
+      "tier": "T2",
       "status": "planned"
     },
     {
-      "id": "ROUTE-003",
-      "owner": "EVALUATION.md",
-      "statement": "Usage classification deterministically projects request_receipt/session_aggregate/partial_events/unavailable and complete/aggregate_only/unknown; request_receipt requires provider-reported rows for every physical attempt, exact arithmetic and no zero imputation.",
-      "tier": "T4",
+      "id": "AUTH-003",
+      "owner": "CONTRACTS.md",
+      "statement": "Sorted-unique grant_ids resolution rejects missing, revoked, expired, mixed-set, mismatched, and duplicate-capability records as frozen-v8 GRANT_DENIED before availability; only valid current same-generation adapter health loss is CAPABILITY_UNAVAILABLE.",
+      "tier": "T2",
       "status": "planned"
     },
     {
-      "id": "ROUTE-004",
+      "id": "CLEAN-001",
+      "owner": "MIGRATION.md",
+      "statement": "One exact aar.clean-install-preparation.v1 object contains install_epoch, runtime_home_digest, database_identity, database_name, positive backup digest/size, row-set digest, intent_digest, the four-field candidate object, migration_sql_digest, and projected external_authority_store_id, with no staging path.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "CLEAN-002",
+      "owner": "CONTRACTS.md",
+      "statement": "The authority projection is authority- plus canonical_sha256(authority_material).removeprefix(\"sha256:\"); snapshot_id is empty-v5- plus canonical_sha256(snapshot_material).removeprefix(\"sha256:\"); both obey the strict no-colon token domain.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "CLEAN-003",
+      "owner": "CONTRACTS.md",
+      "statement": "Issuer, installer, staging verifier, and startup verifier use the same strict canonical target algorithm, canonical JSON UTF-8 bytes, POSIX separators, no normalization/case folding, and exact runtime-home digest object.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "CLEAN-004",
       "owner": "LIFECYCLE.md",
-      "statement": "Send-start, claim, physical-attempt, receipt, retry/recovery, deadline and reconciliation lineage prevents duplicate or blind replay spend; possibly-sent outcome_unknown/quarantined work never becomes a certain deadline terminal without authoritative evidence.",
+      "statement": "Trusted parent and ancestor directory handles retain fstat dev/ino/mode/owner identity; staging is created by dirfd-relative exclusive mode-0700 creation and its fd/dev/ino are retained through publication and the Linux /proc/self/fd SQLite adapter.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "CLEAN-005",
+      "owner": "LIFECYCLE.md",
+      "statement": "All staging, verification, cleanup, and publish operations are fd-relative and no-follow; parent/ancestor replacement and staging substitution refuse with contained evidence rather than deleting by string path.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "CLEAN-006",
+      "owner": "CONTRACTS.md",
+      "statement": "The planned strict receipt has exactly the frozen fields, candidate equality, positive wheel size, repeated digest equality, sorted unique factory entries, and self receipt_digest described by aar.install-candidate-receipt.v1.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "CLEAN-007",
+      "owner": "CONTRACTS.md",
+      "statement": "Receipt and wheel inputs are absolute existing regular non-symlink files opened once with retained no-follow descriptors; exact wheel bytes are hashed and ZIP-inspected, and fixed bundled members are byte-bound.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "CLEAN-008",
+      "owner": "ARCHITECTURE.md",
+      "statement": "Installer prepublication stops before executable capability/grant/session/runtime-health creation; supervisor after publication allocates/fences runtime_generation=1, instantiates factories, projects capabilities, persists WorkbenchGrantSet, and reads back before Ready.",
       "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "CLEAN-009",
+      "owner": "LIFECYCLE.md",
+      "statement": "Startup revalidates receipt and installed member digests plus attestation/profile/inventory without recomputing the deleted backup or overall wheel digest, and performs no schema/profile/install repair.",
+      "tier": "T3",
+      "status": "planned"
+    },
+    {
+      "id": "CLEAN-010",
+      "owner": "MIGRATION.md",
+      "statement": "Old-root acceptance has two atomic alternatives: inactive archive/readback when removal is intended, or proven no-old-root observation on a genuinely fresh host; a nonexistent archive is not required.",
+      "tier": "T3",
+      "status": "planned"
+    },
+    {
+      "id": "CLEAN-011",
+      "owner": "verification/validate_spec.py",
+      "statement": "The validator enforces exact product_contract fields, atomic row schema, candidate/temporal/identity semantics, frozen-input ordering, semantic self-tests, and status iff failures are empty.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "CLEAN-012",
+      "owner": "CONTRACTS.md",
+      "statement": "Clean-install preflight requires the supplied self-digested intent to have activation_generation exactly 1 and previous_activation_authority_digest null; any other initial authority fails before staging without rewrite.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "CLEAN-013",
+      "owner": "CONTRACTS.md",
+      "statement": "After all input and target preflights, the installer issues exactly one install- plus 64 lowercase hexadecimal secrets.token_hex(32) invocation token, freezes it for that invocation, projects it unchanged to preparation install_epoch and attestation cutover_epoch, and never reuses it in a new invocation or adopts its stale stage.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "CLEAN-014",
+      "owner": "LIFECYCLE.md",
+      "statement": "On Linux/WSL the installer-owned SQLiteStageAdapter proves /proc/self/fd/<stage_fd> resolves to the retained stage dev/ino, passes only that root to existing registry/backup/v6 primitives, fences before/after, validates database/backup/WAL/SHM entries no-follow, and fails unsupported before database mutation when the adapter is unavailable.",
+      "tier": "T1",
       "status": "planned"
     },
     {
       "id": "COMP-001",
       "owner": "ARCHITECTURE.md",
-      "statement": "Frozen v7 capability bytes, v8 38-tool names/order/schemas, caller-work owner/request bytes, operation-event/attempt/lease/dispatch owners, and registry-v6 nullable suspension, successor-outbox, cell-only attempt-authority/rebind-transfer DDL remain byte-identical while planner uses only the existing cell-free owners.",
+      "statement": "Frozen v7 capability, v8 tool, registry-v6 DDL, caller-work, operation-event, attempt, lease, dispatch, nullable suspension, successor-outbox, and D1/D2 cell-bound owner bytes remain unchanged.",
       "tier": "T0",
       "status": "planned"
     },
     {
       "id": "COMP-002",
       "owner": "ARCHITECTURE.md",
-      "statement": "Without an activation-profile path, the successor preserves v0.5 startup and publishes only truthful unconfigured/reference capability rows with no mutation grants or migration. A supplied-but-absent, malformed, stale or binding-invalid profile fails before host construction, runtime-generation allocation, listener, Ready, grant or operation.",
+      "statement": "An untouched legacy root may be observed only for a separately existing v0.5 compatibility claim; it cannot be v0.6 authority, and old/new simultaneous activity fails the release boundary.",
       "tier": "T3",
       "status": "planned"
     },
     {
-      "id": "OPS-001",
-      "owner": "CONTRACTS.md",
-      "statement": "One explicit aar-admin surface separates stdout-only zero-write/zero-checkpoint plan/status/verify from explicit apply/abort/reconcile/restore/runtime-initialize mutations, names every mutator write set, and never silently owns service stop/start.",
-      "tier": "T1",
-      "status": "planned"
-    },
-    {
-      "id": "SEC-001",
-      "owner": "CONTRACTS.md",
-      "statement": "Activation intent/final profile, plans, receipts, logs, DB rows, package assets, and evidence contain no provider credential or semantic command/endpoint/import field; allowed identifier values are never expanded, resolved, imported, executed, or content-classified as credentials.",
+      "id": "CUST-001",
+      "owner": "README.md",
+      "statement": "The rev2 specification writer changes only the 16 authorized SDD paths; task-start hashes of the three dirty product files and frozen migration-v6 SQL remain unchanged. No reset, clean, stage, commit, push, or product overwrite is part of this specification task.",
       "tier": "T0",
-      "status": "planned"
-    },
-    {
-      "id": "TEST-001",
-      "owner": "ACCEPTANCE.md",
-      "statement": "One immutable candidate passes every mandatory T0-T3 row, including all fourteen schema fixtures, crash-convergent cell-free planner outcomes, append-only history/reconcile, grant_ids resolution and all admission cross-products, plus exact-wheel preserved-v5 and empty-runtime-v5-bootstrap-to-v6 hosts and independent current-byte review before implementation_verified.",
-      "tier": "T3",
-      "status": "planned"
-    },
-    {
-      "id": "LIVE-001",
-      "owner": "EVALUATION.md",
-      "statement": "T4 live_qualified requires AAR attested request-level route/usage and Prime stock-native observation of effective canonical provider/model/fallback/cache with no contradiction; Prime reasoning may remain explicitly requested_only with null effective reasoning when stock output exposes no effort field, while requested_treatment_qualified alone cannot admit T5.",
-      "tier": "T4",
       "status": "planned"
     },
     {
       "id": "EVAL-001",
       "owner": "EVALUATION.md",
-      "statement": "No paired instrumentation block, physical attempt, machine stop action, rerun, score, comparison, winner or expansion is admitted by v1/0.6.0. Future paired protocol categories are planning bytes only and require a separately reviewed launcher-authority SDD before they can become executable authority.",
+      "statement": "No paired physical attempt or T5 launcher, machine stop, rerun, score, comparison, winner, or expansion authority exists in this generation.",
       "tier": "T0",
       "status": "planned"
     },
     {
       "id": "EVAL-002",
       "owner": "CONTRACTS.md",
-      "statement": "A strict paired-evaluation-admission document binds live-qualified classifications and exact candidate/profile/alias/case/protocol/budget/stop-matrix bytes, explicit operator planning authority and arm order. It is planning evidence only: it allocates no physical attempt, proves no request count and cannot authorize T5 spend in v1/0.6.0.",
+      "statement": "The strict paired-evaluation-admission document binds exact planning bytes and operator planning authority only; it allocates no physical attempt and no package component consumes it.",
       "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "INST-001",
+      "owner": "README.md",
+      "statement": "The 0.6.0a0 claim is clean-install-only: only an absent target may be published. The product does not preserve v0.5 in place. It does not adopt an old root. It does not downgrade or mutate old-root authority.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "INST-002",
+      "owner": "CONTRACTS.md",
+      "statement": "runtime.database_identity is db- followed by lowercase hex of canonical_sha256 over schema_version aar.clean-install-database-identity.v1, runtime_home_digest, and database_name reference.sqlite3; inode/dev and staging identity are forbidden.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "INST-003",
+      "owner": "MIGRATION.md",
+      "statement": "The installer requires an absolute NUL-free target with an absent final component and rejects every existing target type before mutation with FRESH_INSTALL_TARGET_EXISTS.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "INST-004",
+      "owner": "LIFECYCLE.md",
+      "statement": "The sole public mutation is runtime install with an explicit candidate receipt and wheel; status and activation verification are read-only and no transition mutator is reachable.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "INST-005",
+      "owner": "MIGRATION.md",
+      "statement": "One invocation-owned mode-0700 sibling staging directory is created relative to the retained parent handle; all staged database, profile, asset, factory, capability, and grant evidence is verified before publication.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "INST-006",
+      "owner": "MIGRATION.md",
+      "statement": "The existing OperationRegistry constructs canonical empty v1-v5 in staging and unchanged migration-v6.sql plus its attestation commit in one SQLite transaction with no schema v7.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "INST-007",
+      "owner": "MIGRATION.md",
+      "statement": "The staged v6 database passes complete object inventory, exact attestation, migration SQL digest, integrity/FK, empty-domain, positive backup, and exact clean-preparation projection checks.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "INST-008",
+      "owner": "CONTRACTS.md",
+      "statement": "Prepublication checks are generation-independent and do not build executable capability rows, WorkbenchGrantSet, session grants, or runtime health; post-publication supervisor startup allocates runtime_generation=1 before projecting capabilities and grant state.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "INST-009",
+      "owner": "LIFECYCLE.md",
+      "statement": "A fully verified staged tree is fsynced and published once with Linux renameat2 RENAME_NOREPLACE; target EEXIST/refusal is not success and no partial target is visible.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "INST-010",
+      "owner": "LIFECYCLE.md",
+      "statement": "Caught failure removes only identity-matched invocation staging; parent/stage drift refuses cleanup and leaves inert evidence, while abrupt residue is never adopted.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "INST-011",
+      "owner": "LIFECYCLE.md",
+      "statement": "Startup verifies immutable install/profile/evidence, then performs only normal runtime-generation and grant writes before Ready; it never initializes, migrates, repairs, adopts, or rewrites install state.",
+      "tier": "T3",
+      "status": "planned"
+    },
+    {
+      "id": "INST-012",
+      "owner": "MIGRATION.md",
+      "statement": "If a legacy root exists and the operator intends removal, an inactive verified external archive/readback is required; on a genuinely fresh host, acceptance requires a proven no-old-root observation, and no nonexistent archive is mandatory.",
+      "tier": "T3",
+      "status": "planned"
+    },
+    {
+      "id": "INST-013",
+      "owner": "IMPLEMENTATION-PLAN.md",
+      "statement": "Candidate admission uses the exact new aar.install-candidate-receipt.v1 contract and absolute wheel/receipt inputs; installed bytes or ambient lookup cannot prove the wheel digest.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "INST-014",
+      "owner": "TEST-STRATEGY-AND-GAP-ANALYSIS.md",
+      "statement": "The v0.6 constructible publication path is Linux/WSL-only using renameat2 semantics; native Windows fails with FRESH_INSTALL_PUBLICATION_UNSUPPORTED.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "LIVE-001",
+      "owner": "EVALUATION.md",
+      "statement": "T4 live qualification requires exact AAR request-level evidence and honest Prime native/component evidence; requested-only treatment cannot authorize T5.",
+      "tier": "T4",
+      "status": "planned"
+    },
+    {
+      "id": "MOD-001",
+      "owner": "IMPLEMENTATION-PLAN.md",
+      "statement": "Clean-install implementation remains standalone and modular: focused install models, installer, activation store, and focused tests own new behavior; admin/operator stay thin, and supervisor/ReferenceHost/MCP receive only the minimum explicit activation injection seam without moving migration or registry ownership.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "NEC-001",
+      "owner": "ARCHITECTURE.md",
+      "statement": "The selected DIRECT/PLATFORM_PRIMITIVE design produces one usable fresh v6 runtime with one invocation staging owner and Linux renameat2 no-replace publication; it adds no second workbench, broker, provider client, credential store, daemon, database, or recovery ledger.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "OPS-001",
+      "owner": "CONTRACTS.md",
+      "statement": "The public CLI has exactly one install mutation with explicit receipt and wheel, read-only status/verification, and no hidden service control or old-root product mutation.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "PLAN-001",
+      "owner": "ARCHITECTURE.md",
+      "statement": "Every caller-delegated root-planner phase uses one durable model.request ticket with exact kind/phase/step_index, existing v6 request/route/response owners, a unique predecessor event, nullable cell authority, and cell-free successor CAS.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "PLAN-002",
+      "owner": "LIFECYCLE.md",
+      "statement": "Caller-delegated workbench execution requires frozen start_only=true and rejects start_only=false before operation creation without a duplex exception or frozen schema change.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "PLAN-003",
+      "owner": "LIFECYCLE.md",
+      "statement": "External planner wait releases the attempt lease and resumes only through exact pending-to-prepared or dead-owner prepared-to-prepared takeover followed by one fenced prepared-to-consumed projection; uncertain outcomes remain reconcile-only.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "PLAN-004",
+      "owner": "CONTRACTS.md",
+      "statement": "Only reconciled route, usage, physical-attempt, response-contract, budget, control, deadline, and fence evidence can authorize a planner outcome, and absent usage dimensions remain null.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "PLAN-005",
+      "owner": "LIFECYCLE.md",
+      "statement": "Recovery begins from a certain pre-cell checkpoint and cannot automatically replay arbitrary Python, a failed source digest, or possibly-sent work.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "PLAN-006",
+      "owner": "CONTRACTS.md",
+      "statement": "Settled success/failure/certain cancellation, before-send cancellation, deadline, invalid directive correction, and uncertain caller states map to the frozen one-time consume/no-consume rules with no blind resend.",
+      "tier": "T2",
       "status": "planned"
     },
     {
       "id": "REL-001",
       "owner": "README.md",
-      "statement": "Specification, implementation, verification, live qualification, and benchmark-ready statuses remain separate and cannot be promoted by inference.",
+      "statement": "Specification, implementation, T0-T3 verification, T4 live qualification, and benchmark-planned statuses remain separate and cannot be promoted by inference.",
       "tier": "T0",
       "status": "planned"
+    },
+    {
+      "id": "ROUTE-001",
+      "owner": "EVALUATION.md",
+      "statement": "AAR and Prime qualification use one strict component-wise evaluator classification for provider, model, reasoning, fallback, and cache, with requested_only and alias normalization never exceeding native evidence.",
+      "tier": "T4",
+      "status": "planned"
+    },
+    {
+      "id": "ROUTE-002",
+      "owner": "EVALUATION.md",
+      "statement": "Qualification joins exact operation, planner owner, suspension, ticket, physical attempt, request, route, response, timing, adapter-generation, and classification digests and derives route qualification deterministically.",
+      "tier": "T4",
+      "status": "planned"
+    },
+    {
+      "id": "ROUTE-003",
+      "owner": "EVALUATION.md",
+      "statement": "Usage classification distinguishes request_receipt, session_aggregate, partial_events, and unavailable with complete/aggregate/unknown visibility, exact arithmetic, and no zero imputation.",
+      "tier": "T4",
+      "status": "planned"
+    },
+    {
+      "id": "ROUTE-004",
+      "owner": "LIFECYCLE.md",
+      "statement": "Durable send-start, claim, receipt, retry/recovery, deadline, and reconciliation lineage prevents duplicate or blind replay and never promotes possibly-sent uncertainty to certain success or no-send truth.",
+      "tier": "T2",
+      "status": "planned"
+    },
+    {
+      "id": "SEC-001",
+      "owner": "CONTRACTS.md",
+      "statement": "Intent, profile, staged tree, database, package assets, receipts, logs, and evaluation evidence contain no credentials or semantic command/endpoint/import fields and never expand or execute identifier contents.",
+      "tier": "T0",
+      "status": "planned"
+    },
+    {
+      "id": "TEST-001",
+      "owner": "ACCEPTANCE.md",
+      "statement": "The final exact-wheel release bundle is a non-counted summary assertion that every counted T0-T3 atomic row passes on the exact candidate; it is not an acceptance cell.",
+      "tier": "T3",
+      "status": "planned"
+    },
+    {
+      "id": "V6-001",
+      "owner": "MIGRATION.md",
+      "statement": "The v6 transaction has one atomic fail_after_statement boundary for each of the 25 ordered frozen DDL statements plus explicit pre-first, pre-attestation, pre-schema-migration, pre-commit, and post-commit-readback boundaries.",
+      "tier": "T1",
+      "status": "planned"
+    },
+    {
+      "id": "V6-002",
+      "owner": "MIGRATION.md",
+      "statement": "The temporary empty-v5 backup is positive-size, verified after close/reopen read-only, used through final staged verification, removed before fsync/publication, and never required for startup reread.",
+      "tier": "T1",
+      "status": "planned"
     }
+  ],
+  "summary_requirements": [
+    "TEST-001"
   ]
 }

@@ -1,130 +1,67 @@
-# AR-PRW — Provider-Ready RLM Workbench
+# AR-PRW — Provider-Ready RLM Workbench (clean-install rev2)
 
-**Status:** successor specification candidate reopened for S0 review; product implementation is authorized but held pending successor freeze
+**Status:** superseding specification candidate; specification-only, not an implementation claim.
 
-**Provisional package target:** `adaptive-agent-runtime 0.6.0a0`
+**Release mode:** `CLEAN-INSTALL-ONLY`. The `0.6.0a0` claim is limited to constructing one complete runtime below an absent, safe target and publishing it once. The product does not preserve v0.5 in place, does not adopt an old root, does not downgrade, and does not mutate old-root authority.
 
-**Product lane:** local/developer MCP plus durable supervisor; authenticated public MCP remains a separate product lane
+**Exact sole public mutation:**
 
-**Predecessor:** `../aar-rlm-native-workbench-v2/` and exact implemented baseline `v0.5.0a0` (`bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`)
-
-## 1. Decision claim
-
-AAR needs one narrow successor release to make the already-implemented MCP v8 workbench operable through a truthful host-owned caller-delegated journey. The release MUST close the observed migration, activation, root-planner, grant, backend-admission, and route-qualification gaps without introducing a second workbench, model broker, provider client, daemon, database, or inference back-channel.
-
-The recommended mechanism is **operator-owned host activation over the existing registry-v6, caller-work, AR-MB route, receipt, usage, and supervisor primitives**.
-
-## 2. Source custody
-
-| Role | Identity | Authority |
-|---|---|---|
-| Exact executable/source baseline | clean `v0.5.0a0` commit `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1` | Read-only predecessor evidence |
-| Active successor specification | dedicated clean branch `codex/aar-provider-ready-workbench-v1-impl` rooted at the exact baseline | PMO specification/control edits only while S0 is open |
-| Historical reviewed SDD generation | complete custody-tree digest `sha256:bb0287e1718033c773e763096b202591307458e1524ab8de9ea8d5a29039afee`; validator semantic digest `sha256:30dbc6ffb52a289792d7b37d782ce8b537fd0741957af9854b9538a863a01047` | Immutable local evidence, summarized publicly by digest |
-
-The user-owned dirty canonical worktree remains preserved and is not an implementation target. Product-source writers remain blocked until this successor specification validates deterministically, receives independent current-byte review, and the first bounded worker packet passes review. Local filesystem paths are intentionally omitted from the public package.
-
-## 3. Necessity and simpler alternatives
-
-### Observable outcome
-
-From a preserved v5 runtime, an operator can perform a receipt-backed v6 cutover from a credential-free activation intent, generate and activate the final host profile, start the supervisor, obtain scoped workbench grants, submit a caller-delegated workbench job, service every root-planner and cell broker request through durable tickets, and read exact route/usage evidence. The same installed candidate can then be independently qualified against Prime Agent under `openai-codex / gpt-5.6-luna / max`.
-
-### Alternatives
-
-| Alternative | Decision | Reason |
-|---|---|---|
-| Treat 38-tool discovery as ready | REMOVE | Discovery does not prove schema cutover, grants, planner, backend wiring, or provider treatment. |
-| Flip backend rows to `configured=true` | REMOVE | It creates a false-green capability projection without an executable planner or authorized driver. |
-| Add another provider client inside AAR | REMOVE | AAR already has AR-MB contracts and caller-work; credentials and physical calls remain host-owned. |
-| Add a second service/daemon or state DB | REMOVE | The supervisor, runtime DB, generation fences, and content-addressed files already supply the required owners. |
-| Keep synchronous injected planner as the caller-delegated production route | RESTRICT | It remains useful for deterministic tests/native service-managed adapters, but caller-delegated root planning must use durable tickets. |
-| Add new MCP tools or change frozen v7/v8 bytes | DEFER | The required closure can be expressed through existing v8 tools plus an operator CLI and packaged profile contracts. |
-| Operator-owned activation over existing primitives | KEEP | It is the smallest mechanism that makes the existing implementation executable and falsifiable. |
-
-## 4. Gap register
-
-| ID | Observed v0.5 state | Required successor closure |
-|---|---|---|
-| GAP-01 | Installing v0.5 can reopen a preserved registry whose `schema_migrations` ends at 5. | Public, dry-runnable, receipt-backed v5→v6 operator cutover. |
-| GAP-02 | Migration primitives exist, but no supported operator command owns stop/snapshot/authority/apply/reconcile. | `aar-admin` cutover commands and an external-to-DB epoch directory. |
-| GAP-03 | Official launchers accept no activation profile. | Acyclic content-addressed activation intent plus generated final host profile bound at supervisor startup. |
-| GAP-04 | Default host publishes no `rlm.workbench.execute` authority. | Principal-, session-, budget-, route-, and profile-scoped grant publication after verified activation only. |
-| GAP-05 | All six live workbench rows are unconfigured. | Backend rows derived from instantiated native/caller adapters, never copied from unverified booleans. |
-| GAP-06 | `run_claimed()` requires an injected synchronous planner; production profile provides none. | Durable caller-work root-planner tickets for initial/correction/recovery/finalizer logical owners. |
-| GAP-07 | Existing admission effectively conflates “fully configured host” with “this job has all required methods.” | Deterministic method-scoped admission; unavailable optional calls fail at invocation. |
-| GAP-08 | Route and usage contracts exist, but the live workbench journey does not produce qualification evidence. | Exact Luna/max driver manifest, route receipt, provider-reported usage, physical-attempt lineage, and negative probes. |
-| GAP-09 | Local canonical branch and current executable baseline diverge. | Clean implementation-base reconciliation before source work. |
-
-## 5. Scope
-
-### Required
-
-1. Preserve existing registry-v6 DDL and attestations; do not introduce schema v7 unless implementation proves a missing durable field that cannot be represented by existing rows or external activation artifacts.
-2. Add one operator CLI surface, provisionally `aar-admin`, for stdout-only read-only planning/status, explicit cutover/abort/reconcile/restore, canonical empty-v5 bootstrap that stops before cutover, and activation commands.
-3. Add fourteen frozen strict schemas: activation intent, final host profile, method-adapter manifest, append-only activation-generation authority, cutover plan, operator prepared marker, cutover receipt, restore receipt, operator terminal marker, activation readback, server-side workbench grant set, provider-alias attestation, evaluator evidence classification, and paired-evaluation admission.
-4. Bind the activation intent and generated final profile to package, migration, route catalog, grants, adapters, recovery compatibility, and runtime identity.
-5. Publish workbench grants only from a verified active profile.
-6. Replace caller-delegated root planner execution with the existing durable caller-work lifecycle.
-7. Derive required backend methods from the admitted job and fail closed per method.
-8. Preserve `aar.mcp-tools.v7` bytes, the v8 38-tool order/schemas, existing workspace/RLM behavior, and no-code public plugin policy.
-9. Produce T0–T3 no-inference and installed-wheel evidence before any live qualification.
-10. Keep T4 Luna/max qualification and T5 paired benchmark separately authorized and separately identified.
-
-### Non-goals
-
-- Provider credentials inside AAR profiles, databases, receipts, logs, or packages.
-- Automatic package upgrade, Git synchronization, remote config mutation, release, publish, or benchmark execution.
-- Provider-signed attestation when the provider exposes none.
-- Exact Prime physical-request/retry/token telemetry where stock Prime does not expose it.
-- Detached child agents, automatic privileged effects, arbitrary Python stack serialization, or replay of a possibly spent request.
-- A universal host plugin ABI. The first release proves one generic caller-driver contract and one Hermes-owned Luna/max profile.
-
-## 6. Architecture summary
-
-```mermaid
-flowchart LR
-    O[Operator / aar-admin] --> C[Preserved-v5 or empty-runtime-v5-bootstrap cutover]
-    C --> A[Append-only per-profile generation history]
-    A --> P[Derived current pointer]
-    P --> S[AAR durable supervisor]
-    S --> D[(Registry v6)]
-    H[Host caller driver] -->|claim / mark-send-start / commit / reconcile| S
-    S -->|root-planner and cell tickets| H
-    H -->|physical Luna/max call| P[Provider route]
-    P -->|route + usage observation| H
-    S --> R[Workbench result + receipt lineage]
-    R --> E[Independent evaluator]
+```text
+aar-admin runtime install --runtime-home <absolute-runtime-home> --intent <exact-intent> --candidate-receipt <absolute-json> --wheel <absolute-wheel>
 ```
 
-No arrow grants authority merely by existing. Operator activation authorizes configuration; AAR owns operation/ticket/fence state; the host owns physical calls; provider evidence owns only what it actually reports; the evaluator owns scoring.
+`runtime status` and `activation verify/status` are read-only. No aar-admin cutover command exists in this release. No v5 initializer or transition mutator is reachable from the v0.6 public surface.
 
-## 7. Status vocabulary
+## Scope and custody
 
-| Status | Meaning |
-|---|---|
-| `spec_planned` | This SDD is structurally complete and independently reviewed; no source claim. |
-| `implementation_in_progress` | Authorized source work exists on a clean accepted base. |
-| `implemented_unverified` | Candidate bytes exist but T0–T3 are incomplete. |
-| `implementation_verified` | One immutable wheel/source/profile candidate passes every required T0–T3 row. |
-| `live_qualified` | Separately authorized T4 proves the exact effective route and evidence boundary. |
-| `benchmark_planned` | `live_qualified` plus frozen paired protocol/fixtures, instrumentation reconciliation and the strict planning document; this is not T5 launch permission. |
-| `blocked` | A named prerequisite prevents the next state; no higher claim is inferred. |
+This rev2 package changes only the 16 paths named by the task. The three pre-existing dirty product paths remain task-start bytes, and the frozen native migration-v6.sql remains an input. This package does not reset, clean, stage, commit, push, install, start a service, call a provider, or mutate a runtime.
 
-## 8. Normative package
+The package proves documentation structure and planned acceptance only. It does not prove that the command exists, that a wheel was built, that an install occurred, that startup reached Ready, or that a provider was called.
 
-- `BASELINE.md` — exact v0.5 source custody, line evidence, hashes, and observed admission gaps.
-- `ARCHITECTURE.md` — owners, boundaries, activation composition, and compatibility.
-- `CONTRACTS.md` — proposed public/operator contracts and error taxonomy.
-- `LIFECYCLE.md` — temporal ownership, linearization points, crash/cancel/reconcile rules.
-- `MIGRATION.md` — v5→v6 operator cutover and activation transaction.
-- `EVALUATION.md` — Luna/max route qualification and AAR-vs-Prime admission.
-- `ACCEPTANCE.md` — tiered gates and claim rules.
-- `IMPLEMENTATION-PLAN.md` — source lanes and RED-first order; current product authority is recorded by the implementation control plane.
-- `verification/requirements.json` — machine-readable requirement register.
-- `verification/acceptance-matrix.json` — machine-readable discriminating rows.
-- `verification/validate_spec.py` — structural validator only.
-- `HANDOFF.md` — current public transfer boundary.
-- `decisions/ADR-004-freeze-activation-contract-domains.md` — S0 lexical, collection, matching, generation-owner, and security-test decision.
+## Frozen compatibility boundary
 
-The predecessor v2 SDD remains normative for unchanged workbench contracts. This package is a successor amendment; silence here does not repeal a predecessor invariant.
+The existing 14 strict schemas and 64 fixtures remain exact compatibility/evidence bytes and are not regenerated. The count language is **14 preserved + 1 planned receipt schema**: `aar.install-candidate-receipt.v1` is a new planned strict public schema, not a live fifteenth asset. New clean-install integration fixtures and receipt fixtures are additive future implementation assets.
+
+Unchanged v7/v8, registry-v6 DDL, D1/D2 caller-work ownership, planner, grants, admission, route/usage, asset, and evaluation contracts remain required. The five transition-shaped schemas are inert evidence assets and do not authorize a command or state transition.
+
+## Clean-install outcome
+
+The observable outcome is one complete v6/profile/history/current/package/factory tree or an absent target. One mode-`0700` invocation staging directory (mode-0700) and one Linux `renameat2(..., RENAME_NOREPLACE)` publication are the only added mechanisms. Existing targets return FRESH_INSTALL_TARGET_EXISTS. Native Windows fails closed with `FRESH_INSTALL_PUBLICATION_UNSUPPORTED` in v0.6.
+
+The target algorithm is frozen before database creation:
+
+1. Require an absolute path with no NUL; require the final component to be absent.
+2. Require every existing ancestor, including the parent, to be a UTF-8-encodable non-symlink directory. Resolve the existing parent strictly.
+3. Set `canonical_target = resolved_parent / original_final_component`. Do not Unicode-normalize, case-fold, or reinterpret the final component.
+4. Encode canonical JSON as UTF-8 with POSIX `/` separators. Compute exactly:
+
+   ```json
+   {"database":"<canonical_target>/reference.sqlite3","runtime_home":"<canonical_target>"}
+   ```
+
+   as `runtime_home_digest`. The issuer, installer, staging verifier, and startup verifier use this same object and byte algorithm.
+5. Compute `database_identity` as `db-` plus the lowercase hexadecimal part of `canonical_sha256({"schema_version":"aar.clean-install-database-identity.v1","runtime_home_digest":...,"database_name":"reference.sqlite3"})`.
+
+Raw/unresolved path text, inode/dev identity, and staging paths are never semantic identity. Inode/dev are temporal fencing facts only.
+
+Clean-install accepts only an intent with `activation_generation=1` and `previous_activation_authority_digest=null`. After descriptor/target preflight, the installer freezes one `install-<64 lowercase hex>` invocation epoch; a new invocation never reuses that token or adopts its stale stage.
+
+## Temporal safety and generation order
+
+The installer retains no-follow directory handles for the resolved parent and required ancestor identity chain, recording fstat dev/ino/mode/owner. It creates staging by retained-parent dirfd-relative exclusive creation with mode `0700`, retains the staging fd/dev/ino, performs all work relative and no-follow, and refuses cleanup on identity drift. It never recursively deletes a path after a string comparison.
+
+Before and after publication it verifies the parent/ancestor path identity chain. Linux `renameat2(parent_fd, stage_name, parent_fd, target_name, RENAME_NOREPLACE)` is the linearization point. `EEXIST` is refusal; the target inode must equal the staged inode; the parent fd is fsynced. Parent/ancestor replacement returns `FRESH_INSTALL_PARENT_REPLACED` with contained/manual evidence, never success. Same-principal kernel/handle attacks beyond these deterministic substitution tests are outside the `trusted_local` claim.
+
+Before publication, C1 verifies the candidate receipt, wheel bytes, fixed assets, factory declarations, route policy, grant policy, v6, profile, and generation-1 history/current. It does **not** build executable capability rows, `WorkbenchGrantSet`, session grants, or runtime health because `runtime_generation` does not yet exist. After publication, C2 transitions to `starting`, allocates/fences the normal runtime generation, and invokes one standalone activation coordinator. Its exact-generation store publishes and reads back the grant set before Ready; session grants are current-generation memory-only.
+
+The implementation boundary is standalone-first: focused install models, `aar.runtime.installer`, `aar.runtime.provider_ready_activation`, and focused tests own new behavior. `aar-admin` and `runtime.operator` remain thin adapters; supervisor/ReferenceHost/MCP receive only the minimum explicit C2 injection. Existing migration and registry ownership do not move.
+
+## Candidate evidence
+
+The exact receipt and wheel are explicit command inputs. Both are absolute existing regular non-symlink files, opened once with no-follow descriptors and retained fstat identity. The exact wheel bytes are hashed and inspected as ZIP bytes; duplicate, traversal, backslash, absolute, symlink, or noncanonical member names are rejected. Startup revalidates the copied credential-free receipt and installed distribution member digests; it does not recompute the overall wheel digest from installed files. T3 separately proves installed distribution provenance from the exact wheel.
+
+## Planned acceptance and status
+
+`verification/acceptance-matrix.json` contains **214 counted atomic rows**: **T0=22, T1=91, T2=73, T3=15, T4=13, T5=0**. The mandatory no-live release set is **201 T0–T3 atomic rows**. `A-TEST-001` is a non-counted exact-wheel summary in metadata, not an acceptance cell. Counts are generated from the JSON and bound by the final receipt.
+
+The current status remains `spec_planned`. `implementation_verified`, `live_qualified`, and `benchmark_planned` are separate later claims. No implementation, installation, Ready, provider qualification, release, or benchmark is claimed here.

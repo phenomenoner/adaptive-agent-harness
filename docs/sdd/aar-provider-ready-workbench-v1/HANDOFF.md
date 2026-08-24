@@ -1,108 +1,35 @@
-# AR-PRW Specification Handoff
+# Specification handoff — clean-install rev2
 
 ## 1. Status
 
 - Product lane: **AR-PRW — Provider-Ready RLM Workbench**
-- Provisional package target: **`0.6.0a0`**
-- Specification phase: **S0 successor candidate; independent current-byte review pending**
-- Implementation authorization: **authorized by CK for the dedicated clean successor branch; writer gate remains held until S0 freeze**
-- Product source implementation: **not started; writer Baton gate held**
-- Exact-base verification: **`743 passed, 5 skipped, 1 warning`; Ruff PASS**
-- Real runtime migration, activation, provider qualification and paired benchmark: **not performed**
+- Target: **`adaptive-agent-runtime 0.6.0a0`**
+- Release mode: **CLEAN-INSTALL-ONLY**
+- Specification status: **superseding rev2 candidate; implementation not claimed**
+- Candidate counts: **61 requirements; 214 counted atomic rows; T0=22, T1=91, T2=73, T3=15, T4=13, T5=0; 201 T0–T3 release rows**
+- Public mutation: `aar-admin runtime install --runtime-home <absolute-runtime-home> --intent <exact-intent> --candidate-receipt <absolute-json> --wheel <absolute-wheel>`
+- Real install, v6 publication, startup/Ready, provider qualification, benchmark, commit, stage, push, and release: **not performed**
 
-## 2. Source custody
+## 2. Superseding contract
 
-The exact executable behavior baseline is clean `adaptive-agent-runtime 0.5.0a0`, commit `bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1`. The active SDD successor lives on branch `codex/aar-provider-ready-workbench-v1-impl`, rooted at that commit. Product source and tests remain unchanged.
+The release constructs only an absent safe target in one retained-handle-owned mode-0700 sibling staging directory, applies unchanged v6 DDL/attestation to staged empty v5, composes generation-1 install evidence, verifies it, and publishes once with Linux renameat2 `RENAME_NOREPLACE`. Existing target forms refuse before mutation. No aar-admin cutover command exists. The product does not preserve v0.5 in place, does not adopt an old root, does not downgrade, and does not mutate old-root authority.
 
-The historical reviewed SDD generation is retained outside the public repository and bound by complete custody-tree digest `sha256:bb0287e1718033c773e763096b202591307458e1524ab8de9ea8d5a29039afee`, semantic validator digest `sha256:30dbc6ffb52a289792d7b37d782ce8b537fd0741957af9854b9538a863a01047`, and receipt file SHA-256 `9243d6f8306c774ba0ed752eec0a4121019b6a36edf8a4bb0799423b465b6418`. Machine-local paths are intentionally absent from this public handoff.
+C1 prepublication verifies candidate receipt/wheel/assets, factories, route/grant policy, v6, profile, and generation-1 history/current but creates no executable capability rows, WorkbenchGrantSet, session grants, or runtime health. C2 postpublication allocates/fences the normal runtime generation and invokes the standalone activation coordinator; its exact-generation grant-set store must read back before Ready. Startup never initializes, migrates, repairs, adopts, or rewrites install state.
 
-## 3. Chosen architecture
+## 3. Frozen identities and receipt
 
-1. Keep the MCP v8 38-tool surface and exact frozen v7/v8 schemas.
-2. Reuse registry-v6 DDL, AR-MB route/receipt records, caller-work tickets, supervisor, and existing authority contexts.
-3. Add one `aar-admin` operator surface for stdout-only zero-write/zero-checkpoint planning/status/verification and explicit cutover, abort, exact-input reconcile, empty-runtime v5 bootstrap, pre-frontier restore, and activation mutations.
-4. Use a strict, secret-free activation intent; both preserved and bootstrapped-empty v5 roots enter the same truthful snapshot-bound v6 cutover and generate the distinct final host profile.
-5. Make caller-delegated root planner calls durable `model.request` tickets; never call the synchronous planner in that mode.
-6. Normalize job/profile planner mode, resolve the complete coherent `grant_ids` set, then derive required methods from budgets/features, effective capabilities and matching factories.
-7. Publish bounded workbench grants only from strict server-side grant-set and issued records bound to the active supervisor/profile/history/capability/route generation; client context never self-authorizes.
-8. Qualify AAR and Prime on Luna/max separately; an optional strict unexpired paired planning document may bind exact qualification/evaluation bytes and operator planning authority, but v1 defines no T5 physical-launch authority and infers no missing Prime telemetry.
+The shared target algorithm is exact: resolved parent plus original final component, no Unicode normalization/case folding, canonical UTF-8 POSIX JSON, and `runtime_home_digest` over exactly `{database, runtime_home}`. The existing database identity remains `db-` plus canonical digest hex over the specified schema version, runtime-home digest, and `reference.sqlite3`.
 
-## 4. S0 successor decision
+The strict v6 clean projection uses direct `canonical_sha256(...).removeprefix("sha256:")` formulas for `authority-<64hex>` and `empty-v5-<64hex>`. `install_epoch` is one invocation-owned `install-<64hex>` token equal to attestation `cutover_epoch`; the intent is generation 1/null predecessor. One exact preparation object excludes transient staging paths. The Linux SQLite adapter is retained-stage-fd bound. The backup is verified/reopened read-only, used through final staged verification, then removed before publication; startup never rereads it.
 
-Generation-5 fixed-byte dual review verified exact custody but returned a batch-complete S0 block and an incomplete A1a packet. This successor generation closes the marker-cycle/schema, initialization-authority, mode-normalization, planner-outcome, grant-array/availability, readback/deadline, paired-admission, validator-coverage and packet-shape findings without product-source changes, and now owns:
+The planned `aar.install-candidate-receipt.v1` contains exact intent candidate equality, repeated digest fields, positive wheel size, sorted unique factory entries, raw member implementation digests, and a receipt self-digest. Exact absolute receipt/wheel descriptors are read once; startup revalidates installed member digests but does not recompute the overall wheel digest from installed files. T3 separately proves wheel provenance.
 
-- fourteen complete strict schema owners with required properties, nullability, bounds, cross-field rules and self-digest domains, including acyclic prepared/receipt/terminal construction and paired admission; the impossible separate fresh-v6 receipt is retired;
-- strict lexical aliases and no-normalization semantics for every A1a string field;
-- a `1..6` unique adapter subset in the exact frozen v8 broker-catalog order; generic `artifact.read` is excluded from activation, and `artifact.put + caller_driver` rejects because frozen v6 caller-work has no such owner;
-- `1..64` sorted unique route IDs, exact principal IDs, and capabilities;
-- exact-match-only v1 semantics for the legacy `principal_patterns` field;
-- positive-counter wire validation plus append-only per-profile authority history as the generation commit/non-reuse owner; `current.json` is a derived pointer, and cold start detects visible fork/partial-deletion/pointer-rollback against history plus immutable markers; complete mutually consistent offline rollback requires a future external authority;
-- canonical package versions with no leading-zero aliases;
-- frozen v8 reference truth (`configured=true`, `reference_only=true`, `evidence_tier=unknown`) separated from admission usability;
-- frozen capability evidence tier separated from evaluator-owned component-wise provider/model/reasoning/fallback/cache plus usage/visibility classification; Prime mixed observed/requested-only treatment is representable without inventing effective effort;
-- semantic schema/import/expansion/execution security checks rather than identifier-content guessing;
-- exact frozen planner logical-owner wire `{kind, phase, step_index}` with a unique predecessor event, fenced `prepared→prepared` takeover, and atomic one-time valid-directive/correction/certain-failure/cancel/deadline projections; outcome unknown stays unconsumed and planner never touches cell-bound authority/rebind rows;
-- explicit `cutover/restore reconcile` and cutover `abort/apply` commands with exact write sets; runtime initialize creates no independent epoch/reconcile namespace, while read-only plan is stdout-only and never checkpoints WAL;
-- one strict mode-tagged planner object with exact `caller_delegated→caller_delegated_ticketed` and `service_managed→service_managed` normalization, package-owned factories, complete sorted-unique `grant_ids` resolution, truthful readback and mandatory admission cross-products;
-- incident-shaped assertions preventing waiting snapshots from becoming success, possibly-sent deadline states from becoming certain, and absent usage from becoming zero;
-- independent self-digest recomputation and nested inner/outer tamper sequencing.
+## 4. Compatibility
 
-This successor must validate deterministically and receive independent current-byte review before it advances authority.
+The existing **14 schemas and 64 fixtures remain exact compatibility bytes and are not regenerated**. The language is **14 preserved + 1 planned receipt schema**. New clean-install integration fixtures and planned receipt fixtures are additive future implementation assets. Frozen v7/v8, migration-v6.sql, D1/D2 owner bytes, historical ADR-001..004, BASELINE, predecessor SDD, and historical reviews remain outside this candidate's writable scope.
 
-## 5. Deliberate non-additions
+## 5. Validation and next boundary
 
-No new daemon, state database, provider credential store, embedded provider SDK, MCP inference back-channel, MCP tool, generic plugin ABI, principal glob/regex engine, or silent startup migration is proposed.
+`verification/validate_spec.py` enforces the exact structured product contract, atomic row fields and count/tier arithmetic, receipt/temporal/identity semantics, frozen-input checks before status computation, explicit semantic negation, and self-test probes for positive cutover, truthful negation, preservation masking, frozen drift, and stale counts. The final receipt is generated only after all edits and is run twice with `--receipt`.
 
-## 6. Remaining gates
-
-Before product implementation:
-
-1. successor structural validator PASS on two deterministic generations;
-2. public-release hygiene PASS;
-3. independent fixed-byte S0 review with no blocker;
-4. regenerated current-byte A1a packet independent PASS;
-5. exact task-start commit and exclusive two-path Luna/max dispatch.
-
-Before live qualification or evaluation:
-
-- immutable implementation candidate passing all mandatory T0–T3 gates;
-- separate provider-call authority;
-- exact provider-alias, route, receipt, usage, stop, and budget manifests;
-- separately authorized T4 qualification may establish each arm's evidence tier before an optional paired-planning document; T5 physical execution remains not authorized.
-- an optional unexpired strict paired-planning document may bind both qualifications, exact bytes/budgets/stop matrix, operator planning authority and arm order, but it contains no attempt IDs and grants no T5 send authority.
-
-## 7. Artifact map
-
-Core documents:
-
-- `README.md`
-- `BASELINE.md`
-- `ARCHITECTURE.md`
-- `CONTRACTS.md`
-- `LIFECYCLE.md`
-- `MIGRATION.md`
-- `EVALUATION.md`
-- `ACCEPTANCE.md`
-- `IMPLEMENTATION-PLAN.md`
-- `HANDOFF.md`
-- `decisions/ADR-001-activate-existing-authorities.md`
-- `decisions/ADR-002-ticket-root-planner.md`
-- `decisions/ADR-003-preserve-v8-method-scoped-admission.md`
-- `decisions/ADR-004-freeze-activation-contract-domains.md`
-
-Machine-readable planning:
-
-- `verification/requirements.json`
-- `verification/acceptance-matrix.json`
-- `verification/validate_spec.py`
-- `verification/spec-validation-receipt.json`
-
-Historical review files remain evidence for their exact older generation only. A new current-byte S0 review is required.
-
-## 8. Release sequencing
-
-No intermediate phase installation, push, tag, publication, or release is allowed. After every non-live implementation phase and mandatory exact-candidate gate converges, PMO installs the completed candidate, directs Luna/max installed-candidate verification, updates final docs, verifies the configured `phenomenoner/adaptive-agent-harness` remote, then pushes, tags, and creates the GitHub release. T4/T5 and production cutover remain separately authorized effects.
-
-## 9. Next authorized action
-
-PMO may validate, review and freeze this S0 specification successor. Product-source writers remain blocked until that review and the corrected A1a packet both pass.
+Residual implementation work is the product receipt parser/loader, standalone installer and activation-store modules, retained-fd SQLite/staging/cleanup, narrow C2 injection, renameat2 binding, additive integration fixtures, and later exact-wheel/runtime evidence. Their ownership is fixed; no product implementation is claimed by this handoff.

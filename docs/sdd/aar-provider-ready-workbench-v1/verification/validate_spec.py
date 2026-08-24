@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Deterministic validator for the clean-install-only provider-ready SDD rev2."""
 from __future__ import annotations
 
 import argparse
@@ -18,43 +19,181 @@ EXPECTED_FILES = {
     "EVALUATION.md",
     "ACCEPTANCE.md",
     "IMPLEMENTATION-PLAN.md",
+    "TEST-STRATEGY-AND-GAP-ANALYSIS.md",
     "HANDOFF.md",
     "decisions/ADR-001-activate-existing-authorities.md",
     "decisions/ADR-002-ticket-root-planner.md",
     "decisions/ADR-003-preserve-v8-method-scoped-admission.md",
     "decisions/ADR-004-freeze-activation-contract-domains.md",
+    "decisions/ADR-005-clean-install-only.md",
     "verification/README.md",
     "verification/requirements.json",
     "verification/acceptance-matrix.json",
-    "verification/validate_spec.py"
+    "verification/validate_spec.py",
 }
-LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+ACTIVE_MARKDOWN = {
+    "README.md",
+    "ARCHITECTURE.md",
+    "CONTRACTS.md",
+    "LIFECYCLE.md",
+    "MIGRATION.md",
+    "EVALUATION.md",
+    "ACCEPTANCE.md",
+    "IMPLEMENTATION-PLAN.md",
+    "TEST-STRATEGY-AND-GAP-ANALYSIS.md",
+    "HANDOFF.md",
+    "decisions/ADR-005-clean-install-only.md",
+    "verification/README.md",
+}
+HISTORICAL_PREFIXES = (
+    "reviews/",
+    "decisions/ADR-001-",
+    "decisions/ADR-002-",
+    "decisions/ADR-003-",
+    "decisions/ADR-004-",
+)
+HISTORICAL_FILES = {"BASELINE.md"}
+FROZEN_BASELINE_FILES = {
+    "schemas/aar-broker-catalog-v2.json": "sha256:88099616e61f41c7d72d5e1c81fba8ebfe29995467fd583acc9da0bb15aeadbc",
+    "schemas/aar-rlm-workbench-v1.schema.json": "sha256:0d52527f9019cae724459e3eb36a0165b91822771ae64f815f1c2fd18d3054ef",
+    "schemas/aar-caller-work-v1.schema.json": "sha256:76deb95fb89081c7ec90734821689e14a893040696af6727725b059676c2b7e3",
+    "docs/sdd/aar-rlm-native-workbench-v2/migration-v6.sql": "sha256:8e7080b319aadb4eb98b5e3b9e12efe8c189c0bd12a82dc8ba1eea7c7bfe29b7",
+}
+PRODUCT_CONTRACT = {
+    "release_mode": "clean_install_only",
+    "sole_public_mutation": "aar-admin runtime install --runtime-home <absolute-runtime-home> --intent <exact-intent> --candidate-receipt <absolute-json> --wheel <absolute-wheel>",
+    "preservation": False,
+    "adoption": False,
+    "downgrade": False,
+    "old_root_product_mutation": False,
+    "transition_mutators": [],
+    "planned_receipt_schema": "aar.install-candidate-receipt.v1",
+    "implementation_architecture": "standalone_installer_with_thin_adapters",
+    "c1_phase": "prepublication_generation_independent",
+    "c2_phase": "postpublication_runtime_activation",
+    "grant_set_owner": "aar.runtime.provider_ready_activation.ProviderReadyActivationStore",
+}
+SCHEMA_NAMES = (
+    "aar.host-activation-intent.v1",
+    "aar.host-activation-profile.v1",
+    "aar.method-adapter-manifest.v1",
+    "aar.activation-generation-authority.v1",
+    "aar.cutover-plan.v1",
+    "aar.operator-prepared-marker.v1",
+    "aar.cutover-receipt.v1",
+    "aar.restore-receipt.v1",
+    "aar.operator-terminal-marker.v1",
+    "aar.activation-readback.v1",
+    "aar.workbench-grant-set.v1",
+    "aar.provider-alias-attestation.v1",
+    "aar.evaluation-evidence-classification.v1",
+    "aar.paired-evaluation-admission.v1",
+)
+V6_STATEMENTS = (
+    "migration_v6_attestations",
+    "rlm_workbench_jobs",
+    "rlm_workbench_cells",
+    "rlm_workbench_suspensions",
+    "caller_work_tickets",
+    "caller_work_candidate_receipts",
+    "caller_work_command_receipts",
+    "caller_work_command_receipts_no_update",
+    "caller_work_command_receipts_no_delete",
+    "rlm_workbench_successor_outbox",
+    "rlm_workbench_attempt_authority",
+    "rlm_workbench_rebind_transfers",
+    "rlm_workbench_artifact_stages",
+    "rlm_workbench_cell_manifests",
+    "rlm_workbench_finalization_manifests",
+    "broker_contract_catalog_v2",
+    "broker_backend_availability_v2",
+    "idx_workbench_phase_deadline",
+    "idx_workbench_cells_state",
+    "idx_caller_work_state_deadline",
+    "idx_caller_work_claim_expiry",
+    "idx_candidate_receipts_ticket",
+    "idx_caller_command_receipts_ticket",
+    "idx_artifact_stages_state",
+    "idx_successor_outbox_state",
+)
 PACKAGE_VERSION_PATTERN = re.compile(
     r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
     r"(?:(?:a|b|rc)(?:0|[1-9][0-9]*))?"
     r"(?:\.post(?:0|[1-9][0-9]*))?(?:\.dev(?:0|[1-9][0-9]*))?$"
 )
-REQUIRED_S0_ACCEPTANCE_IDS = {
-    "A-CUST-001",
-    "A-NEC-001",
-    "A-MIG-001", "A-MIG-002", "A-MIG-003", "A-MIG-004", "A-MIG-005",
-    "A-MIG-006", "A-MIG-007", "A-MIG-008", "A-MIG-009", "A-MIG-010",
-    "A-ACT-001", "A-ACT-002", "A-ACT-003", "A-ACT-004", "A-ACT-005",
-    "A-AUTH-001", "A-AUTH-002", "A-AUTH-003",
-    "A-PLAN-001", "A-PLAN-002", "A-PLAN-003", "A-PLAN-004", "A-PLAN-005", "A-PLAN-006",
-    "A-ADM-001", "A-ADM-002", "A-ADM-003", "A-ADM-004", "A-ADM-005",
-    "A-ROUTE-004",
-    "A-COMP-001", "A-COMP-002",
-    "A-OPS-001", "A-SEC-001", "A-TEST-001", "A-REL-001",
-}
-EXPECTED_ACCEPTANCE_MATRIX_DIGEST = "sha256:0bf0d9e7f341282f2db0e22240a43df850e16f302faff97e441a5a01716ecdc1"
-
-FROZEN_BASELINE_FILES = (
-    "schemas/aar-broker-catalog-v2.json",
-    "schemas/aar-rlm-workbench-v1.schema.json",
-    "schemas/aar-caller-work-v1.schema.json",
-    "docs/sdd/aar-rlm-native-workbench-v2/migration-v6.sql",
+LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
+PUBLIC_TRANSITION = re.compile(
+    r"(?:aar-admin\s+cutover|aar-admin\s+runtime\s+initialize|`cutover\s+(?:plan|apply|abort|reconcile|restore)`)",
+    re.IGNORECASE,
 )
+PRESERVATION_ACTION = re.compile(
+    r"\b(?:preserv(?:e|es|ed|ing|ation)|support(?:s|ed|ing)?|adopt(?:s|ed|ing)?|downgrad(?:e|d|ing)?|rollback|roll\s+back)\b",
+    re.IGNORECASE,
+)
+PRESERVATION_OBJECT = re.compile(
+    r"\b(?:in[- ]place|v0\.5|v5|old runtime|existing runtime|old root|prior runtime|old operations|old history)\b",
+    re.IGNORECASE,
+)
+NEGATION_BEFORE = re.compile(
+    r"\b(?:no|not|never|without|cannot|does not|do not|unsupported|removed|retired|absent)\b"
+    r"(?:\s+[A-Za-z0-9_./`-]+){0,5}\s*$",
+    re.IGNORECASE,
+)
+STALE_COUNT = re.compile(
+    r"\b(?:53|48|39|45|194|181|57)(?:\s*-\s*|\s+)(?:planned\s+)?(?:rows?|gates?|requirements?)\b",
+    re.IGNORECASE,
+)
+AGGREGATE_VARIANT = re.compile(
+    r"\b(?:all|every|each|aggregate|cross[- ]?product|matrix|variants?)\b|[\[\]|]",
+    re.IGNORECASE,
+)
+
+WRONG_EFFECT_BY_ID_PREFIX: tuple[tuple[str, str], ...] = (
+    ("A-TARGET-", "no existing target byte, directory entry, SQLite sidecar, authority state, or staging sibling is created, deleted, adopted, or overwritten"),
+    ("A-PATH-", "no unresolved, symlinked, normalized, case-folded, or wrong-ancestor path becomes canonical identity and no filesystem mutation occurs"),
+    ("A-STAGE-", "no operation escapes retained handles, no mismatched inode is cleaned or published, and no unknown residue is deleted"),
+    ("A-SQLITE-", "no SQLite, backup, WAL, or SHM write escapes the retained stage inode and no drifted entry is cleaned or published"),
+    ("A-V6-PROJ-", "no illegal token, digest, preparation, snapshot, or attestation projection is persisted or published"),
+    ("A-V6-", "no partial v6 DDL, attestation row, schema-migration row, or published target survives the injected boundary"),
+    ("A-V5-", "no noncanonical v1-v5 row, domain state, integrity violation, WAL, SHM, or unknown residue is accepted"),
+    ("A-INITIAL-", "no noninitial intent is rewritten, staged, installed, or published"),
+    ("A-EPOCH-", "no malformed, reused, or mismatched epoch and no stale stage is accepted, persisted, or published"),
+    ("A-CLEAN-", "no illegal token, digest, preparation, snapshot, or attestation projection is persisted or published"),
+    ("A-GEN-", "no wrong-generation capability or grant-set bytes are published, reused, exposed as current, or reported Ready"),
+    ("A-GRANT-", "no denied provider dispatch, capability admission, grant expansion, budget charge, or authority mutation occurs"),
+    ("A-AUTH-", "no denied provider dispatch, capability admission, grant expansion, budget charge, or authority mutation occurs"),
+    ("A-ADM-", "no denied provider dispatch, capability admission, grant expansion, budget charge, or authority mutation occurs"),
+    ("A-ACT-", "no activation mutation, factory instantiation, grant issuance, or Ready publication occurs in the wrong phase"),
+    ("A-D2-", "no physical send, blind replay, duplicate successor, authority rebind, or cell-bound mutation occurs outside the claimed durable transition"),
+    ("A-PLAN-", "no physical send, blind replay, duplicate successor, authority rebind, or cell-bound mutation occurs outside the claimed durable transition"),
+    ("A-T4-", "no unauthorized provider call, route upgrade, rerun, or evidence-tier promotion occurs"),
+    ("A-EVAL-", "no unauthorized provider call, route upgrade, rerun, or evidence-tier promotion occurs"),
+    ("A-T3-", "no release, push, tag, qualification, or exact-candidate claim is emitted from missing, mixed, secret-bearing, or nonexact evidence"),
+    ("A-REL-", "no release, push, tag, qualification, or exact-candidate claim is emitted from missing, mixed, secret-bearing, or nonexact evidence"),
+    ("A-COMP-", "no preserved schema or fixture byte is regenerated, omitted, reordered, or accepted with path, size, or digest drift"),
+    ("A-CUST-", "no credential, secret, unowned artifact, or nonexact evidence enters persisted or release-authorizing bytes"),
+    ("A-SEC-", "no credential, secret, unowned artifact, or nonexact evidence enters persisted or release-authorizing bytes"),
+    ("A-MOD-", "no install orchestration enters admin or operator and no migration, registry, transport, or daemon ownership moves"),
+    ("A-CLI-", "no install mutation or success receipt occurs when exact CLI, receipt, wheel, identity, or target preconditions are absent or mismatched"),
+    ("A-INST-", "no install mutation or success receipt occurs when exact CLI, receipt, wheel, identity, or target preconditions are absent or mismatched"),
+    ("A-SCOPE-", "no install mutation or success receipt occurs when exact CLI, receipt, wheel, identity, or target preconditions are absent or mismatched"),
+    ("A-IDENT-", "no install mutation or success receipt occurs when exact CLI, receipt, wheel, identity, or target preconditions are absent or mismatched"),
+    ("A-VALID-", "no invalid spec, receipt, count, tree, or frozen-input state is reported as pass"),
+    ("A-NEC-", "no wider seam, migration feature, or unreviewed scope is authorized"),
+    ("A-OPS-", "no old runtime is moved, deleted, or declared inactive without verified archive or no-old-root evidence"),
+)
+
+
+def expected_wrong_effect(row_id: str) -> str:
+    for prefix, effect in WRONG_EFFECT_BY_ID_PREFIX:
+        if row_id.startswith(prefix):
+            return effect
+    raise KeyError(row_id)
+
+
+def expected_stimulus(row: dict[str, Any]) -> str:
+    return f"{row['operation']} at phase {row['phase']} using exactly the {row['variant']} fixture"
+
 
 def load_json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
@@ -68,7 +207,7 @@ def sha256_file(path: Path) -> str:
     with path.open("rb") as handle:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
-    return digest.hexdigest()
+    return "sha256:" + digest.hexdigest()
 
 
 def tree_digest(root: Path, files: list[Path]) -> str:
@@ -83,640 +222,479 @@ def tree_digest(root: Path, files: list[Path]) -> str:
     return "sha256:" + digest.hexdigest()
 
 
-def validate_frozen_baseline(root: Path, failures: list[str]) -> dict[str, str]:
-    """Bind and cross-check the exact predecessor bytes the successor reuses."""
-    project_root = root.parents[2]
-    paths = {relative: project_root / relative for relative in FROZEN_BASELINE_FILES}
-    for relative, path in paths.items():
-        if not path.is_file():
-            failures.append(f"missing frozen baseline input: {relative}")
-    hashes = {
-        relative: "sha256:" + sha256_file(path)
-        for relative, path in paths.items()
-        if path.is_file()
-    }
-    if len(hashes) != len(FROZEN_BASELINE_FILES):
-        return hashes
+def canonical_digest(value: Any) -> str:
+    content = json.dumps(
+        value,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(content).hexdigest()
 
+
+def active_text(root: Path) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for relative in sorted(ACTIVE_MARKDOWN):
+        path = root / relative
+        if path.is_file():
+            result[relative] = path.read_text(encoding="utf-8")
+    for relative in ("verification/requirements.json", "verification/acceptance-matrix.json"):
+        result[relative] = (root / relative).read_text(encoding="utf-8")
+    return result
+
+
+def validate_frozen_inputs(root: Path, failures: list[str]) -> dict[str, str]:
+    """Append every frozen-input failure before the result status is computed."""
+    project_root = root.parents[2]
+    observed: dict[str, str] = {}
+    for relative, expected in FROZEN_BASELINE_FILES.items():
+        path = project_root / relative
+        if not path.is_file():
+            failures.append(f"missing frozen predecessor input: {relative}")
+            continue
+        actual = sha256_file(path)
+        observed[relative] = actual
+        if actual != expected:
+            failures.append(f"frozen predecessor bytes drifted: {relative}: {actual}")
     try:
-        catalog = load_json(paths["schemas/aar-broker-catalog-v2.json"])
-        catalog_methods = tuple(row["method"] for row in catalog["contracts"])
-        expected_catalog = (
+        catalog = load_json(project_root / "schemas/aar-broker-catalog-v2.json")
+        methods = tuple(item["method"] for item in catalog["contracts"])
+        if methods != (
             "model.request", "subagent.submit", "subagent.result",
             "evidence.query", "artifact.put", "effect.propose",
-        )
-        if catalog_methods != expected_catalog:
-            failures.append("frozen broker catalog no longer matches the exact six-method order")
-
-        workbench = load_json(paths["schemas/aar-rlm-workbench-v1.schema.json"])
+        ):
+            failures.append("frozen broker catalog method order drifted")
+        workbench = load_json(project_root / "schemas/aar-rlm-workbench-v1.schema.json")
         backend = workbench["$defs"]["BackendAvailability"]
-        evidence = set(backend["properties"]["evidence_tier"]["enum"])
-        if evidence != {"unknown", "caller_observed", "host_receipt_bound", "provider_attested"}:
-            failures.append("frozen workbench capability evidence domain drifted")
+        if set(backend["properties"]["evidence_tier"]["enum"]) != {
+            "unknown", "caller_observed", "host_receipt_bound", "provider_attested"
+        }:
+            failures.append("frozen capability evidence domain drifted")
         reference = next(
-            item["then"]["properties"]
-            for item in backend["allOf"]
+            item["then"]["properties"] for item in backend["allOf"]
             if item["if"]["properties"]["backend_kind"].get("const") == "reference"
         )
-        reference_tuple = (
-            reference["configured"].get("const"),
-            reference["reference_only"].get("const"),
-            reference["adapter_id"].get("type"),
-            reference["adapter_generation"].get("type"),
-            reference["evidence_tier"].get("const"),
-        )
-        if reference_tuple != (True, True, "null", "null", "unknown"):
+        if (
+            reference["configured"].get("const") is not True
+            or reference["reference_only"].get("const") is not True
+            or reference["adapter_id"].get("type") != "null"
+            or reference["adapter_generation"].get("type") != "null"
+            or reference["evidence_tier"].get("const") != "unknown"
+        ):
             failures.append("frozen reference capability truth drifted")
-
-        caller = load_json(paths["schemas/aar-caller-work-v1.schema.json"])
+        caller = load_json(project_root / "schemas/aar-caller-work-v1.schema.json")
         logical_owner = caller["$defs"]["LogicalCallOwner"]
-        planner = next(
-            item for item in logical_owner["oneOf"]
-            if item["properties"]["kind"].get("const") == "planner"
-        )
-        if (
-            planner.get("additionalProperties") is not False
-            or set(planner["properties"]) != {"kind", "phase", "step_index"}
-            or set(planner["required"]) != {"kind", "phase", "step_index"}
+        planner = next(item for item in logical_owner["oneOf"] if item["properties"]["kind"].get("const") == "planner")
+        if set(planner["properties"]) != {"kind", "phase", "step_index"} or planner.get("additionalProperties") is not False:
+            failures.append("frozen planner logical-owner wire drifted")
+        requests = caller["$defs"]["CallerWorkRequest"]["oneOf"]
+        if tuple(item["properties"]["method"]["const"] for item in requests) != (
+            "model.request", "subagent.submit", "subagent.result", "evidence.query", "effect.propose"
         ):
-            failures.append("frozen planner logical-owner wire is not exactly kind/phase/step_index")
-        caller_requests = caller["$defs"]["CallerWorkRequest"]["oneOf"]
-        caller_methods = tuple(item["properties"]["method"]["const"] for item in caller_requests)
-        expected_caller_methods = (
-            "model.request", "subagent.submit", "subagent.result",
-            "evidence.query", "effect.propose",
-        )
-        if caller_methods != expected_caller_methods or "artifact.put" in caller_methods:
             failures.append("frozen caller-work method domain drifted")
-        model_request = caller_requests[0]["properties"]
-        if "route_binding" not in model_request or "response_contract" not in model_request:
-            failures.append("frozen model request lacks route/response-contract owners")
+        migration = (project_root / "docs/sdd/aar-rlm-native-workbench-v2/migration-v6.sql").read_text(encoding="utf-8")
+        for marker in (
+            "CREATE TABLE IF NOT EXISTS migration_v6_attestations",
+            "CREATE TABLE IF NOT EXISTS rlm_workbench_jobs",
+            "CREATE TABLE IF NOT EXISTS rlm_workbench_suspensions",
+            "CREATE TABLE IF NOT EXISTS caller_work_tickets",
+            "CREATE TABLE IF NOT EXISTS rlm_workbench_successor_outbox",
+            "foreign_key_violation_count INTEGER NOT NULL",
+            "integrity_result TEXT NOT NULL CHECK (integrity_result = 'ok')",
+        ):
+            if marker not in migration:
+                failures.append(f"frozen v6 SQL marker missing: {marker}")
+        suspension = re.search(r"CREATE TABLE IF NOT EXISTS rlm_workbench_suspensions \((.*?)\n\);", migration, re.DOTALL)
+        if suspension is None or "cell_execution_id TEXT" not in suspension.group(1) or "'model.request'" not in suspension.group(1):
+            failures.append("frozen v6 suspension/cell-free planner owner drifted")
+        outbox = re.search(r"CREATE TABLE IF NOT EXISTS rlm_workbench_successor_outbox \((.*?)\n\);", migration, re.DOTALL)
+        if outbox is None or "rebind_generation" not in outbox.group(1) or "successor_attempt_fence" not in outbox.group(1):
+            failures.append("frozen v6 successor outbox CAS fields drifted")
+    except (KeyError, TypeError, StopIteration, json.JSONDecodeError, OSError) as error:
+        failures.append(f"cannot cross-check frozen predecessor contracts: {error}")
+    return observed
 
-        migration = paths[
-            "docs/sdd/aar-rlm-native-workbench-v2/migration-v6.sql"
-        ].read_text(encoding="utf-8")
-        match = re.search(
-            r"CREATE TABLE IF NOT EXISTS rlm_workbench_suspensions \((.*?)\n\);",
-            migration,
-            flags=re.DOTALL,
-        )
-        if match is None:
-            failures.append("frozen v6 suspension table was not found")
+
+def validate_frozen_compatibility(
+    root: Path,
+    requirements: dict[str, Any],
+    failures: list[str],
+) -> str | None:
+    """Bind every preserved schema and provider-ready fixture byte before status."""
+
+    project_root = root.parents[2]
+    manifest = requirements.get("frozen_compatibility_manifest")
+    if not isinstance(manifest, dict):
+        failures.append("missing frozen_compatibility_manifest")
+        return None
+    if manifest.get("schema_version") != "aar.prw-frozen-compatibility-manifest.v1":
+        failures.append("frozen compatibility schema_version is wrong")
+    schemas = manifest.get("schemas")
+    fixtures = manifest.get("fixtures")
+    fixture_manifest = manifest.get("fixture_manifest")
+    if not isinstance(schemas, list) or len(schemas) != 14:
+        failures.append("frozen compatibility manifest must bind 14 schema files")
+        schemas = []
+    if not isinstance(fixtures, list) or len(fixtures) != 64:
+        failures.append("frozen compatibility manifest must bind 64 fixture files")
+        fixtures = []
+    if not isinstance(fixture_manifest, dict):
+        failures.append("frozen compatibility fixture manifest entry is missing")
+        fixture_manifest = {}
+
+    observed_schema_paths = sorted(
+        path.relative_to(project_root).as_posix()
+        for path in (project_root / "schemas").glob("*.json")
+    )
+    expected_schema_paths = [item.get("path") for item in schemas if isinstance(item, dict)]
+    if expected_schema_paths != observed_schema_paths or len(set(expected_schema_paths)) != 14:
+        failures.append("frozen compatibility schema paths are not the exact sorted 14-file set")
+
+    fixture_manifest_path = "tests/fixtures/provider-ready/manifest.json"
+    if fixture_manifest.get("path") != fixture_manifest_path:
+        failures.append("frozen compatibility fixture manifest path is wrong")
+    try:
+        declared_fixture_manifest = load_json(project_root / fixture_manifest_path)
+        declared_paths = [
+            f"tests/fixtures/provider-ready/{item['path']}"
+            for item in declared_fixture_manifest["fixtures"]
+        ]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError, ValueError) as error:
+        failures.append(f"cannot read provider-ready fixture manifest: {error}")
+        declared_fixture_manifest = {}
+        declared_paths = []
+    expected_fixture_paths = [item.get("path") for item in fixtures if isinstance(item, dict)]
+    if (
+        expected_fixture_paths != declared_paths
+        or expected_fixture_paths != sorted(expected_fixture_paths)
+        or len(set(expected_fixture_paths)) != 64
+    ):
+        failures.append("frozen compatibility fixture paths are not the exact declared sorted 64-file set")
+
+    def check_entry(item: dict[str, Any], *, label: str) -> None:
+        if set(item) != {"path", "size_bytes", "sha256"}:
+            failures.append(f"{label}: compatibility entry fields are not exact")
+            return
+        path = project_root / str(item["path"])
+        if not path.is_file():
+            failures.append(f"{label}: compatibility file is missing: {item['path']}")
+            return
+        raw = path.read_bytes()
+        if item["size_bytes"] != len(raw):
+            failures.append(f"{label}: compatibility size drifted: {item['path']}")
+        if item["sha256"] != "sha256:" + hashlib.sha256(raw).hexdigest():
+            failures.append(f"{label}: compatibility digest drifted: {item['path']}")
+
+    for item in schemas:
+        if isinstance(item, dict):
+            check_entry(item, label="schema")
+    if fixture_manifest:
+        check_entry(fixture_manifest, label="fixture-manifest")
+    for item in fixtures:
+        if isinstance(item, dict):
+            check_entry(item, label="fixture")
+
+    if declared_fixture_manifest:
+        by_path = {item.get("path"): item for item in fixtures if isinstance(item, dict)}
+        for declared in declared_fixture_manifest.get("fixtures", []):
+            full_path = f"tests/fixtures/provider-ready/{declared.get('path')}"
+            bound = by_path.get(full_path)
+            if bound is None or bound.get("sha256") != "sha256:" + str(declared.get("raw_bytes_sha256")):
+                failures.append(f"fixture manifest/raw-byte binding drifted: {full_path}")
+
+    core = {
+        key: manifest.get(key)
+        for key in ("schema_version", "schemas", "fixture_manifest", "fixtures")
+    }
+    observed_digest = canonical_digest(core)
+    if manifest.get("bundle_digest") != observed_digest:
+        failures.append("frozen compatibility bundle_digest mismatch")
+    try:
+        provider_bundle = load_json(project_root / "schemas/aar-provider-ready-schemas-v1.json")
+        schema_map = provider_bundle["schemas"]
+        if not isinstance(schema_map, dict) or sorted(schema_map) != sorted(SCHEMA_NAMES):
+            failures.append("provider-ready bundle schema-name set drifted")
+    except (OSError, KeyError, TypeError, json.JSONDecodeError, ValueError) as error:
+        failures.append(f"cannot validate provider-ready schema-name order: {error}")
+    return observed_digest
+
+
+def _explicit_negation(text: str, start: int) -> bool:
+    clause = re.split(r"[.;\n]", text[:start])[-1]
+    return NEGATION_BEFORE.search(clause) is not None or re.search(
+        r"\b(?:no|not|never|without|cannot|does not|do not|unsupported|removed|retired|absent)\b"
+        r"[\s,;:A-Za-z0-9_./`-]{0,100}$",
+        clause,
+        re.IGNORECASE,
+    ) is not None
+
+
+def _preservation_is_negated(text: str, action: re.Match[str], object_match: re.Match[str]) -> bool:
+    clause = re.split(r"[.;\n]", text[:action.start()])[-1]
+    suffix = text[object_match.end():object_match.end() + 80]
+    return bool(
+        _explicit_negation(text, action.start())
+        or re.search(r"\b(?:false product claim|not a product claim|cannot be .*authority|never becomes .*authority)\b", suffix, re.I)
+    )
+
+
+def _same_clause_object(text: str, action: re.Match[str]) -> re.Match[str] | None:
+    suffix = re.split(r"[.;\n]", text[action.end():], maxsplit=1)[0]
+    match = PRESERVATION_OBJECT.search(suffix)
+    if match is None:
+        return None
+    offset = action.end()
+    return re.compile(PRESERVATION_OBJECT.pattern, re.IGNORECASE).search(text, offset, offset + match.end())
+
+
+def check_required_phrases(texts: dict[str, str], failures: list[str]) -> None:
+    required: dict[str, tuple[str, ...]] = {
+        "README.md": ("CLEAN-INSTALL-ONLY", "FRESH_INSTALL_TARGET_EXISTS", "mode-0700", "renameat2", "14 preserved + 1 planned receipt schema", "No implementation", "standalone-first", "214 counted atomic rows"),
+        "ARCHITECTURE.md": ("DIRECT/PLATFORM_PRIMITIVE", "renameat2", "C1", "C2", "WorkbenchGrantSet", "cell-bound", "SQLiteStageAdapter", "ProviderReadyActivationStore", "Standalone module boundary"),
+        "CONTRACTS.md": ("aar.clean-install-database-identity.v1", "canonical_sha256(authority_material).removeprefix", "canonical_sha256(snapshot_material).removeprefix", "^install-[0-9a-f]{64}$", "FRESH_INSTALL_INITIAL_AUTHORITY_INVALID", "SQLiteStageAdapter", "aar.clean-install-preparation.v1", "aar.install-candidate-receipt.v1", "wheel_size_bytes", "ProviderReadyActivationStore", "grant_ids", "GRANT_DENIED", "CAPABILITY_UNAVAILABLE", "step_index", "aar.evaluation-evidence-classification.v1", "T5 physical execution remains `NOT AUTHORIZED`"),
+        "LIFECYCLE.md": ("ABSENT_TARGET", "PUBLISHING", "mode-0700", "renameat2", "never adopted", "mark_send_started", "outcome_unknown", "cell-bound", "FRESH_INSTALL_PARENT_REPLACED", "SQLiteStageAdapter", "runtime-generations"),
+        "MIGRATION.md": ("migration-v6.sql", "OperationRegistry", "empty-v5", "external_authority_prepared_digest", "cutover_epoch", "secrets.token_hex(32)", "SQLiteStageAdapter", "no schema v7", "FRESH_INSTALL_TARGET_EXISTS", "profile_digest", "removed before final fsync/publication"),
+        "ACCEPTANCE.md": ("214 counted atomic rows", "T0=22", "T1=91", "T2=73", "T3=15", "T4=13", "T5=0", "A-TEST-001", "fail_after_statement_25", "wrong_effect_absent"),
+        "IMPLEMENTATION-PLAN.md": ("Lane C1", "Lane C2", "Lane D1", "Lane D2", "aar.install-candidate-receipt.v1", "same worktree", "bounded patch", "standalone", "SQLiteStageAdapter", "ProviderReadyActivationStore"),
+        "TEST-STRATEGY-AND-GAP-ANALYSIS.md": ("214-row matrix", "A-V6-001", "renameat2", "exact-wheel", "runtime_generation=1", "wrong_effect_absent", "T5"),
+        "EVALUATION.md": ("aar.evaluation-evidence-classification.v1", "prime_live_qualified", "requested_only", "paired-evaluation-admission"),
+        "HANDOFF.md": ("CLEAN-INSTALL-ONLY", "214 counted atomic rows", "candidate-receipt", "no product implementation is claimed", "SQLite adapter", "standalone activation coordinator"),
+        "decisions/ADR-005-clean-install-only.md": ("CLEAN-INSTALL-ONLY", "DIRECT/PLATFORM_PRIMITIVE", "FRESH_INSTALL_TARGET_EXISTS", "No aar-admin cutover command exists", "renameat2"),
+        "verification/README.md": ("61 requirement IDs", "214 counted atomic rows", "wrong-effect absence", "aar.install-candidate-receipt.v1", "frozen-compatibility manifest", "--receipt"),
+    }
+    for relative, phrases in required.items():
+        text = texts.get(relative, "")
+        for phrase in phrases:
+            if phrase not in text:
+                failures.append(f"{relative}: missing required phrase: {phrase}")
+
+
+def check_forbidden_active_semantics(texts: dict[str, str], failures: list[str]) -> None:
+    for relative, text in texts.items():
+        for match in PUBLIC_TRANSITION.finditer(text):
+            if not _explicit_negation(text, match.start()):
+                failures.append(f"{relative}: positive public transition command")
+        for action in PRESERVATION_ACTION.finditer(text):
+            object_match = _same_clause_object(text, action)
+            if object_match and not _preservation_is_negated(text, action, object_match):
+                failures.append(f"{relative}: positive preservation/in-place claim")
+        if STALE_COUNT.search(text):
+            failures.append(f"{relative}: stale predecessor acceptance count remains")
+        if "hex(canonical_sha256" in text:
+            failures.append(f"{relative}: non-constructible digest projection formula")
+        if "C1/C2" in text:
+            failures.append(f"{relative}: ambiguous C1/C2 phase ownership")
+
+
+def validate_product_contract(requirements: dict[str, Any], failures: list[str]) -> None:
+    if requirements.get("product_contract") != PRODUCT_CONTRACT:
+        failures.append("product_contract must exactly match the clean-install-only contract")
+    if requirements.get("summary_requirements") != ["TEST-001"]:
+        failures.append("summary_requirements must contain only TEST-001")
+
+
+def validate_requirements(root: Path, requirements: dict[str, Any], failures: list[str]) -> tuple[set[str], dict[str, dict[str, Any]], set[str]]:
+    rows = requirements.get("requirements")
+    if not isinstance(rows, list):
+        failures.append("requirements must be a list")
+        return set(), {}, set()
+    ids: set[str] = set()
+    by_id: dict[str, dict[str, Any]] = {}
+    valid_tiers = {"T0", "T1", "T2", "T3", "T4", "T5"}
+    for item in rows:
+        if not isinstance(item, dict):
+            failures.append("requirement row is not an object")
+            continue
+        row_id = item.get("id")
+        if not isinstance(row_id, str) or not row_id:
+            failures.append("requirement row lacks id")
+            continue
+        if row_id in ids:
+            failures.append(f"duplicate requirement id: {row_id}")
+        ids.add(row_id); by_id[row_id] = item
+        owner = item.get("owner")
+        if not isinstance(owner, str) or not (root / owner).is_file():
+            failures.append(f"{row_id}: missing owner document {owner!r}")
+        if owner in HISTORICAL_FILES or owner.startswith(HISTORICAL_PREFIXES):
+            failures.append(f"{row_id}: historical owner is not active authority")
+        if item.get("tier") not in valid_tiers:
+            failures.append(f"{row_id}: invalid tier")
+        if item.get("status") != "planned":
+            failures.append(f"{row_id}: status must be planned")
+        if not isinstance(item.get("statement"), str) or not item["statement"].strip():
+            failures.append(f"{row_id}: statement must be non-empty")
+    if [item.get("id") for item in rows if isinstance(item, dict)] != sorted(ids):
+        failures.append("requirement IDs must be sorted and unique")
+    return ids, by_id, set(requirements.get("summary_requirements", []))
+
+
+def validate_matrix(root: Path, matrix: dict[str, Any], requirement_ids: set[str], summary_requirement_ids: set[str], summary_row_ids: set[str], failures: list[str]) -> tuple[int, set[str], dict[str, int]]:
+    if matrix.get("schema_version") != "aar.prw-acceptance-matrix.v2-clean-install-rev2":
+        failures.append("acceptance matrix schema_version is not rev2")
+    if matrix.get("status") != "planned_not_executed":
+        failures.append("acceptance matrix must remain planned_not_executed")
+    if matrix.get("generation") != "clean-install-only-rev2":
+        failures.append("acceptance matrix generation marker is wrong")
+    rows = matrix.get("rows")
+    if not isinstance(rows, list):
+        failures.append("acceptance rows must be a list"); rows = []
+    ids: set[str] = set(); covered: set[str] = set(); counts = {tier: 0 for tier in ("T0", "T1", "T2", "T3", "T4", "T5")}
+    required = ("title", "setup", "operation", "phase", "variant", "stimulus", "expected", "wrong_effect_absent", "evidence_class")
+    exact_row_fields = {"id", "tier", "requirement", *required, "release_gate", "live_inference", "status"}
+    for item in rows:
+        if not isinstance(item, dict):
+            failures.append("acceptance row is not an object"); continue
+        row_id = item.get("id")
+        if not isinstance(row_id, str) or not row_id:
+            failures.append("acceptance row lacks id"); continue
+        if row_id in ids: failures.append(f"duplicate acceptance id: {row_id}")
+        ids.add(row_id)
+        if set(item) != exact_row_fields: failures.append(f"{row_id}: acceptance row fields are not exact")
+        if row_id in summary_row_ids: failures.append(f"summary row is counted: {row_id}")
+        tier = item.get("tier")
+        if tier not in counts: failures.append(f"{row_id}: invalid tier")
+        else: counts[tier] += 1
+        if "requirements" in item or isinstance(item.get("requirement"), (list, dict, tuple)):
+            failures.append(f"{row_id}: requirement reference must be singular")
+        requirement = item.get("requirement")
+        if not isinstance(requirement, str) or not requirement.strip():
+            failures.append(f"{row_id}: missing singular requirement")
+        elif requirement not in requirement_ids:
+            failures.append(f"{row_id}: unknown requirement {requirement}")
+        else: covered.add(requirement)
+        for field in required:
+            if not isinstance(item.get(field), str) or not item[field].strip(): failures.append(f"{row_id}: missing scalar {field}")
+        if all(isinstance(item.get(field), str) and item[field].strip() for field in ("operation", "phase", "variant")):
+            if item.get("stimulus") != expected_stimulus(item): failures.append(f"{row_id}: stimulus is not the exact operation/phase/variant enactment")
+        try:
+            required_wrong_effect = expected_wrong_effect(row_id)
+        except KeyError:
+            failures.append(f"{row_id}: no wrong-effect safety partition is defined")
         else:
-            suspension = match.group(1)
-            cell_line = next(
-                (line for line in suspension.splitlines() if "cell_execution_id TEXT" in line),
-                "",
-            )
-            if "REFERENCES rlm_workbench_cells" not in cell_line or "NOT NULL" in cell_line:
-                failures.append("frozen v6 suspension no longer permits planner-owned null cell identity")
-            if "'model.request'" not in suspension or "'artifact.put'" in suspension:
-                failures.append("frozen v6 suspension method ownership drifted")
+            if item.get("wrong_effect_absent") != required_wrong_effect: failures.append(f"{row_id}: wrong_effect_absent is missing or weakened")
+        variant = item.get("variant")
+        if isinstance(variant, str) and AGGREGATE_VARIANT.search(variant): failures.append(f"{row_id}: aggregate token in variant")
+        if item.get("status") != "planned": failures.append(f"{row_id}: status must be planned")
+        if tier in {"T0", "T1", "T2", "T3"} and (item.get("release_gate") is not True or item.get("live_inference") is not False): failures.append(f"{row_id}: T0-T3 gate flags invalid")
+        if tier == "T4" and (item.get("release_gate") is not False or item.get("live_inference") is not True): failures.append(f"{row_id}: T4 gate flags invalid")
+        if tier == "T5": failures.append(f"{row_id}: T5 execution row is forbidden")
+    if [item.get("id") for item in rows if isinstance(item, dict)] != sorted(ids): failures.append("acceptance IDs must be sorted and unique")
+    if matrix.get("declared_total_rows") != len(rows) or matrix.get("declared_atomic_row_count") != len(rows): failures.append("declared row counts do not equal counted atomic rows")
+    if matrix.get("declared_tier_counts") != counts: failures.append(f"declared tier counts {matrix.get('declared_tier_counts')} != {counts}")
+    if covered | summary_requirement_ids != requirement_ids: failures.append(f"requirement coverage mismatch: {sorted(requirement_ids - covered - summary_requirement_ids)}")
+    if "A-TEST-001" not in set(matrix.get("non_counted_metadata", {}).get("summary_ids", [])): failures.append("A-TEST-001 must be non-counted metadata")
+    variants = {item.get("variant") for item in rows if isinstance(item, dict) and item.get("requirement") == "V6-001"}
+    expected_variants = {f"fail_after_statement_{i:02d}_{name}" for i, name in enumerate(V6_STATEMENTS, 1)} | {"before-first-statement", "before-attestation-insert", "before-schema-migration-insert", "before-commit", "after-commit-readback"}
+    if variants != expected_variants: failures.append("v6 failpoint/boundary variants are not the exact frozen 30-cell set")
+    target_variants = {item.get("variant") for item in rows if isinstance(item, dict) and item.get("id", "").startswith("A-TARGET-")}
+    expected_targets = {"regular-file", "empty-directory", "nonempty-directory", "symlink", "broken-symlink", "database-file", "wal-shm-tree", "authority-history-current-tree", "unknown-directory-entry"}
+    if target_variants != expected_targets: failures.append("existing target type cells are incomplete")
+    expected_epoch = {"fresh-invocation", "invalid-token-grammar", "cutover-epoch-mismatch", "reused-prior-invocation-token"}
+    epoch_variants = {item.get("variant") for item in rows if isinstance(item, dict) and item.get("requirement") == "CLEAN-013"}
+    if epoch_variants != expected_epoch: failures.append("install-epoch cells are not the exact four-cell set")
+    expected_initial = {"generation-one-null-predecessor", "activation-generation-not-one", "non-null-previous-authority"}
+    initial_variants = {item.get("variant") for item in rows if isinstance(item, dict) and item.get("requirement") == "CLEAN-012"}
+    if initial_variants != expected_initial: failures.append("initial activation-authority cells are incomplete")
+    expected_sqlite = {"proc-fd-unavailable", "renamed-stage-parent-entry", "fd-root-backup-destination", "wal-shm-nofollow-allowlist", "stage-fstat-identity-drift"}
+    sqlite_variants = {item.get("variant") for item in rows if isinstance(item, dict) and item.get("requirement") == "CLEAN-014"}
+    if sqlite_variants != expected_sqlite: failures.append("SQLite stage-adapter cells are incomplete")
+    expected_modularity = {"installer-module-ownership", "thin-admin-operator-adapters", "single-activation-injection-seam"}
+    modularity_variants = {item.get("variant") for item in rows if isinstance(item, dict) and item.get("requirement") == "MOD-001"}
+    if modularity_variants != expected_modularity: failures.append("standalone modularity cells are incomplete")
+    required_grant_store = {"generation-file-first-publish", "same-generation-exact-bytes", "same-generation-conflicting-bytes", "successor-generation-invalidates-session-grants", "explicit-current-session-request"}
+    grant_store_variants = {item.get("variant") for item in rows if isinstance(item, dict) and item.get("id", "").startswith("A-GEN-")}
+    if not required_grant_store <= grant_store_variants: failures.append("C2 grant-store lifecycle cells are incomplete")
+    if any(isinstance(item, dict) and item.get("tier") == "T5" for item in rows): failures.append("T5 execution authority exists")
+    return len(rows), covered, counts
 
-        def table_body(name: str) -> str:
-            found = re.search(
-                rf"CREATE TABLE IF NOT EXISTS {re.escape(name)} \((.*?)\n\);",
-                migration,
-                flags=re.DOTALL,
-            )
-            if found is None:
-                failures.append(f"frozen v6 table was not found: {name}")
-                return ""
-            return found.group(1)
 
-        outbox = table_body("rlm_workbench_successor_outbox")
-        required_outbox_columns = {
-            "operation_id", "suspension_revision", "settlement_digest", "outbox_digest",
-            "state", "rebind_generation", "successor_attempt_id", "successor_attempt_fence",
-            "created_at_unix_ms", "prepared_at_unix_ms", "consumed_at_unix_ms",
-        }
-        missing_outbox = {
-            name for name in required_outbox_columns
-            if re.search(rf"^\s*{re.escape(name)}\s", outbox, flags=re.MULTILINE) is None
-        }
-        if missing_outbox:
-            failures.append(f"frozen successor outbox lacks columns: {sorted(missing_outbox)}")
-        if (
-            "'pending', 'prepared', 'consumed'" not in outbox
-            or "successor_attempt_id IS NULL" not in outbox
-            or "rebind_generation > 0" not in outbox
-        ):
-            failures.append("frozen successor outbox state/CAS constraints drifted")
-        if re.search(r"^\s*cell_execution_id\s", outbox, flags=re.MULTILINE):
-            failures.append("frozen successor outbox unexpectedly became cell-bound")
-        if re.search(
-            r"CREATE\s+TRIGGER[^;]*\bON\s+rlm_workbench_successor_outbox\b",
-            migration,
-            flags=re.IGNORECASE,
-        ):
-            failures.append("frozen successor outbox unexpectedly forbids the reviewed state-preserving takeover CAS")
+def run_self_tests(failures: list[str]) -> None:
+    probes = []
+    positive = []; check_forbidden_active_semantics({"probe": "run aar-admin cutover apply"}, positive)
+    probes.append(bool(positive))
+    negative = []; check_forbidden_active_semantics({"probe": "No aar-admin cutover command exists"}, negative)
+    probes.append(not negative)
+    preservation_positive = []; check_forbidden_active_semantics({"probe": "status is read-only; preserve v5 in place"}, preservation_positive)
+    probes.append(bool(preservation_positive))
+    preservation_negative = []; check_forbidden_active_semantics({"probe": "The product does not preserve v5 in place"}, preservation_negative)
+    probes.append(not preservation_negative)
+    frozen_failures = ["frozen predecessor bytes drifted: probe"]
+    probes.append(("fail" if frozen_failures else "pass") == "fail")
+    stale = []; check_forbidden_active_semantics({"probe": "53 planned rows"}, stale)
+    probes.append(bool(stale))
+    stale_hyphen = []; check_forbidden_active_semantics({"probe": "The 194-row matrix is atomic"}, stale_hyphen)
+    probes.append(bool(stale_hyphen))
+    if not all(probes): failures.append("validator semantic self-test failed")
 
-        registry_source = (project_root / "src/aar/runtime/registry.py").read_text(encoding="utf-8")
-        required_existing_authority = (
-            '("attempt_no", "INTEGER")',
-            '("event_kind", "TEXT")',
-            '("payload_json", "TEXT")',
-            '("payload_digest", "TEXT")',
-            "CREATE TABLE IF NOT EXISTS operation_attempts",
-            "dispatcher_generation INTEGER NOT NULL",
-            "CREATE TABLE IF NOT EXISTS operation_leases",
-            "released_at_unix_ms INTEGER",
-            "CREATE TABLE IF NOT EXISTS operation_dispatch",
-            "current_attempt_no INTEGER",
-            '"suspension_revision": suspension_revision',
-            'event_kind="workbench_waiting_external"',
-        )
-        for marker in required_existing_authority:
-            if marker not in registry_source:
-                failures.append(f"existing predecessor/takeover authority drifted: {marker}")
-
-        authority = table_body("rlm_workbench_attempt_authority")
-        transfer = table_body("rlm_workbench_rebind_transfers")
-        for name, body in (("attempt authority", authority), ("rebind transfer", transfer)):
-            line = next((item for item in body.splitlines() if "cell_execution_id TEXT" in item), "")
-            if "NOT NULL" not in line or "REFERENCES rlm_workbench_cells" not in line:
-                failures.append(f"frozen v6 {name} no longer has cell-only NOT NULL authority")
-    except (KeyError, TypeError, StopIteration, json.JSONDecodeError) as error:
-        failures.append(f"cannot cross-check frozen baseline contracts: {error}")
-    return hashes
 
 def validate(root: Path) -> dict[str, Any]:
     failures: list[str] = []
     for relative in sorted(EXPECTED_FILES):
-        if not (root / relative).is_file():
-            failures.append(f"missing required file: {relative}")
-
-    requirements_path = root / "verification" / "requirements.json"
-    matrix_path = root / "verification" / "acceptance-matrix.json"
-    requirements = load_json(requirements_path)
-    matrix = load_json(matrix_path)
-    observed_matrix_digest = "sha256:" + sha256_file(matrix_path)
-    if observed_matrix_digest != EXPECTED_ACCEPTANCE_MATRIX_DIGEST:
-        failures.append(
-            "acceptance matrix bytes drifted from the reviewed mandatory row authority: "
-            f"{observed_matrix_digest}"
-        )
-
-    if requirements.get("schema_version") != "aar.prw-requirements.v1":
-        failures.append("unexpected requirements schema_version")
-    if requirements.get("status") != "specification_only":
-        failures.append("requirements status must remain specification_only")
-    if matrix.get("schema_version") != "aar.prw-acceptance-matrix.v1":
-        failures.append("unexpected acceptance matrix schema_version")
-    if matrix.get("status") != "planned_not_executed":
-        failures.append("acceptance matrix must remain planned_not_executed")
-
-    requirement_rows = requirements.get("requirements")
-    acceptance_rows = matrix.get("rows")
-    if not isinstance(requirement_rows, list):
-        failures.append("requirements must be a list")
-        requirement_rows = []
-    if not isinstance(acceptance_rows, list):
-        failures.append("acceptance rows must be a list")
-        acceptance_rows = []
-
-    requirement_ids: set[str] = set()
-    for row in requirement_rows:
-        if not isinstance(row, dict):
-            failures.append("requirement row is not an object")
-            continue
-        row_id = row.get("id")
-        if not isinstance(row_id, str) or not row_id:
-            failures.append("requirement row lacks id")
-            continue
-        if row_id in requirement_ids:
-            failures.append(f"duplicate requirement id: {row_id}")
-        requirement_ids.add(row_id)
-        owner = row.get("owner")
-        if not isinstance(owner, str) or not (root / owner).is_file():
-            failures.append(f"{row_id}: missing owner document {owner!r}")
-        if row.get("status") != "planned":
-            failures.append(f"{row_id}: status must be planned in spec phase")
-        if row.get("tier") not in {"T0", "T1", "T2", "T3", "T4", "T5"}:
-            failures.append(f"{row_id}: invalid tier")
-
-    acceptance_ids: set[str] = set()
-    covered: set[str] = set()
-    for row in acceptance_rows:
-        if not isinstance(row, dict):
-            failures.append("acceptance row is not an object")
-            continue
-        row_id = row.get("id")
-        if not isinstance(row_id, str) or not row_id:
-            failures.append("acceptance row lacks id")
-            continue
-        if row_id in acceptance_ids:
-            failures.append(f"duplicate acceptance id: {row_id}")
-        acceptance_ids.add(row_id)
-        tier = row.get("tier")
-        if tier not in {"T0", "T1", "T2", "T3", "T4", "T5"}:
-            failures.append(f"{row_id}: invalid tier")
-        refs = row.get("requirements")
-        if not isinstance(refs, list) or not refs:
-            failures.append(f"{row_id}: requirements must be a non-empty list")
-            refs = []
-        for reference in refs:
-            if reference not in requirement_ids:
-                failures.append(f"{row_id}: unknown requirement {reference}")
-            else:
-                covered.add(reference)
-        if row.get("status") != "planned":
-            failures.append(f"{row_id}: status must be planned")
-        for field in ("title", "setup", "stimulus", "expected", "wrong_effect_absent", "evidence_class"):
-            if not isinstance(row.get(field), str) or not row[field].strip():
-                failures.append(f"{row_id}: missing non-empty {field}")
-        live = row.get("live_inference")
-        release_gate = row.get("release_gate")
-        if tier in {"T0", "T1", "T2", "T3"} and live is not False:
-            failures.append(f"{row_id}: T0-T3 cannot use live inference")
-        if tier in {"T0", "T1", "T2", "T3"} and release_gate is not True:
-            failures.append(f"{row_id}: every necessary T0-T3 row must be a release gate")
-        if tier in {"T4", "T5"} and live is not True:
-            failures.append(f"{row_id}: T4-T5 must declare live inference")
-        if tier in {"T4", "T5"} and release_gate is not False:
-            failures.append(f"{row_id}: T4-T5 cannot be package release gates")
-
-    for missing in sorted(requirement_ids - covered):
-        failures.append(f"requirement has no acceptance row: {missing}")
-
-    forbidden_t5_ids = {f"A-EVAL-{index:03d}" for index in range(1, 7)}
-    for forbidden in sorted(forbidden_t5_ids & acceptance_ids):
-        failures.append(f"superseded executable paired-evaluation row remains: {forbidden}")
-    for row in acceptance_rows:
-        if isinstance(row, dict) and row.get("tier") == "T5":
-            failures.append(f"{row.get('id', '<unknown>')}: v1 has no T5 execution authority")
-
-    for missing in sorted(REQUIRED_S0_ACCEPTANCE_IDS - acceptance_ids):
-        failures.append(f"missing mandatory S0 acceptance row: {missing}")
-
-    requirement_by_id = {
-        row["id"]: row
-        for row in requirement_rows
-        if isinstance(row, dict) and isinstance(row.get("id"), str)
-    }
-    semantic_requirement_phrases = {
-        "ACT-001": ("All fourteen strict", "marker construction is acyclic", "complete required-property"),
-        "ACT-002": ("complete unbranched activation history", "before host construction", "runtime-generation allocation"),
-        "ACT-003": ("configured/reference-only/unknown", "never usable"),
-        "ACT-004": ("one separate strict owner", "cannot be upgraded"),
-        "COMP-001": ("registry-v6 nullable suspension", "operation-event/attempt/lease/dispatch owners", "existing cell-free owners"),
-        "MIG-001": ("emits one canonical plan on stdout only", "no WAL checkpoint", "read-only/query-only"),
-        "MIG-002": ("creates no separate epoch", "lock exclusively"),
-        "MIG-005": ("UNINITIALIZED_RUNTIME_RESIDUE", "ordinary markers", "never silently applies or aborts"),
-        "MIG-006": ("snapshot/prepared/DB/profile", "without blind replay"),
-        "MIG-008": ("plan→prepared→transaction/receipt→terminal", "snapshot-before-prepared adoption", "cycle-free"),
-        "AUTH-001": ("frozen grant_ids array", "client context is never authority"),
-        "AUTH-003": ("mixed-set", "duplicate-capability", "authority-before-availability"),
-        "OPS-001": ("stdout-only", "apply/abort/reconcile/restore/runtime-initialize"),
-        "PLAN-001": ("step_index", "SQL-null cell authority", "unique predecessor operation event"),
-        "PLAN-003": ("fenced prepared-to-prepared takeover", "valid directive/correction/certain terminal projection", "never accesses cell-bound"),
-        "PLAN-004": ("settled_success", "cancelled_before_send", "outcome_unknown", "Absent usage dimensions remain null"),
-        "PLAN-006": ("Only settled_success, settled_failure and cancelled_certain", "no blind resend", "synthetic settlement digest"),
-        "ADM-001": ("normalized job/profile planner mode", "effective capability union", "mandatory T2 release evidence"),
-        "ADM-002": ("frozen-v8 GRANT_DENIED", "CAPABILITY_UNAVAILABLE"),
-        "ROUTE-001": ("provider, model, reasoning, fallback and cache", "Prime alias normalization"),
-        "ROUTE-004": ("never becomes a certain deadline terminal",),
-        "TEST-001": ("all fourteen schema fixtures", "crash-convergent cell-free planner outcomes", "all admission cross-products"),
-        "EVAL-002": ("strict paired-evaluation-admission", "planning evidence only", "cannot authorize T5 spend"),
-        "EVAL-001": ("No paired instrumentation block", "Future paired protocol categories", "launcher-authority SDD"),
-    }
-    for row_id, phrases in semantic_requirement_phrases.items():
-        statement = str(requirement_by_id.get(row_id, {}).get("statement", ""))
-        for phrase in phrases:
-            if phrase not in statement:
-                failures.append(f"{row_id}: missing semantic requirement phrase: {phrase}")
-
-    valid_versions = ("0.6.0a0", "1.2.3", "1.2.3rc1.post2.dev3", "10.20.30.post0")
-    invalid_versions = (
-        "00.06.000a00",
-        "1.2.3rc01.post02.dev03",
-        "01.2.3",
-        "1.02.3",
-        "1.2.03",
-        "1.2.3+local",
-    )
-    if any(PACKAGE_VERSION_PATTERN.fullmatch(value) is None for value in valid_versions):
-        failures.append("canonical package-version validator rejects a required valid fixture")
-    if any(PACKAGE_VERSION_PATTERN.fullmatch(value) is not None for value in invalid_versions):
-        failures.append("canonical package-version validator accepts a non-canonical fixture")
-
-    markdown_files = sorted(root.rglob("*.md"))
-    for document in markdown_files:
+        if not (root / relative).is_file(): failures.append(f"missing required file: {relative}")
+    requirements: dict[str, Any] = {}
+    matrix: dict[str, Any] = {}
+    try:
+        requirements = load_json(root / "verification/requirements.json")
+        matrix = load_json(root / "verification/acceptance-matrix.json")
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        failures.append(f"cannot load machine assets: {error}")
+    if requirements:
+        if requirements.get("schema_version") != "aar.prw-requirements.v2-clean-install-rev2": failures.append("requirements schema_version is not rev2")
+        if requirements.get("target_release") != "0.6.0a0-clean-install-only": failures.append("requirements target_release is not clean-install-only")
+        if requirements.get("status") != "specification_only": failures.append("requirements status must remain specification_only")
+        validate_product_contract(requirements, failures)
+    requirement_ids, requirement_by_id, summary_requirements = validate_requirements(root, requirements, failures) if requirements else (set(), {}, set())
+    acceptance_count, covered, tier_counts = validate_matrix(root, matrix, requirement_ids, summary_requirements, set(matrix.get("non_counted_metadata", {}).get("summary_ids", [])), failures) if matrix else (0, set(), {tier: 0 for tier in ("T0", "T1", "T2", "T3", "T4", "T5")})
+    texts = active_text(root) if (root / "verification/requirements.json").is_file() and (root / "verification/acceptance-matrix.json").is_file() else {}
+    check_required_phrases(texts, failures)
+    check_forbidden_active_semantics(texts, failures)
+    for relative, text in texts.items():
+        if "[truncated]" in text: failures.append(f"{relative}: contains truncated marker")
+    for document in sorted(root.rglob("*.md")):
         text = document.read_text(encoding="utf-8")
-        if "[truncated]" in text:
-            failures.append(f"{document.relative_to(root)}: contains a truncated-payload marker")
         for raw_target in LINK_PATTERN.findall(text):
             target = raw_target.split("#", 1)[0].strip()
-            if not target or target.startswith(("http://", "https://", "mailto:")):
-                continue
+            if not target or target.startswith(("http://", "https://", "mailto:")): continue
             resolved = (document.parent / target).resolve()
-            try:
-                resolved.relative_to(root.resolve())
+            try: resolved.relative_to(root.resolve())
             except ValueError:
-                failures.append(
-                    f"{document.relative_to(root)}: local link escapes spec root: {raw_target}"
-                )
-                continue
-            if not resolved.exists():
-                failures.append(
-                    f"{document.relative_to(root)}: broken local link: {raw_target}"
-                )
-
-    readme = (root / "README.md").read_text(encoding="utf-8")
-    required_phrases = (
-        "product implementation is authorized but held pending successor freeze",
-        "0.6.0a0",
-        "v0.5.0a0",
-        "Product-source writers remain blocked until this successor specification validates deterministically",
-    )
-    for phrase in required_phrases:
-        if phrase not in readme:
-            failures.append(f"README missing claim boundary phrase: {phrase}")
-
-    contracts = (root / "CONTRACTS.md").read_text(encoding="utf-8")
-    required_contract_phrases = (
-        "v1 lexical, collection, and validation domains",
-        "v1 semantics are exact principal-ID equality only",
-        "`adapters` contains `1..6` manifests",
-        "Generic `artifact.read` remains available to lower-layer broker code",
-        "unknown | caller_observed | host_receipt_bound | provider_attested",
-        "each contain `1..64` values",
-        'backend_kind="reference"` requires `reference_only=true` and `evidence_tier="unknown"',
-        "That publication is the activation-generation commit linearization point",
-        "every numeric component is exactly `0` or has no leading zero",
-        "aar-admin runtime initialize",
-        "accepts no output-path option and emits exactly one canonical",
-        "existing `Registry` initialization transaction",
-        "aar-admin cutover reconcile",
-        "It MUST NOT execute any WAL checkpoint pragma",
-        "All properties below are required",
-        "literal integer `5`; an already-v6 root returns existing status/receipt",
-        "State/nullability rules are exhaustive",
-        "does not claim Byzantine rollback detection",
-        "one strict mode-tagged object",
-        "plan → prepared marker → transaction/receipt → terminal marker",
-        "same still-current generation is `CAPABILITY_UNAVAILABLE`",
-        "sorted unique `grant_ids` array",
-        "integer `1000..900000`",
-        "does **not** place a non-recomputable internal-record-shape digest",
-        "cutover_terminal_marker_digest",
-        "terminally resolves the original cutover without rewriting either marker",
-        "T5 physical execution remains `NOT AUTHORIZED`",
-        "cancelled_before_send`, `cancel_requested`, `outcome_unknown`, and `quarantined` have no successor outbox",
-        "Only a pending outbox created by frozen `settled_success`, `settled_failure`, or `cancelled_certain`",
-        "Exhaustive planner settlement and successor outcomes",
-        "aar.paired-evaluation-admission.v1",
-        "unique append-only `operation_events` row",
-        "CAS the exact old prepared tuple to another `prepared` tuple",
-        "In **one registry transaction**",
-        "`provider_tier`, `model_tier`, `reasoning_tier`, `fallback_tier`, `cache_tier`",
-        "effective_reasoning=null",
-        "The cell-bound `rlm_workbench_attempt_authority` and `rlm_workbench_rebind_transfers` tables are neither read nor written",
-        "client-supplied context is only a lookup/challenge; it never establishes those values",
-        "an `ordinal` field MUST NOT be emitted",
-        'method="artifact.put"` plus `backend_kind="caller_driver"` is invalid',
-        "`BackendAvailability.backend_kind` is the readback-only domain",
-        "| `unconfigured` | `false` | `false` | both null | `unknown` |",
-        "`previous_activation_authority_digest` remains nullable in every state",
-        "`candidate` is an independently installed observation",
-        "`issued_at_unix_ms: UnixMs`",
-        "requires `issued_at_unix_ms < expires_at_unix_ms`",
-        "Python-mode tests use tuples; JSON-mode arrays are validated through `model_validate_json`",
-        "| `reference` | `true` | `true` | both null | `unknown` |",
-        "only native/caller-driver executable rows carry the current runtime generation",
-        "all profile-derived nullable values remain source-dependent",
-        "State alone does not make an independently observed operator tuple non-null",
-        "Broker/tool/route observations and validated profile/history/operator evidence remain source-dependent",
-        "Independently validated broker-catalog, tool-surface and route observations remain source-dependent",
-        "every profile/history/runtime/grant/capability binding is null; all six methods are truthful unconfigured/reference rows",
-        "`migration_required` cannot carry `capability_digest` or a configured native/caller-driver method row",
-    )
-    for phrase in required_contract_phrases:
-        if phrase not in contracts:
-            failures.append(f"CONTRACTS missing S0 phrase: {phrase}")
-    forbidden_contract_claims = (
-        "| `issued_grant_record_shape_digest` |",
-        "| `attempts` | exact two-item tuple",
-        "literal `benchmark_ready_authorized`",
-        "only pre-spend authority for one two-arm paired benchmark block",
-    )
-    for claim in forbidden_contract_claims:
-        if claim in contracts:
-            failures.append(f"CONTRACTS retains forbidden superseded claim: {claim}")
-
-    architecture = (root / "ARCHITECTURE.md").read_text(encoding="utf-8")
-    required_architecture_phrases = (
-        "configured=true AND reference_only=false",
-        "configured=true`, `reference_only=true`, null adapter identity/generation and `evidence_tier=unknown`",
-        "no `ordinal` wire field is introduced",
-        "v1 activation rejects an `artifact.put` caller driver",
-        "side-effect-free read-only preflight",
-        "frozen-v6 cell-free planner CAS",
-        "generation-advancing `prepared→prepared` takeover",
-        "atomically commits `prepared→consumed`",
-        "package-owned immutable method registry",
-        "Prime may retain requested-only reasoning with null effective effort",
-        "only when an activation-profile path is explicitly supplied",
-        "When no activation-profile path is supplied",
-        "`AUTHORITY_DENIED` is never a v8 wire literal",
-        "complete immutable activation-history",
-        "The client context is only compared against issuer state and never creates authority",
-        "Do not create a parallel",
-    )
-    for phrase in required_architecture_phrases:
-        if phrase not in architecture:
-            failures.append(f"ARCHITECTURE missing S0 phrase: {phrase}")
-
-    schema_names = (
-        "aar.host-activation-intent.v1",
-        "aar.host-activation-profile.v1",
-        "aar.method-adapter-manifest.v1",
-        "aar.activation-generation-authority.v1",
-        "aar.cutover-plan.v1",
-        "aar.operator-prepared-marker.v1",
-        "aar.cutover-receipt.v1",
-        "aar.restore-receipt.v1",
-        "aar.operator-terminal-marker.v1",
-        "aar.activation-readback.v1",
-        "aar.workbench-grant-set.v1",
-        "aar.provider-alias-attestation.v1",
-        "aar.evaluation-evidence-classification.v1",
-        "aar.paired-evaluation-admission.v1",
-    )
-    for name in schema_names:
-        if name not in contracts:
-            failures.append(f"CONTRACTS missing normative schema owner: {name}")
-    if "fourteen frozen strict schemas" not in readme:
-        failures.append("README schema complexity budget is not fourteen")
-
-    complete_wire_markers = (
-        "Shared operator-document wire domains",
-        "A valid plan is emitted only after all read-only checks pass. All properties below are required",
-        "This is the single prepared authority for cutover or restore. Every property is required",
-        "The two receipt schemas use the shared records above. Every listed property is required",
-        "This is the epoch terminal file and the only outer marker. Every property is required",
-        "This is the strict output of read-only `aar-admin activation status`; it has a self `readback_digest`",
-        "This evaluator-owned metadata contract is not a runtime adapter or provider authority. Every property is required",
-        "After activation preflight and factory derivation, the supervisor constructs this strict server-side policy record",
-        "This evaluator-owned strict document is the sole owner of route-component, usage and visibility classification",
-        "planning/evidence document, **not** runtime/provider, physical-launch, replay, or single-use-attempt authority",
-        "readback_digest",
-        "classification_digest",
-        "grant_set_digest",
-        "OperatorPath",
-        "SidecarObservation",
-    )
-    for marker in complete_wire_markers:
-        if marker not in contracts:
-            failures.append(f"CONTRACTS lacks complete wire marker: {marker}")
-
-    migration = (root / "MIGRATION.md").read_text(encoding="utf-8")
-    lifecycle = (root / "LIFECYCLE.md").read_text(encoding="utf-8")
-    evaluation = (root / "EVALUATION.md").read_text(encoding="utf-8")
-    acceptance = (root / "ACCEPTANCE.md").read_text(encoding="utf-8")
-    required_cross_document_phrases = {
-        "MIGRATION.md": (
-            "without executing a checkpoint or any filesystem/DB mutation",
-            "emit exactly one canonical `aar.cutover-plan.v1` JSON document",
-            "existing `Registry` initialization transaction",
-            "operator must next run the ordinary read-only `cutover plan",
-            "history/<activation-generation>-<authority-digest>.json",
-            "history publication is the generation commit linearization point",
-            "aar-admin cutover apply|abort|reconcile|restore",
-            "creates no initialization directory, cutover plan, snapshot, marker, epoch, receipt",
-            "aar.operator-prepared-marker.v1",
-            "aar.operator-terminal-marker.v1",
-            "cutover_recovery_required` → `restore_committed",
-            "Abrupt process loss is not claimed crash-convergent in v1",
-            "UNINITIALIZED_RUNTIME_RESIDUE",
-        ),
-        "LIFECYCLE.md": (
-            "pending→prepared",
-            "prepared→prepared",
-            "selects exactly one `CONTRACTS.md §7` outcome",
-            "Outcome unknown does not prepare or consume",
-            "Planner flow never touches cell-bound",
-            "`start_only=false` is rejected before operation creation without exception",
-            "`cancel_requested`, `outcome_unknown`, or `quarantined`",
-            "no successor outbox",
-            "ACTIVATION_HISTORY_CONFLICT",
-        ),
-        "EVALUATION.md": (
-            "aar.evaluation-evidence-classification.v1",
-            "classified independently",
-            "five route-component tiers, derived route qualification, usage tier and attempt visibility have no other owner",
-            "never upgrades the evaluator record",
-            "aar.paired-evaluation-admission.v1",
-            "No v1 status authorizes T5 physical execution",
-            "No paired instrumentation block is admitted",
-        ),
-        "ACCEPTANCE.md": (
-            "all fourteen normative documents",
-            "accepts no output path",
-            "`A-EVAL-007` is the sole machine row",
-            "executes no WAL checkpoint",
-            "sorted-unique `grant_ids` array",
-            "mandatory release-gate method-scoped admission rows",
-            "valid unexpired strict `aar.paired-evaluation-admission.v1`",
-        ),
-    }
-    documents = {
-        "MIGRATION.md": migration,
-        "LIFECYCLE.md": lifecycle,
-        "EVALUATION.md": evaluation,
-        "ACCEPTANCE.md": acceptance,
-    }
-    for name, phrases in required_cross_document_phrases.items():
-        for phrase in phrases:
-            if phrase not in documents[name]:
-                failures.append(f"{name} missing blocker-closure phrase: {phrase}")
-
-    forbidden_obsolete_phrases = (
-        "checkpoint/read WAL safely",
-        "atomic current.json replacement is the linearization point",
-        "atomic `current.json` replacement is the commit linearization point",
-        "provider_reported | host_receipt_bound | caller_observed | requested_only",
-        "aar.fresh-v6-initialization-receipt.v1",
-        "route_tier",
-        "contradiction_reason",
-        "directly at schema v6",
-        "cutover plan       --runtime-home ... --intent ... --profile-output ... --output",
-        "first commits canonical empty v5, then emits",
-        "pre/post-v5 crashes converge",
-        "A crash before the v5 transaction commit leaves absent/uninitialized input that may be retried",
-        "A crash after commit leaves canonical empty v5",
-    )
-    combined_semantics = "\n".join(documents.values()) + "\n" + contracts + "\n" + architecture
-    for phrase in forbidden_obsolete_phrases:
-        if phrase in combined_semantics:
-            failures.append(f"obsolete S0 authority phrase remains: {phrase}")
-
-    acceptance_by_id = {
-        row.get("id"): row for row in acceptance_rows if isinstance(row, dict)
-    }
-    for row_id in ("A-ADM-003", "A-ADM-004", "A-ADM-005"):
-        row = acceptance_by_id.get(row_id)
-        if not isinstance(row, dict) or row.get("release_gate") is not True:
-            failures.append(f"{row_id}: mandatory admission discriminator is not a release gate")
-
-    adm004 = acceptance_by_id.get("A-ADM-004")
-    if isinstance(adm004, dict):
-        adm004_semantics = "\n".join(
-            str(adm004.get(field, ""))
-            for field in ("title", "setup", "stimulus", "expected", "wrong_effect_absent", "evidence_class")
-        )
-        for marker in (
-            "Both separately digested caller_delegated_ticketed/caller_driver and service_managed/native model.request profiles",
-            "max_artifact_count",
-            "max_artifact_bytes",
-            "require_named_artifacts",
-            "artifact.put",
-            "max_subagent_calls",
-            "either subagent capability",
-            "both subagent.submit and subagent.result",
-            "evidence.query/effect.propose",
-            "zero budget",
-            "zero/nonzero budgets",
-            "coherent/conflicting grant unions",
-            "retired factory/profile/digest",
-            "same-generation instantiated-adapter health",
-            "Before operation creation",
-            "GRANT_DENIED",
-            "CAPABILITY_UNAVAILABLE",
-        ):
-            if marker not in adm004_semantics:
-                failures.append(f"A-ADM-004 missing budget/grant/method cross-product marker: {marker}")
-
-    if (root / "WAL.md").exists():
-        failures.append("public SDD package must not contain local-only WAL.md")
-
-    frozen_baseline_files = validate_frozen_baseline(root, failures)
-
+                failures.append(f"{document.relative_to(root)}: local link escapes spec root: {raw_target}"); continue
+            if not resolved.exists(): failures.append(f"{document.relative_to(root)}: broken local link: {raw_target}")
+    valid_versions = ("0.6.0a0", "1.2.3", "1.2.3rc1.post2.dev3", "10.20.30.post0")
+    invalid_versions = ("00.06.000a00", "1.2.3rc01.post02.dev03", "01.2.3", "1.02.3", "1.2.03", "1.2.3+local")
+    if any(PACKAGE_VERSION_PATTERN.fullmatch(value) is None for value in valid_versions): failures.append("package-version fixture rejected")
+    if any(PACKAGE_VERSION_PATTERN.fullmatch(value) is not None for value in invalid_versions): failures.append("invalid package-version fixture accepted")
+    run_self_tests(failures)
+    # Frozen inputs are deliberately checked before this status/result construction.
+    frozen = validate_frozen_inputs(root, failures)
+    frozen_compatibility_digest = validate_frozen_compatibility(root, requirements, failures)
     artifact_files = [
-        path
-        for path in root.rglob("*")
-        if path.is_file()
-        and path.name not in {"spec-validation-receipt.json"}
+        path for path in root.rglob("*")
+        if path.is_file() and path.name != "spec-validation-receipt.json"
         and "reviews" not in path.relative_to(root).parts
-        and "__pycache__" not in path.relative_to(root).parts
-        and path.suffix != ".pyc"
+        and "__pycache__" not in path.relative_to(root).parts and path.suffix != ".pyc"
     ]
+    status = "pass" if not failures else "fail"
+    assert status == ("pass" if not failures else "fail")
     return {
-        "schema_version": "aar.prw-spec-validation.v1",
-        "status": "pass" if not failures else "fail",
+        "schema_version": "aar.prw-spec-validation.v2-clean-install-rev2",
+        "status": status,
         "failures": failures,
+        "generation": "clean-install-only-rev2",
         "requirement_count": len(requirement_ids),
-        "acceptance_row_count": len(acceptance_ids),
+        "summary_requirement_count": len(summary_requirements),
+        "acceptance_row_count": acceptance_count,
         "covered_requirement_count": len(covered),
-        "markdown_file_count": len(markdown_files),
+        "tier_counts": tier_counts,
+        "markdown_file_count": len(list(root.rglob("*.md"))),
         "artifact_file_count": len(artifact_files),
         "tree_digest": tree_digest(root, artifact_files),
-        "files": {
-            path.relative_to(root).as_posix(): "sha256:" + sha256_file(path)
-            for path in sorted(artifact_files, key=lambda item: item.relative_to(root).as_posix())
-        },
-        "frozen_baseline_files": frozen_baseline_files,
-        "non_claim": "This receipt proves specification structure only; it proves no implementation or runtime behavior."
+        "files": {path.relative_to(root).as_posix(): sha256_file(path) for path in sorted(artifact_files, key=lambda item: item.relative_to(root).as_posix())},
+        "frozen_baseline_files": frozen,
+        "frozen_compatibility_digest": frozen_compatibility_digest,
+        "active_semantic_scan_excludes": sorted(HISTORICAL_FILES | {item for item in EXPECTED_FILES if item.startswith(HISTORICAL_PREFIXES)}),
+        "non_claim": "This receipt proves specification structure only; it proves no implementation or runtime behavior.",
     }
 
 
@@ -729,16 +707,11 @@ def main() -> int:
     result = validate(root)
     rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.receipt is not None:
-        args.receipt.parent.mkdir(parents=True, exist_ok=True)
-        temporary = args.receipt.with_suffix(args.receipt.suffix + ".tmp")
-        temporary.write_text(rendered, encoding="utf-8")
-        temporary.replace(args.receipt)
-    print(json.dumps({key: result[key] for key in ("status", "requirement_count", "acceptance_row_count", "covered_requirement_count", "artifact_file_count", "tree_digest")}, sort_keys=True))
-    if result["failures"]:
-        for failure in result["failures"]:
-            print(f"FAIL: {failure}")
-        return 1
-    return 0
+        args.receipt.resolve().write_text(rendered, encoding="utf-8")
+    summary_keys = ("status", "requirement_count", "summary_requirement_count", "acceptance_row_count", "covered_requirement_count", "tier_counts", "artifact_file_count", "tree_digest")
+    print(json.dumps({key: result[key] for key in summary_keys}, sort_keys=True))
+    for failure in result["failures"]: print(f"FAIL: {failure}")
+    return 0 if result["status"] == "pass" else 1
 
 
 if __name__ == "__main__":

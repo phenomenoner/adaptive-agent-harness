@@ -1,110 +1,66 @@
-# Acceptance and Claim Gates
+# Acceptance and claim gates — clean-install rev2
 
-## 1. Evidence tiers
+## 1. Counted atomic matrix
 
-| Tier | Purpose | Provider inference | Required for release claim |
+| Tier | Meaning | Live/provider inference | Release gate |
 |---|---|---:|---:|
-| T0 | Contract generation, schema fixtures, static caller/sink inventory, package/profile byte parity | No | Yes |
-| T1 | Cutover/activation unit and fault-injection evidence | No | Yes |
-| T2 | Runtime workbench/caller lifecycle integration on exact source bytes | No | Yes |
-| T3 | Exact-wheel, preserved-v5 and empty-runtime-v5-bootstrap host qualification | No | Yes |
-| T4 | Separately authorized exact Luna/max route and receipt qualification | Yes | No; required for `live_qualified` |
-| T5 | Paired AAR-vs-Prime instrumentation/benchmark | Yes | No; downstream evaluation only |
+| T0 | static contract, identity, frozen-byte, receipt-shape, and claim separation | No | Yes |
+| T1 | target, handle, staging, database, v6, publication, and zero-write behavior | No | Yes |
+| T2 | generation ordering, grants, planner, reconciliation, and method admission | No | Yes |
+| T3 | exact-wheel installed host, startup, Ready barrier, and conditional old-root boundary | No | Yes |
+| T4 | separately authorized route/usage/evidence qualification | Yes | No |
+| T5 | no execution authority in this release | N/A | No |
 
-`implementation_verified` requires every T0–T3 release row. T4 and T5 never repair a failed T0–T3 row.
+The machine matrix contains **214 counted atomic rows**: **T0=22, T1=91, T2=73, T3=15, T4=13, T5=0**. The mandatory no-live release set is **201 T0–T3 atomic rows**. The requirement register has **61 requirements**. These numbers are computed from the JSON, not inherited from a predecessor.
 
-## 2. Claim rules
+Each counted row has one scalar `operation`, one scalar `phase`, one singular non-empty `variant`, one exact executable `stimulus`, one expected observation, and one concrete `wrong_effect_absent`. The validator derives the exact stimulus and safety-partition wrong effect and rejects removal or weakening. Aggregate containers, recursive summaries, arrays of variants, and “all gates” rows are not acceptance cells. `A-TEST-001` is explicit non-counted metadata describing the exact-wheel summary assertion.
 
-- Source tests do not establish installed-wheel behavior.
-- Standalone MCP discovery does not establish live-host pickup.
-- Capability rows do not establish driver liveness or provider treatment.
-- Launch flags do not establish effective route.
-- A passing artifact does not repair unknown outcome, unauthorized replay, or telemetry fabrication.
-- Historical v0.5 test/release evidence remains historical and is not rewritten as v0.6 evidence.
-- Every rerun has a new attempt ID and reason; no latest-success overwrites prior failure.
+## 2. Atomic partitions that must remain visible
 
-## 3. Required T0 evidence
+The matrix individually enumerates:
 
-1. Generated strict schemas and canonical fixtures for all fourteen normative documents: activation intent, final profile, method adapter, activation-generation authority, cutover plan, operator prepared marker, cutover receipt, restore receipt, operator terminal marker, activation readback, workbench grant set, provider-alias attestation, evaluation evidence classification, and paired-evaluation admission.
-2. Cross-validator agreement, explicit self-digest domains/equality relations, acyclic `plan→prepared→receipt→terminal` construction, inner/outer marker swap rejection, and digest stability.
-3. Exact v7 and standalone v8 tool names/order/descriptors unchanged byte-for-byte; the dependency-closed v8 combined schema is regenerated for the reviewed `CallerWorkCommitInput.model_response` amendment, and generator/checked-in/live/package bytes plus digests must agree.
-4. Static inventory of migration callers, supervisor construction, grant publication, planner calls, provider send sinks, candidate commit/reconcile sinks, and profile/package copies.
-5. Credential canaries and secret scan of profile/receipt/log artifacts.
-6. Requirement-to-test traceability with zero unowned mandatory rows.
+- nine existing target forms: regular file, empty directory, non-empty directory, symlink, broken symlink, database file, WAL/SHM tree, authority/history/current tree, and unknown entry;
+- ten path/ancestor forms: relative, NUL, non-UTF-8 final, missing ancestor, file ancestor, symlink ancestor, non-UTF-8 ancestor, case alias, Unicode-normalization alias, and safe absolute absent final;
+- retained parent/ancestor/stage handles, mode `0700`, same-filesystem creation, stage substitution, cleanup drift, parent/ancestor replacement, before/after identity-chain checks, target inode equality, parent fsync, EEXIST, caught cleanup, abrupt residue, backup removal, and native-Windows fail-closed behavior;
+- every one of the 25 frozen v6 DDL statement `fail_after_statement_01` … `fail_after_statement_25` indexes, plus before-first, before attestation insert, before schema-migration insert, before commit, and after-commit readback;
+- clean projection authority/snapshot/preparation/timestamp/attestation/profile cells;
+- generation-independent prepublication and postpublication `runtime_generation=1`/factory/capability/grant/Ready order;
+- each D1 phase, `start_only` condition, lease release, pending/prepared, live-owner refusal, dead-owner takeover, and one-time consume;
+- each D2 settlement/correction/uncertainty/takeover/no-resend outcome, including settled success/failure, certain and before-send cancellation, cancel-requested, outcome-unknown, quarantined, deadline before/after send, invalid directive correction, send-start, exact receipt evidence, null usage, failed-source replay refusal, and possibly-sent no-resend;
+- method admission variants for caller/native modes, zero/positive artifact and subagent budgets, evidence/effect methods, missing/reference/retired/stale/mismatched factories, current health loss, grant ceilings, and `start_only=false`;
+- exact-wheel receipt/member/startup cases, installed-member readback without overall-wheel recomputation, damaged evidence, rerun refusal, status zero-write, source-import leakage, and separate old-root archive versus fresh-host no-old-root observations;
+- T4 component-wise provider/model/reasoning/fallback/cache evidence and usage visibility cases.
 
-## 4. Required T1 evidence
+A row may be merged only when operation, lifecycle phase, adversarial variant, and expected observation are behaviorally identical. No such merge is used for the partitions above.
 
-- read-only plan accepts no output path, emits exactly one canonical JSON document on stdout, produces no filesystem/DB/service mutation, executes no WAL checkpoint, creates no temp/snapshot/authority artifact, and leaves SQLite/filesystem write canaries at zero;
-- active/replaced owner, nonterminal state, corrupt DB, WAL drift, stale plan, and intent/final-profile/candidate drift reject;
-- shared-supervisor/exclusive-operator lock exclusion, startup rejection, exact-input cutover reconcile and pre-DB `abort` contracts, replacement-owner classification, and lock-loss boundaries; runtime initialization owns no separate epoch/reconcile namespace;
-- SQLite backup API after exclusive ownership with read-only-plan DB/WAL/SHM hashes, backup result, fsync, integrity/FK, snapshot-before-prepared adoption/conflict, strict restore preparation/reconcile/replacement, and sidecar-disposition evidence;
-- exact rerun is idempotent; changed bytes conflict;
-- rollback/restore is denied beyond the frontier;
-- activation profile unknown/secret/shell/arbitrary-endpoint fields reject;
-- adapter-factory/manifest and grant/route/recovery binding mismatches reject;
-- absent/uninitialized runtime initialization runs only the existing canonical-empty-v5 transaction and then stops at `migration_required`; caught pre-commit faults roll back and caught post-commit faults leave canonical empty v5. Abrupt process loss with any WAL/SHM residue fails `UNINITIALIZED_RUNTIME_RESIDUE` with no checkpoint/delete/adoption/retry. A separate operator `cutover plan` plus `cutover apply` later emits the ordinary truthful snapshot/row-set-bound cutover receipt; non-empty v5 is refused by initialize.
+## 3. Claim rules
 
-## 5. Required T2 evidence
+A passing specification receipt proves documentation consistency only. It proves no implementation, wheel, database transaction, publication, startup, Ready, provider route, archive, or benchmark. Candidate/profile fields do not prove wheel bytes; staged v6 does not prove publication; capability does not prove live route; requested route does not prove effective route; and stale staging is never authority.
 
-- caller-delegated root planner creates one durable ticket and releases attempt ownership while waiting; a fail-if-called synchronous planner canary remains at zero calls;
-- initial/correction/recovery/finalizer identities and suspension revisions are distinct, deterministic, mapped through exact waiting-external operation events, and recovered by fenced prepared takeover plus atomic consume of exactly one valid-directive/correction/certain-failure/cancel/deadline projection on exact v6 rows; outcome unknown remains unconsumed/reconcile-only;
-- claim/send-start/cancel/commit/reconcile ordering is enforced;
-- crash after send-start is not replayed;
-- stale claimant/adapter/attempt/runtime/profile writers are fenced;
-- mandatory release-gate method-scoped admission rows pass separately activated caller/native planner-profile × artifact budget × subagent budget × optional grant × exact model.request/method-factory cross-products, including model-only partial profiles;
-- feature-implied but ungranted fails `GRANT_DENIED`; current-grant same-generation instantiated-adapter health loss fails `CAPABILITY_UNAVAILABLE`; factory/profile/digest drift retires/revokes and fails `GRANT_DENIED`; optional unavailable invocation fails certain before send;
-- grants are absent before activation; afterward the frozen sorted-unique `grant_ids` array resolves every server-side issued record, rejects mixed sets/identities/ceilings and duplicate capabilities, derives one effective capability union, and binds principal/session, budgets/TTL/deadline, runtime/activation/profile/history-tip/capability/route digests; changed client context never self-authorizes;
-- planner directive and final output validate before mutation/success;
-- cumulative usage includes correction/recovery/retry/discarded spend;
-- restart, deadline, cancellation, and finalization races preserve one terminal authority;
-- v1/public/workspace/assets compatibility remains green.
+Prepublication never fabricates executable capability rows, `WorkbenchGrantSet`, session grants, or runtime health. Postpublication startup performs normal generation/grant writes only after immutable install/profile/evidence readback. Startup cannot initialize, migrate, repair, adopt, or recompute the deleted backup/overall wheel digest.
 
-## 6. Required T3 evidence
+## 4. Tier gates
 
-Two fresh, disposable roots are required:
+### T0
 
-1. **Preserved-v5 upgrade root:** exact supported v5 fixture/database plus WAL/SHM variants → plan/apply/restart/readback/workbench no-inference scenario.
-2. **Empty-runtime bootstrap root:** exact wheel/profile install → absent/uninitialized DB → existing Registry canonical empty v5 → ordinary plan/apply v6 cutover/activation/restart/readback/workbench no-inference scenario.
+T0 binds the product contract, clean identity, strict receipt shape, authority/snapshot token projections, exact 14-schema/64-fixture preservation, frozen v6/v7/v8/D1/D2 inputs, credential-free identifiers, inert paired planning, validator oracles, clean-only modes, and status separation.
 
-For each:
+### T1
 
-- installed `direct_url`/wheel/source/profile/skill/contract digests match;
-- durable supervisor identity and schema/profile readback match;
-- current host/session discovers exact 38 tools and calls workbench capabilities natively;
-- compatibility smoke and focused workbench journey pass;
-- stop/restart/reconcile leaves no orphan worker/socket/claim;
-- run from built wheel, not source import leakage.
+T1 covers every target/path form, no-write refusal, retained-handle staging, deterministic cleanup and substitution races, empty-v5, every v6 statement failpoint and boundary, exact attestation/preparation projection, positive backup lifecycle, no-replace publication, and native-Windows failure.
 
-Supported Python/platform matrix follows release policy; platform-gated skips remain explicit.
+### T2
 
-## 7. T4 qualification
+T2 covers the C1-prepublication/C2-postpublication split, runtime generation, exact factories and capability truth, generation-store CAS/restart behavior, server-owned memory-only session grants, activation no-effects, all D1/D2 outcomes, and method-scoped admission. `GRANT_DENIED` precedes availability; only valid current same-generation health loss is `CAPABILITY_UNAVAILABLE`.
 
-T4 uses exactly one authorized request per required negative/positive scenario and is never folded into T0–T3. Minimum positive route is `openai-codex / gpt-5.6-luna / max`, fallback none. Minimum negatives cover route/effort/fallback/profile/usage/duplicate-spend/reconcile drift.
+### T3
 
-AAR route qualification requires every field join and nullable/arithmetic rule in `EVALUATION.md §4` at request-receipt scope plus one valid `aar.evaluation-evidence-classification.v1` projection bound by its digest. Prime has separate alias/effective-route and usage-scope rows: `hermes-codex` becomes comparable requested provider identity only through the `CONTRACTS.md §10` schema/builder/validator and digest-bound alias attestation, while stock events independently classify provider/model/reasoning/fallback/cache and usage. Prime may be live-qualified with observed provider/model/fallback/cache plus requested-only reasoning whose effective value stays null; weaker mixes remain insufficient. Alias plus launch flags alone yields `requested_treatment_qualified`, not `live_qualified`. No cross-arm artifact, wall-clock, token-efficiency, winner, or workload comparison is authorized by T4 qualification.
+T3 uses one exact wheel and receipt on an absent target, verifies installed member provenance and startup readback, refuses damaged evidence before Ready, keeps startup read-only with respect to schema/profile/install state, refuses rerun, and separates old-root archive/readback from fresh-host no-old-root proof.
 
-## 8. No T5 execution authority
+### T4 and T5
 
-V1/`0.6.0` defines no T5 attempt, launch path, paired block, machine stop action, rerun, score, comparison, winner, or expansion acceptance. One valid unexpired strict `aar.paired-evaluation-admission.v1` planning document may bind exact candidate/profile/alias/classification/case/fixture/oracle/artifact/tool/protocol/budget/stop-matrix bytes, arm order, and explicit planning authority, but it contains no attempt allocation and no package component consumes it. `A-EVAL-007` is the sole machine row and proves this no-launch boundary. Any future paired execution requires a separately reviewed launcher-authority SDD and new acceptance authority.
+T4 is separately authorized and cannot repair T0–T3. T5 physical paired execution, launcher, stop, rerun, score, winner, and expansion authority remain absent. `aar.paired-evaluation-admission.v1` is planning evidence only.
 
-## 9. Machine-readable matrix
+## 5. Specification exit
 
-`verification/acceptance-matrix.json` is the row authority for planned acceptance. It records required evidence class, whether live inference occurs, release-gate membership, and expected absence of the wrong effect. Implementation may add rows but may not delete or weaken mandatory rows without an accepted SDD amendment.
-
-## 10. Exit criteria
-
-### Specification phase
-
-- documents and JSON validate;
-- every requirement has an owner and at least one acceptance row;
-- independent review has no unresolved Critical/High and no implementation-blocking Medium;
-- branch/source custody and non-claims are explicit;
-- handoff is complete;
-- no runtime/source implementation exists.
-
-### Implementation phase
-
-- one immutable candidate passes all required T0–T3 rows;
-- independent current-byte review passes;
-- package/profile/readback evidence is content-addressed;
-- optional T4 work is visibly unexecuted or separately evidenced; T5 execution is absent from this release authority.
+The specification phase exits only when both JSON assets parse, the validator passes twice with byte-identical receipt, frozen inputs pass, `git diff --check` passes, the exact 16-path write set is verified, forbidden product/SQL hashes remain unchanged, and no implementation/live claim is made. Historical ADR-001..004, BASELINE, predecessor SDD, and historical reviews remain untouched.

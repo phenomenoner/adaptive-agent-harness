@@ -1,214 +1,69 @@
-# AR-PRW Implementation Plan
+# Implementation plan — clean-install provider-ready rev2
 
-**Authority state:** product implementation is authorized on the dedicated clean successor branch, but source dispatch is held until the S0 specification successor and first worker packet independently pass review.
+**Authority state:** this is a plan, not product-code authorization. No implementation, installation, provider call, stage, commit, push, service start, or runtime mutation is claimed.
 
-## 1. Entry condition
+## 1. Entry and worktree rule
 
-Implementation begins only after:
+Implementation may begin only after the rev2 specification receipt is final and the exact frozen v6/v7/v8/D1/D2 inputs are rebound. The three pre-existing dirty cutover files may be replaced in this same worktree by bounded patch; a separate clean worktree is not required. Record their task-start hashes, retire only the superseded cutover seams, preserve unrelated read-only behavior, and do not use reset, stash, clean, or checkout.
 
-1. CK explicitly authorizes implementation;
-2. this SDD is reviewed/frozen or amended;
-3. a clean worktree is created from exact accepted v0.5-or-later source;
-4. local dirty work remains preserved;
-5. baseline tests and source-delta review are recorded.
+Do **not** force the clean installer back into the 2,785-line legacy `runtime.operator` monolith. New behavior is owned by focused modules and tests: strict install/receipt models; `aar.runtime.installer` for target/receipt/SQLite/staging/publication; `aar.runtime.provider_ready_activation` and `ProviderReadyActivationStore` for C2; focused installer/activation tests; and additive generated receipt schema/fixtures. `aar-admin` is a thin dispatch adapter and `runtime.operator` remains read-only. Supervisor, `ReferenceHost`, and MCP may receive only one explicit optional activation injection required to run C2 after runtime-generation allocation. Any wider registry, migration, transport, broker, daemon, or system-seam change requires a separate scope checkpoint.
 
-This plan is sequencing guidance, not authority to edit source, migrate a real runtime, call a provider, publish, commit, or push.
+This documentation task does not write those product paths.
 
-## 2. RED-first lanes
+## 2. Non-goals and fixed seams
 
-### Lane A — Frozen contracts and generators
+Do not add a second workbench, broker, provider client, credential store, daemon, database, schema v7, transition mutator, adoption path, downgrade path, old-root product mutation, or durable recovery ledger. The planned new receipt schema and clean-install integration fixtures are additive future implementation assets. The existing 14 schemas and 64 fixtures remain byte-identical; do not regenerate them.
 
-Likely ownership:
-
-- fourteen canonical model/schema owners, including strict prepared/terminal markers, append-only activation-generation authority, server grant-set, component-wise evaluator classification and paired-admission records;
-- `schemas/` generated documents;
-- valid/invalid fixtures;
-- package asset parity tests.
-
-RED first:
-
-- activation intent/final-profile unknown fields, secrets, shell interpolation, self/nested digest cycles, bad digest equality, non-canonical package versions, forbidden seventh workbench method, and generation wire/CAS cases;
-- complete property/nullability/bound/cross-field matrices for cutover/restore/inner-outer-marker/readback/grant/evaluation/paired-admission records;
-- empty-runtime v5-bootstrap→ordinary-cutover and restore receipt omission/frontier/sidecar errors;
-- provider-alias attestation and evaluator-classification tamper/requested/effective overclaim;
-- cross-validator/canonical digest disagreement;
-- changed frozen v7/v8 bytes.
-
-Exit: T0 contract rows pass; no runtime behavior claim.
-
-### Lane B — Operator cutover
-
-Likely ownership:
-
-- new `aar-admin` entry point;
-- public wrapper around reviewed migration-v6 primitives;
-- local file authority, acyclic final-profile generation, append-only per-profile activation-history CAS plus derived-current repair, stdout-only plan, snapshot/cutover/empty-runtime-v5-bootstrap/reconcile/restore helpers;
-- focused migration/fault tests.
-
-RED first:
-
-- plan mutation canary;
-- active/replaced owner and shared-supervisor/exclusive-cutover lock overlap;
-- DB/WAL/SHM drift, backup/restore fsync and sidecar disposition;
-- crash after snapshot-before-prepared adoption/conflict and at prepared, transaction, DB commit, final-profile, immutable history publication, derived-current replace, restore replacement and terminal-marker boundaries;
-- exact-input reconcile versus changed input, implicit apply/abort rejection, and plan zero-checkpoint canaries;
-- absent/first, equal, lower, strict-higher, stale-prior and ABA generation cases;
-- exact rerun vs changed-byte conflict;
-- restore after frontier.
-
-Exit: T1 cutover rows pass on disposable databases.
-
-### Lane C — Activation composition and grants
-
-Likely ownership:
-
-- activation intent/final-profile loader, generator, and verifier plus complete history/marker scan and derived-current readback;
-- supervisor construction path;
-- reference host capability projection, strict server grant-set and complete sorted-unique `grant_ids` resolver;
-- operator status/readback;
-- Hermes profile/package assets.
-
-RED first:
-
-- no final profile => no grant/unconfigured methods;
-- intent/legacy-attestation/final-profile digest cycle or mismatch => reject;
-- profile boolean or arbitrary import without package-registered factory => reject; caller and service-managed profiles each resolve the exact bound caller-driver/native `model.request` manifest from the same registry and project its factory/digest in planner readback; exact reference factory projects configured/reference-only/unknown but remains admission-unusable;
-- stale migration/profile/factory/adapter/route/grant/recovery digest;
-- Ready/grant issuer ordering, exact multi-record set/principal/session/profile/history/capability/route/budget binding, duplicate-capability/mixed-set rejection, TTL/deadline expiry, runtime-generation revocation and ABA;
-- credential canary.
-
-Exit: activated no-inference host reports truthful per-method rows and scoped grants.
-
-### Lane D — Durable root planner
-
-Likely ownership:
-
-- workbench coordinator;
-- caller-work logical owner/request/settlement integration;
-- scheduler/recovery hooks;
-- planner/correction/recovery/finalization tests.
-
-RED first:
-
-- caller-delegated initial planner ticket, `start_only` rule, and fail-if-called synchronous planner canary;
-- strict v6 logical-owner/request/suspension/receipt map, unique predecessor event, null-cell outbox pending prepare, dead-owner generation-advancing prepared takeover, and atomic consume of valid directive/correction/certain failure/cancel/deadline, while outcome unknown stays unconsumed, with zero planner access to cell-bound authority/rebind tables;
-- attempt lease released while waiting;
-- crash before/after send-start and settlement;
-- stale/duplicate successor;
-- correction usage charge;
-- recovery planner repeated failed source;
-- invalid-directive correction/exhaustion plus cancellation/deadline/outcome-unknown/finalization races.
-
-Exit: caller-delegated workbench can complete with deterministic fake caller receipts; no provider call.
-
-### Lane E — Method-scoped admission
-
-Likely ownership:
-
-- workbench capability/admission models;
-- required-method derivation;
-- facade capability projection;
-- partial/full profile tests.
-
-RED first:
-
-- separately activated caller-driver/native `model.request` planner profiles × exact `caller_delegated→caller_delegated_ticketed`/`service_managed→service_managed` normalization × matching/mismatching job mode × artifact/subagent budget × optional multi-grant set × factory-kind cross-product;
-- model-only job on a truthful partial profile;
-- feature-implied but ungranted/retired-factory authority denial vs valid-current-grant same-generation adapter-health unavailability;
-- optional unavailable invocation before send;
-- reference/stale adapter rows;
-- grant-required methods.
-
-Exit: all mandatory admission cross-product rows are release-gate green; partial capability truth is usable without false full-host claims.
-
-### Lane F — Installed host/product assets
-
-Likely ownership:
-
-- `pyproject.toml` script declaration;
-- bundled Hermes profile and operation skill;
-- release/status/host compatibility documents;
-- exact-wheel preserved-v5 and empty-runtime-v5-bootstrap host scripts.
-
-RED first:
-
-- source/wheel/profile/skill copy drift;
-- default/unactivated profile accidentally authorizes inference;
-- live host session still sees stale catalog/profile;
-- source import leakage.
-
-Exit: exact wheel passes T3 preserved-v5 and empty-runtime-v5-bootstrap roots.
-
-### Lane G — Optional live qualification and offline paired planning
-
-Separate authorization. A later CK decision may permit bounded T4 route qualification only. The implementation may then materialize strict evaluator classifications and the offline paired-planning document, but v1 has no T5 launcher, paired attempt, spend, score, retry, or expansion lane. A future launcher-authority SDD is a separate project decision and cannot be inferred from this plan.
-
-## 3. Dependency order
+The public mutation is fixed, with no unresolved locator:
 
 ```text
-A contracts
-  -> B cutover
-  -> C activation/grants
-  -> D durable planner
-  -> E method admission
-  -> F exact-wheel host qualification
-  -> independent current-byte review
-  -> candidate freeze
-  -> optional G live qualification / offline planning evidence only
+aar-admin runtime install --runtime-home <absolute-runtime-home> --intent <exact-intent> --candidate-receipt <absolute-json> --wheel <absolute-wheel>
 ```
 
-B and D may be developed in isolated worktrees after A freezes, but shared registry/contracts/schemas are single-owner. C depends on B's receipt contracts. E depends on C/D semantics. F begins only after executable bytes stabilize.
+The receipt schema is exactly `aar.install-candidate-receipt.v1`. Absolute receipt/wheel files are opened once no-follow, retained, and read/hash-verified from those same descriptors. Fixed wheel members, factory entries, implementation digests, receipt self-digest, and installed-member startup checks follow `CONTRACTS.md`.
 
-## 4. Test discipline
+## 3. Ordered lanes
 
-- Write the smallest failing seam test before production change.
-- Record the RED failure reason; a syntax/import failure is not a behavioral RED.
-- Make one narrow change to GREEN.
-- Refactor only under green focused tests.
-- Re-run affected predecessor compatibility rows.
-- Defer full suite/matrix until candidate bytes stabilize.
-- Final claims use exact wheel/disposable roots, not editable checkout convenience.
+### Lane A — identity, strict receipt, and frozen assets
 
-## 5. Review checkpoints
+Implement the exact target algorithm, `database_identity`, authority/snapshot projections, one preparation object, exact attestation digest, receipt parser, ZIP byte inspection, fixed bundled assets, factory declarations, and credential-free boundary. Existing compatibility bytes remain unchanged.
 
-1. **Contract freeze:** schemas/fixtures only.
-2. **Cutover freeze:** migration/authority fault matrix.
-3. **Runtime freeze:** planner/admission/grants lifecycle.
-4. **Packaging freeze:** exact bundled bytes.
-5. **Independent complete review:** current candidate, no writer self-review substitution.
-6. **Release candidate freeze:** immutable digests.
-7. **Optional T4 authority:** live qualification.
+### Lane B — staging and publication
 
-At each checkpoint, update owning WAL/evidence and roadmap only when durable status changes.
+Implement retained no-follow parent/ancestor handles, fstat identity records, dirfd-relative mode-0700 staging, and the constructibility-proven Linux `SQLiteStageAdapter` over `/proc/self/fd/<stage_fd>`. Reuse existing `OperationRegistry` v1-v5 construction, backup, and unchanged v6 transaction without moving ownership. Add 25 statement failpoints, complete read-only verification, sidecar allowlisting, cleanup refusal on identity drift, Linux `renameat2` no-replace, target inode readback, parent fsync, and deterministic parent/stage races. Native Windows or unavailable stable-fd SQLite support fails before database mutation.
 
-## 6. Commit boundaries
+### Lane C1 — generation-independent installation evidence
 
-Recommended commits after implementation authority:
+Before publication verify intent, exact candidate receipt/wheel/assets, factory declarations, route policy, grant policy, v6, profile, generation-1 history/current, and staged evidence. Do not create executable capability rows, `WorkbenchGrantSet`, session grants, or runtime health because runtime_generation is absent.
 
-1. contract schemas/fixtures;
-2. `aar-admin` and migration tests;
-3. activation/profile/grant composition;
-4. root-planner caller tickets;
-5. method-scoped admission;
-6. package/profile/skill/docs;
-7. verification receipts/status.
+### Lane C2 — postpublication supervisor authority
 
-Stage intended files only. Never bundle unrelated dirty branch work. No push, PR, package publish, release, live inference, or runtime migration without separate authority.
+After publication verify immutable install/profile/evidence, enter `starting`, allocate/fence the normal runtime generation, and invoke the standalone activation coordinator. `ProviderReadyActivationStore` publishes mode-0600 canonical bytes to the exact 20-digit generation path with no-replace/idempotent-same/conflicting-different semantics and readback before Ready. Prior generation files remain historical; session grants are memory-only/current-generation/revocable and issued only on an explicit policy-approved request. Startup never initializes, migrates, repairs, adopts, or rewrites schema/profile/install state.
 
-## 7. Expected artifacts
+### Lane D1 — durable root planner
 
-```text
-schemas/
-tests/fixtures/
-src/aar/... operator and activation modules
-profiles/hermes/...
-skills/aar-operations/...
-tests/... focused and compatibility
-release / host compatibility receipts
-```
+Retain exact model.request tickets, `{kind, phase, step_index}`, waiting lease release, pending/prepared and dead-owner takeover CAS, cell-free successor ownership, and start-only admission.
 
-Exact names may change after source-level navigation, but owners, contracts, gates, and non-claims may not drift silently.
+### Lane D2 — settlement and reconciliation
 
-## 8. Definition of implementation complete
+Retain claim/send-start/receipt fences, settled success/failure/certain and before-send cancellation rules, correction/deadline/uncertainty/takeover outcomes, null usage, lookup/reconcile, and no blind resend.
 
-Not “code exists.” Complete means one immutable candidate passes all mandatory T0–T3 rows, exact-wheel provenance and live-host pickup reconcile, independent review is clean at the accepted severity threshold, and T4/T5 remain either separately evidenced or explicitly unexecuted.
+### Lane E — method-scoped admission
+
+Test caller/native planner modes, zero/positive budgets and feature implications, exact grant unions, factory variants, `GRANT_DENIED` versus `CAPABILITY_UNAVAILABLE`, and the no-operation-before-admission barrier.
+
+### Lane F — exact-wheel installed host
+
+Use one immutable wheel and exact receipt in a neutral environment. Prove absent-target install, installed-member provenance, startup/Ready barriers, read-only status/verification, rerun refusal, source-import isolation, and conditional old-root archive/no-old-root boundaries.
+
+### Lane G — separately authorized T4
+
+Only after T0–T3 passes may a separate authorization exercise route/usage evidence. T5 remains not authorized.
+
+## 4. Verification discipline
+
+Use deterministic barriers, fake clocks, transaction failpoints, exact bytes, and two independent filesystem/process actors. Do not use sleeps. Keep source, staged, published, installed, live, and evaluator evidence separate. The machine matrix has 214 atomic rows (T0=22, T1=91, T2=73, T3=15, T4=13, T5=0); its non-counted A-TEST-001 summary cannot substitute for those rows.
+
+## 5. Definition of implementation complete
+
+Implementation is complete only when the exact candidate receipt/wheel, all 201 T0–T3 atomic rows, exact startup/readback, conditional old-root evidence, and independent current-byte review pass. This plan does not claim that any of those events has occurred.
