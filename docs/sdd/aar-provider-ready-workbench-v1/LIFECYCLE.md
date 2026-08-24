@@ -81,7 +81,7 @@ RUNNING
 2. Commit workbench phase `waiting_external` and release the attempt/worker ownership allowed by predecessor rules.
 3. Claim performs CAS from `pending` to `send_reserved` and binds claimant/adapter/physical-attempt identities.
 4. `mark_send_started` is the conservative may-have-sent point and MUST precede physical dispatch.
-5. Commit appends a candidate observation; the current reconciler decides authority.
+5. Successful model commit validates the required strict `model_response` against the current ticket/request/route and observation digests, then records model journal, candidate, settlement/outbox and command receipt in one SQLite transaction. Non-model or non-success observations require `model_response=null`. A late provider callback uses the sealed journal-plus-candidate transaction before reconciliation.
 6. A root-planner successor maps the nullable-cell suspension to its predecessor through one exact waiting-external operation event, then uses the frozen-v6 outbox CAS: released predecessor lease, exact settlement/control/deadline, `pending→prepared` for a current attempt, or generation-advancing `prepared→prepared` takeover only after the stored successor lease and dispatch authority are dead.
 7. The exact current successor selects exactly one `CONTRACTS.md §7` outcome and commits `prepared→consumed` plus valid directive, correction, certain failure/cancel/deadline and its event/projection in one registry transaction. Outcome unknown does not prepare or consume. Before commit a crashed prepared owner can be fenced/taken over; after commit the authoritative projection exists. Planner flow never touches cell-bound attempt-authority/rebind-transfer rows; a real cell authority begins only inside a valid directive transaction.
 

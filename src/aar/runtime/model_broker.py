@@ -6,7 +6,7 @@ import sqlite3
 import threading
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from aar.broker_models import (
     BrokerContext,
@@ -489,6 +489,151 @@ class ModelExecutionJournal:
         if row is None:
             raise ModelRouteNotFound(f"operation has no bound model route: {operation.value}")
         return ModelRouteBinding.model_validate_json(str(row["binding_json"]), strict=True)
+
+    def record_caller_result_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        operation: OperationRef,
+        ticket_id: str,
+        physical_attempt_id: str,
+        idempotency_key: str,
+        request_digest: str,
+        request_document: Mapping[str, Any],
+        binding: ModelRouteBinding,
+        response: ModelResponse,
+    ) -> ModelResponse:
+        """Commit typed caller evidence inside the caller-command transaction."""
+
+        request_json = canonical_json_bytes(dict(request_document)).decode()
+        binding_json = canonical_json_bytes(binding).decode()
+        response_json = canonical_json_bytes(response).decode()
+        usage_json = canonical_json_bytes(response.usage).decode()
+        response_digest = canonical_sha256(response)
+        if canonical_sha256(dict(request_document)) != request_digest:
+            raise ModelRouteBindingStale("caller model request digest does not match bytes")
+        if response.route_receipt.requested != binding:
+            raise ModelRouteDrift("caller model response does not attest the exact bound route")
+        ticket = connection.execute(
+            """
+            SELECT state, operation_id, physical_attempt_id, external_idempotency_key,
+                   request_digest, request_json
+            FROM caller_work_tickets WHERE ticket_id = ?
+            """,
+            (ticket_id,),
+        ).fetchone()
+        if (
+            ticket is None
+            or str(ticket["state"])
+            not in {
+                "send_started",
+                "cancel_requested",
+                "outcome_unknown",
+                "settled_success",
+            }
+            or str(ticket["operation_id"]) != operation.value
+            or str(ticket["physical_attempt_id"]) != physical_attempt_id
+            or str(ticket["external_idempotency_key"]) != idempotency_key
+            or str(ticket["request_digest"]) != request_digest
+            or str(ticket["request_json"]) != request_json
+        ):
+            raise ModelRouteBindingStale("caller model ticket authority is stale")
+        self.bind_operation_in_transaction(connection, operation, binding)
+        row = connection.execute(
+            """
+            SELECT * FROM model_executions
+            WHERE operation_id = ? AND idempotency_key = ?
+            """,
+            (operation.value, idempotency_key),
+        ).fetchone()
+        if row is not None:
+            if (
+                str(row["request_digest"]) != request_digest
+                or str(row["request_json"]) != request_json
+                or str(row["binding_json"]) != binding_json
+                or str(row["state"]) != "result_committed"
+                or str(row["response_digest"]) != response_digest
+                or str(row["response_json"]) != response_json
+                or str(row["usage_json"]) != usage_json
+                or row["failure_code"] is not None
+            ):
+                raise ModelRouteBindingStale(
+                    "caller model idempotency identity binds different evidence"
+                )
+            return self._validated_response_row(row, expected_binding=binding)
+        connection.execute(
+            """
+            INSERT INTO model_executions(
+                operation_id, idempotency_key, request_digest, request_json,
+                binding_json, state, response_digest, response_json,
+                usage_json, failure_code
+            ) VALUES (?, ?, ?, ?, ?, 'result_committed', ?, ?, ?, NULL)
+            """,
+            (
+                operation.value,
+                idempotency_key,
+                request_digest,
+                request_json,
+                binding_json,
+                response_digest,
+                response_json,
+                usage_json,
+            ),
+        )
+        return response
+
+    def require_caller_result_in_transaction(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        operation: OperationRef,
+        ticket_id: str,
+        physical_attempt_id: str,
+        idempotency_key: str,
+        request_digest: str,
+        request_document: Mapping[str, Any],
+        binding: ModelRouteBinding,
+    ) -> ModelResponse:
+        """Read and revalidate one journal-backed caller result before settlement."""
+
+        request_json = canonical_json_bytes(dict(request_document)).decode()
+        binding_json = canonical_json_bytes(binding).decode()
+        ticket = connection.execute(
+            """
+            SELECT state, operation_id, physical_attempt_id, external_idempotency_key,
+                   request_digest, request_json
+            FROM caller_work_tickets WHERE ticket_id = ?
+            """,
+            (ticket_id,),
+        ).fetchone()
+        if (
+            ticket is None
+            or str(ticket["state"])
+            not in {"send_started", "cancel_requested", "outcome_unknown", "settled_success"}
+            or str(ticket["operation_id"]) != operation.value
+            or str(ticket["physical_attempt_id"]) != physical_attempt_id
+            or str(ticket["external_idempotency_key"]) != idempotency_key
+            or str(ticket["request_digest"]) != request_digest
+            or str(ticket["request_json"]) != request_json
+        ):
+            raise ModelRouteBindingStale("caller model ticket authority is stale")
+        row = connection.execute(
+            """
+            SELECT * FROM model_executions
+            WHERE operation_id = ? AND idempotency_key = ?
+            """,
+            (operation.value, idempotency_key),
+        ).fetchone()
+        if row is None or str(row["state"]) != "result_committed":
+            raise ModelCallIndeterminate("caller model result journal is absent")
+        if (
+            str(row["request_digest"]) != request_digest
+            or str(row["request_json"]) != request_json
+            or str(row["binding_json"]) != binding_json
+            or row["failure_code"] is not None
+        ):
+            raise ModelRouteBindingStale("caller model result journal lineage is stale")
+        return self._validated_response_row(row, expected_binding=binding)
 
     def invoke(
         self,

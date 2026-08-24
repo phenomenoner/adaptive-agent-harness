@@ -15,8 +15,8 @@ The minimum preserved invariant is:
 | Durable supervisor and generation-unique private attachment | KEEP | Single runtime owner and restart boundary. |
 | Registry v6 workbench/caller-work tables | KEEP | Sole durable workbench lifecycle authority. |
 | AR-MB route catalog/binding/receipt/usage journal | KEEP | Route policy, drift rejection, provider usage evidence. |
-| Five caller-work commands | KEEP | Claim, send-start, certain no-send cancellation, candidate commit, reconciliation. |
-| MCP v8 38-tool surface | KEEP | No schema or order change in this release. |
+| Five caller-work commands | KEEP WITH CONTRACT AMENDMENT | Claim, send-start, certain no-send cancellation, typed candidate commit, reconciliation. Successful model commit now carries strict response evidence so the journal/candidate/settlement transaction has real bytes to validate. |
+| MCP v8 38-tool surface | KEEP NAMES/ORDER; REGENERATE DEPENDENCY-CLOSED SCHEMA | The v7 descriptors and v8 tool names/order remain unchanged. `CallerWorkCommitInput` and the combined v8 schema advance together; no runtime-only descriptor patch is legal. |
 | Synchronous `RlmWorkbenchPlanner` seam | RESTRICT | Deterministic tests and explicitly native service-managed profiles only. |
 | Deprecated MCP Sampling route | REMOVE from new journey | Compatibility only; never qualification authority. |
 | Static fake model broker | REFERENCE ONLY | Contract/unit evidence; cannot satisfy product admission. |

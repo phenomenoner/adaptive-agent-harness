@@ -304,6 +304,8 @@ schemas/aar-schemas-v1.json            02b894c6a1396c2a3f3d3238e44a3f26a5f1e3126
 tests/fixtures/manifest.json           69214e21f14be8800e386c7a8f4800311c3fabcc12015a843031b8b3cd3324b0
 ```
 
+**Post-A1 contract amendment:** the values above remain the historical A1c-GF freeze. The independently reviewed public caller/journal contradiction required `CallerWorkCommitInput.model_response`; the standalone v7 and v8 descriptor assets remain unchanged, while the regenerated dependency-closed `schemas/aar-mcp-tools-v8-combined.json` now has raw SHA-256 `36b41abbcab2e5b3a60dff6a1de85e7a3168cc01135d42c5a88b416abfbca424`. Current generator/checked-in/package verification uses that successor value and does not rewrite the historical row.
+
 No legacy generator is invoked in write mode.
 
 ## 9. Required tests and anti-false-pass

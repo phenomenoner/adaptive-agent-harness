@@ -27,7 +27,7 @@
 
 1. Generated strict schemas and canonical fixtures for all fourteen normative documents: activation intent, final profile, method adapter, activation-generation authority, cutover plan, operator prepared marker, cutover receipt, restore receipt, operator terminal marker, activation readback, workbench grant set, provider-alias attestation, evaluation evidence classification, and paired-evaluation admission.
 2. Cross-validator agreement, explicit self-digest domains/equality relations, acyclic `plan→prepared→receipt→terminal` construction, inner/outer marker swap rejection, and digest stability.
-3. Exact v7 and v8 MCP assets unchanged byte-for-byte.
+3. Exact v7 and standalone v8 tool names/order/descriptors unchanged byte-for-byte; the dependency-closed v8 combined schema is regenerated for the reviewed `CallerWorkCommitInput.model_response` amendment, and generator/checked-in/live/package bytes plus digests must agree.
 4. Static inventory of migration callers, supervisor construction, grant publication, planner calls, provider send sinks, candidate commit/reconcile sinks, and profile/package copies.
 5. Credential canaries and secret scan of profile/receipt/log artifacts.
 6. Requirement-to-test traceability with zero unowned mandatory rows.

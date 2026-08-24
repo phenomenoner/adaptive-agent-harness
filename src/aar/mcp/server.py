@@ -2348,6 +2348,7 @@ def build_server(
         sent_at_unix_ms: int | None,
         provider_or_child_request_id: str | None,
         observation: dict[str, Any],
+        model_response: dict[str, Any] | None,
         idempotency_key: str,
     ) -> dict[str, Any]:
         operation_ref: OperationRef | None = None
@@ -2370,6 +2371,7 @@ def build_server(
                 "sent_at_unix_ms": sent_at_unix_ms,
                 "provider_or_child_request_id": provider_or_child_request_id,
                 "observation": observation,
+                "model_response": model_response,
                 "idempotency_key": idempotency_key,
             }
             return await asyncio.to_thread(

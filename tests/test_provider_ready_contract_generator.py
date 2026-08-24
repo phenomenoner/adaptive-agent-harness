@@ -37,7 +37,7 @@ SPEC_DIGEST = "sha256:1b45466190c7b54d493ef3d68857633f5b8f2643cd827a602faa976aaf
 LEGACY_HASHES = {
     "schemas/aar-mcp-tools-v7.json": "6ebf848eee74795771af23dfaaeb70fd5030cb88878327f76ffc10d1c4639ab8",
     "schemas/aar-mcp-tools-v8.json": "41e97f76f8f371ad2c12d1c4bcba0131491a903cfdf6760430bdeffe4ab2e82f",
-    "schemas/aar-mcp-tools-v8-combined.json": "b4dc4988d081131bff451e740a29e8df55844c3e160a2142368e2bf77dfb5a6d",
+    "schemas/aar-mcp-tools-v8-combined.json": "36b41abbcab2e5b3a60dff6a1de85e7a3168cc01135d42c5a88b416abfbca424",
     "schemas/aar-schemas-v1.json": "02b894c6a1396c2a3f3d3238e44a3f26a5f1e3126bc3e3e4bac5946cd13c33ca",
     "tests/fixtures/manifest.json": "69214e21f14be8800e386c7a8f4800311c3fabcc12015a843031b8b3cd3324b0",
 }
