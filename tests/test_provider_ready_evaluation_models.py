@@ -945,8 +945,18 @@ def test_inert_module_has_no_runtime_provider_or_authority_consumer() -> None:
     package_root = Path(module.__file__).resolve().parent
     module_path = Path(module.__file__).resolve()
     authority_name_parts = ("runtime", "provider", "mcp", "cli", "supervisor", "launcher")
+    inert_contract_consumers = {
+        "provider_ready_contract.py",
+        "provider_ready_contract_generator.py",
+    }
+    observed_consumers: set[str] = set()
     for candidate in package_root.rglob("*.py"):
         if candidate.resolve() == module_path:
             continue
-        if any(part in candidate.stem.lower() for part in authority_name_parts):
-            assert "provider_ready_evaluation_models" not in candidate.read_text()
+        if (
+            any(part in candidate.stem.lower() for part in authority_name_parts)
+            and "provider_ready_evaluation_models" in candidate.read_text()
+        ):
+            observed_consumers.add(candidate.name)
+            assert candidate.name in inert_contract_consumers
+    assert observed_consumers == inert_contract_consumers

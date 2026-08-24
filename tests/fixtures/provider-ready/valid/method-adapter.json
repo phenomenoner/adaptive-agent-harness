@@ -1,0 +1,17 @@
+{
+  "adapter_generation_policy": "runtime_generation",
+  "adapter_id": "adapter-model-request",
+  "backend_kind": "caller_driver",
+  "cancel_supported": false,
+  "contract_id": "aar.broker-contract.model-request.v2",
+  "evidence_tier": "caller_observed",
+  "factory_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "factory_id": "aar.factory.model-request.v1",
+  "lookup_supported": true,
+  "manifest_digest": "sha256:424d15cadced31f186be52ec9c240643fac80c5185b547b8a680c4372256a4c5",
+  "method": "model.request",
+  "reference_only": false,
+  "request_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "response_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "schema_version": "aar.method-adapter-manifest.v1"
+}

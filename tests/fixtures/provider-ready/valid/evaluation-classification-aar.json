@@ -1,0 +1,29 @@
+{
+  "arm": "aar",
+  "attempt_id": "aar-attempt",
+  "attempt_visibility": "complete",
+  "cache_tier": "attested",
+  "classification_digest": "sha256:4ca7a327dffbd6fa04b4894db5611149746e96473ff03345cde0a2d8fd787703",
+  "contradiction_components": [],
+  "effective_cache_policy": "disabled",
+  "effective_fallback_policy": "none",
+  "effective_model": "gpt-5.6-luna",
+  "effective_provider": "openai-codex",
+  "effective_reasoning": "max",
+  "fallback_tier": "attested",
+  "model_tier": "attested",
+  "provider_tier": "attested",
+  "reasoning_tier": "attested",
+  "requested_cache_policy": "disabled",
+  "requested_fallback_policy": "none",
+  "requested_model": "gpt-5.6-luna",
+  "requested_provider": "openai-codex",
+  "requested_reasoning": "max",
+  "route_qualification": "aar_live_qualified",
+  "run_id": "aar-run",
+  "schema_version": "aar.evaluation-evidence-classification.v1",
+  "source_receipt_digests": [
+    "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb"
+  ],
+  "usage_tier": "request_receipt"
+}

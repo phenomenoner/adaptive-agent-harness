@@ -1,0 +1,129 @@
+{
+  "activation_authority_digest": "sha256:2b280d0a8ac242fb690cd38c477d535530fd0141678065dcce1cd1e09fc6b85c",
+  "activation_generation": 1,
+  "authority_history_tip_digest": "sha256:2b280d0a8ac242fb690cd38c477d535530fd0141678065dcce1cd1e09fc6b85c",
+  "authority_store_id": "local-file-authority-v1:runtime-primary",
+  "broker_catalog_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "candidate": {
+    "contract_manifest_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+    "package_version": "0.6.0a0",
+    "skill_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+    "source_commit": "0000000000000000000000000000000000000000",
+    "wheel_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb"
+  },
+  "capability_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "evidence_sources": [
+    "activation_current",
+    "activation_history",
+    "capability_registry",
+    "epoch_marker",
+    "grant_issuer",
+    "installed_assets",
+    "registry",
+    "supervisor"
+  ],
+  "grant_set_digest": "sha256:bbcfe55ecfe086839b754668286ee453c18c23fa8c6df941f890ac8cbe5eb071",
+  "intent_digest": "sha256:458d7015fe2b80690cd554308fd4d73b488acab38e630eae6bd03f6bbf53b176",
+  "latest_operator_receipt_digest": null,
+  "methods": [
+    {
+      "adapter_generation": 7,
+      "adapter_id": "adapter-model-request",
+      "backend_kind": "caller_driver",
+      "configured": true,
+      "contract_id": "aar.broker-contract.model-request.v2",
+      "evidence_tier": "caller_observed",
+      "method": "model.request",
+      "reference_only": false,
+      "request_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+      "response_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb"
+    },
+    {
+      "adapter_generation": 7,
+      "adapter_id": "adapter-subagent-submit",
+      "backend_kind": "native",
+      "configured": true,
+      "contract_id": "aar.broker-contract.subagent-submit.v2",
+      "evidence_tier": "host_receipt_bound",
+      "method": "subagent.submit",
+      "reference_only": false,
+      "request_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+      "response_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb"
+    },
+    {
+      "adapter_generation": 7,
+      "adapter_id": "adapter-subagent-result",
+      "backend_kind": "native",
+      "configured": true,
+      "contract_id": "aar.broker-contract.subagent-result.v2",
+      "evidence_tier": "provider_attested",
+      "method": "subagent.result",
+      "reference_only": false,
+      "request_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+      "response_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb"
+    },
+    {
+      "adapter_generation": 7,
+      "adapter_id": "adapter-evidence-query",
+      "backend_kind": "native",
+      "configured": true,
+      "contract_id": "aar.broker-contract.evidence-query.v2",
+      "evidence_tier": "unknown",
+      "method": "evidence.query",
+      "reference_only": false,
+      "request_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+      "response_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb"
+    },
+    {
+      "adapter_generation": null,
+      "adapter_id": null,
+      "backend_kind": "reference",
+      "configured": true,
+      "contract_id": "aar.broker-contract.artifact-put.v2",
+      "evidence_tier": "unknown",
+      "method": "artifact.put",
+      "reference_only": true,
+      "request_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+      "response_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb"
+    },
+    {
+      "adapter_generation": 7,
+      "adapter_id": "adapter-effect-propose",
+      "backend_kind": "native",
+      "configured": true,
+      "contract_id": "aar.broker-contract.effect-propose.v2",
+      "evidence_tier": "host_receipt_bound",
+      "method": "effect.propose",
+      "reference_only": false,
+      "request_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+      "response_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb"
+    }
+  ],
+  "migration_attestation_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "observed_at_unix_ms": 100,
+  "operator_epoch": null,
+  "operator_epoch_kind": null,
+  "planner": {
+    "factory_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+    "factory_id": "aar.factory.model-request.v1",
+    "method_manifest_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+    "mode": "caller_delegated_ticketed",
+    "ready": true
+  },
+  "previous_activation_authority_digest": null,
+  "profile_digest": "sha256:c25846c3dfa89128569c6222cd4062ad486c84feb5630e590dfed4a02c625082",
+  "profile_id": "hermes-caller-luna-max-v1",
+  "readback_digest": "sha256:33d3769898ec67211319da545d219c309f57d302893ca2b612548794fa19d47c",
+  "reason_code": "none",
+  "registry_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "registry_schema_version": 6,
+  "route_catalog_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "route_profile_ids": [
+    "hermes-codex-luna-max"
+  ],
+  "runtime_generation": 7,
+  "schema_version": "aar.activation-readback.v1",
+  "state": "active",
+  "supervisor_process_identity_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "tool_surface_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb"
+}

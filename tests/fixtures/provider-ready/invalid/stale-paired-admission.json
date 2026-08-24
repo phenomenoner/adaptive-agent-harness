@@ -1,0 +1,29 @@
+{
+  "aar_classification_digest": "sha256:4ca7a327dffbd6fa04b4894db5611149746e96473ff03345cde0a2d8fd787703",
+  "aar_profile_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "aar_qualification_run_id": "aar-run",
+  "admission_digest": "sha256:3ea52aedbdff0bc3682bf8f7d4e19a70599e929669ee94d41e60a6da4dd6b5a0",
+  "arm_order": [
+    "aar",
+    "prime"
+  ],
+  "artifact_contract_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "budget_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "candidate_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "case_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "created_at_unix_ms": 100,
+  "expires_at_unix_ms": 900100,
+  "fixture_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "hidden_oracle_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "operator_run_authority_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "paired_run_id": "paired-run",
+  "prime_alias_digest": "sha256:9b1926e82cf4f20b7ec68df5855de15e847e2347d421c35d8fd9521aa9d5b69d",
+  "prime_classification_digest": "sha256:8e670a67eb3a5872bdb6de9fa0c12cbc02121f8f3c798904331ac9fe256973c8",
+  "prime_launch_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "prime_qualification_run_id": "prime-run",
+  "protocol_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "schema_version": "aar.paired-evaluation-admission.v1",
+  "status": "benchmark_ready_planned",
+  "stop_matrix_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "tool_network_policy_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb"
+}
