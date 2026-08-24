@@ -33,6 +33,7 @@ dependencies = [
 
 [project.scripts]
 aar-contract = "aar.contract:main"
+aar-admin = "aar.admin:main"
 aar-codex-mcp = "aar.compat.codex_mcp:main"
 aar-mcp = "aar.mcp.server:main"
 aar-mcp-public = "aar.mcp.public_server:main"
