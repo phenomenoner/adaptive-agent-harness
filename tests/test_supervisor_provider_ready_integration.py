@@ -322,12 +322,19 @@ def _host_options(readback: Any) -> dict[str, Any]:
 def _execute_arguments(
     capabilities: dict[str, Any],
     *,
-    grant_id: str,
     suffix: str,
+    grant_id: str | None = None,
+    grant_ids: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
     fixture = json.loads(
         (WORKBENCH_SDD / "fixtures/valid-workbench-execute.json").read_text(encoding="utf-8")
     )
+    if grant_ids is None:
+        if grant_id is None:
+            raise AssertionError("one grant_id or grant_ids is required")
+        grant_ids = (grant_id,)
+    elif grant_id is not None:
+        raise AssertionError("grant_id and grant_ids are mutually exclusive")
     fixture["context"] = {
         "principal_id": PRINCIPAL,
         "session_id": SESSION,
@@ -337,7 +344,7 @@ def _execute_arguments(
         "schema_version": "aar.mcp-rlm-workbench-context.v1",
         "request_id": f"request-{suffix}",
         "idempotency_key": f"idempotency-{suffix}",
-        "grant_ids": [grant_id],
+        "grant_ids": list(grant_ids),
         "budget_wall_time_ms": BUDGET.wall_time_ms,
         "budget_model_requests": BUDGET.model_requests,
         "budget_input_tokens": BUDGET.input_tokens,
@@ -719,6 +726,23 @@ def test_mcp_uses_only_current_memory_session_grants_in_provider_mode(
                 policy_approved=True,
                 grant_id="grant-current-workbench",
             )
+            method_grants = tuple(
+                startup.coordinator.issue_session_grant(
+                    principal_id=PRINCIPAL,
+                    session_id=SESSION,
+                    capability=capability,
+                    issued_at_unix_ms=NOW_MS,
+                    ttl_ms=900_000,
+                    policy_approved=True,
+                    grant_id=f"grant-current-{capability.replace('.', '-')}",
+                )
+                for capability in (
+                    "artifact.write",
+                    "model.request",
+                    "subagent.result",
+                    "subagent.submit",
+                )
+            )
             wrong_session = startup.coordinator.issue_session_grant(
                 principal_id=PRINCIPAL,
                 session_id="session-other",
@@ -785,8 +809,15 @@ def test_mcp_uses_only_current_memory_session_grants_in_provider_mode(
                 "aar_rlm_workbench_execute",
                 _execute_arguments(
                     capabilities,
-                    grant_id=issued.grant_id,
                     suffix="current-accepted",
+                    grant_ids=tuple(
+                        sorted(
+                            (
+                                issued.grant_id,
+                                *(grant.grant_id for grant in method_grants),
+                            )
+                        )
+                    ),
                 ),
             )
             assert not accepted_result.is_error and accepted_result.structured_content is not None
@@ -879,7 +910,7 @@ def test_mcp_grant_denial_precedes_capability_unavailable(
 
     assert denied["code"] == "GRANT_DENIED"
     assert denied["operation"] is None
-    assert unavailable["code"] == "CAPABILITY_UNAVAILABLE"
+    assert unavailable["code"] == "GRANT_DENIED"
     assert unavailable["operation"] is None
     with sqlite3.connect(database) as connection:
         assert connection.execute("SELECT COUNT(*) FROM rlm_workbench_jobs").fetchone()[0] == 0

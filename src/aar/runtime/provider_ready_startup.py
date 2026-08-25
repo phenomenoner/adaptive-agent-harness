@@ -505,6 +505,7 @@ class ProviderReadyStartup:
         now_unix_ms: int,
         deadline_unix_ms: int,
         required_capability: str,
+        required_capabilities: tuple[str, ...] = (),
         budget: Budget,
     ) -> tuple[Grant, ...]:
         """Resolve sorted current memory-only grants for MCP admission."""
@@ -513,6 +514,7 @@ class ProviderReadyStartup:
             raise SessionGrantDenied("session grant IDs must be sorted and unique")
         grant_set = self.grant_set
         resolved: list[IssuedWorkbenchGrant] = []
+        resolved_capabilities: set[str] = set()
         for grant_id in grant_ids:
             grant = self.coordinator.accept_session_grant(
                 grant_id,
@@ -530,10 +532,15 @@ class ProviderReadyStartup:
                 raise SessionGrantDenied("session grant expires before the request deadline")
             if not _budget_within(grant, budget):
                 raise SessionGrantDenied("request budget exceeds the issued session grant")
+            if grant.capability in resolved_capabilities:
+                raise SessionGrantDenied("session grants must not duplicate a capability")
+            resolved_capabilities.add(grant.capability)
             resolved.append(grant)
-        if required_capability not in {grant.capability for grant in resolved}:
+        required = {required_capability, *required_capabilities}
+        missing = sorted(required - resolved_capabilities)
+        if missing:
             raise SessionGrantDenied(
-                f"current session grants omit required capability: {required_capability}"
+                "current session grants omit required capability: " + ", ".join(missing)
             )
         principal = PrincipalRef(value=principal_id)
         return tuple(

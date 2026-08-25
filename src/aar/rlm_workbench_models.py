@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from functools import cache, lru_cache
 from importlib import resources
 from pathlib import Path
@@ -242,6 +242,88 @@ def require_fully_configured_workbench_capability(
         ):
             raise ValueError(f"capability {row['method']} has no qualified executable backend")
     return capability
+
+
+_WORKBENCH_METHOD_ORDER = (
+    "model.request",
+    "subagent.submit",
+    "subagent.result",
+    "evidence.query",
+    "artifact.put",
+    "effect.propose",
+)
+_WORKBENCH_METHOD_CAPABILITIES = {
+    "model.request": "model.request",
+    "subagent.submit": "subagent.submit",
+    "subagent.result": "subagent.result",
+    "evidence.query": "evidence.query",
+    "artifact.put": "artifact.write",
+    "effect.propose": "effect.propose",
+}
+
+
+def normalize_workbench_planner_mode(document: Mapping[str, Any]) -> str:
+    """Return the one planner mode used by method-scoped admission.
+
+    The wire contract keeps ``caller_delegated`` for compatibility, while the
+    durable planner owner is the ticketed caller mode.  This small pure
+    projection keeps that normalization in one place and makes the admission
+    budget/method matrix testable without a runtime or provider.
+    """
+
+    spec = document.get("spec", document)
+    mode = spec["model"]["execution_mode"]
+    if mode == "caller_delegated":
+        if "start_only" in document and document["start_only"] is not True:
+            raise ValueError("caller-delegated admission requires start_only=true")
+        return "caller_delegated_ticketed"
+    if mode == "service_managed":
+        return "service_managed"
+    raise ValueError(f"unsupported workbench planner mode: {mode}")
+
+
+def derive_required_workbench_methods(
+    document: Mapping[str, Any],
+    *,
+    effective_capabilities: Iterable[str] = (),
+) -> tuple[str, ...]:
+    """Derive required broker methods from normalized job features.
+
+    ``effective_capabilities`` is already the server-owned resolved grant
+    union.  It is intentionally an input rather than an authority source: a
+    client cannot make an optional broker method required by naming a method in
+    job metadata.  Artifact and subagent methods are implied only by positive
+    frozen budgets; evidence/effect methods become required only when the
+    resolved server grant union explicitly enables that feature.
+    """
+
+    normalize_workbench_planner_mode(document)
+    spec = document.get("spec", document)
+    budgets = spec["budgets"]
+    required = {"model.request"}
+    if budgets["max_artifact_bytes"] > 0:
+        required.add("artifact.put")
+    if budgets["max_subagent_calls"] > 0:
+        required.update(("subagent.submit", "subagent.result"))
+    enabled = set(effective_capabilities)
+    if "evidence.query" in enabled:
+        required.add("evidence.query")
+    if "effect.propose" in enabled:
+        required.add("effect.propose")
+    return tuple(method for method in _WORKBENCH_METHOD_ORDER if method in required)
+
+
+def workbench_method_capabilities(methods: Iterable[str]) -> tuple[str, ...]:
+    """Map required method names to their server-side grant capabilities."""
+
+    unknown = sorted(set(methods) - set(_WORKBENCH_METHOD_CAPABILITIES))
+    if unknown:
+        raise ValueError("unknown workbench methods: " + ", ".join(unknown))
+    return tuple(
+        _WORKBENCH_METHOD_CAPABILITIES[method]
+        for method in _WORKBENCH_METHOD_ORDER
+        if method in methods
+    )
 
 
 class WorkspaceBrokerFrame(ContractDocument):

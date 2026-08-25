@@ -79,7 +79,10 @@ from aar.rlm_workbench_models import (
     RlmWorkbenchCapability,
     RlmWorkbenchExecuteInput,
     RlmWorkbenchFailure,
+    derive_required_workbench_methods,
+    normalize_workbench_planner_mode,
     require_fully_configured_workbench_capability,
+    workbench_method_capabilities,
 )
 from aar.runtime.brokers import (
     BrokerBudgetExceeded,
@@ -545,6 +548,7 @@ def _rlm_envelope(
     input_digest: str,
     *,
     required_capability: str,
+    required_capabilities: tuple[str, ...] = (),
 ) -> RequestEnvelope:
     _validate_read_context(host, context)
     remaining_ms = context.deadline_unix_ms - host.now_ms()
@@ -585,6 +589,7 @@ def _rlm_envelope(
             now_unix_ms=host.now_ms(),
             deadline_unix_ms=context.deadline_unix_ms,
             required_capability=required_capability,
+            required_capabilities=required_capabilities,
             budget=budget,
         )
     return RequestEnvelope(
@@ -725,6 +730,55 @@ def _assert_workbench_operation_binding(
 
 def _workbench_capability(host: ReferenceHost) -> RlmWorkbenchCapability:
     return host.workbench_capability()
+
+
+def _validate_provider_ready_workbench_admission(
+    host: ReferenceHost,
+    envelope: RequestEnvelope,
+    request: RlmWorkbenchExecuteInput,
+) -> None:
+    """Enforce method-scoped authority before the registry accept boundary."""
+
+    if host.provider_ready_startup is None:
+        return
+    granted = {
+        grant.capability
+        for grant in envelope.grants
+        if grant.issued_to == envelope.principal
+        and grant.expires_at_unix_ms >= envelope.deadline_unix_ms
+    }
+    methods = derive_required_workbench_methods(
+        request.root,
+        effective_capabilities=granted,
+    )
+    required = set(workbench_method_capabilities(methods))
+    missing = sorted(required - granted)
+    if missing:
+        raise GrantDenied("required workbench method grants are absent: " + ", ".join(missing))
+
+    capability = _workbench_capability(host)
+    rows = {row["method"]: row for row in capability.root["methods"]}
+    planner_mode = normalize_workbench_planner_mode(request.root)
+    for method in methods:
+        row = rows.get(method)
+        if row is None:
+            raise GrantDenied(f"required workbench method is not published: {method}")
+        if (
+            not row["configured"]
+            or row["reference_only"]
+            or row["backend_kind"] not in {"caller_driver", "native"}
+        ):
+            raise GrantDenied(f"required workbench method has no current authority: {method}")
+        if row["adapter_generation"] != host.runtime_generation:
+            raise GrantDenied(f"required workbench method has stale authority: {method}")
+        if method == "model.request":
+            expected_backend = (
+                "caller_driver" if planner_mode == "caller_delegated_ticketed" else "native"
+            )
+            if row["backend_kind"] != expected_backend:
+                raise GrantDenied(
+                    f"model.request backend does not match planner mode: {planner_mode}"
+                )
 
 
 def _run_caller_work_command(
@@ -2129,17 +2183,27 @@ def build_server(
             workbench_context = McpRlmWorkbenchMutationContext.model_validate(
                 request.root["context"], strict=True
             )
+            required_methods = derive_required_workbench_methods(request.root)
+            required_capabilities = (
+                workbench_method_capabilities(required_methods)
+                if host.provider_ready_startup is not None
+                else ()
+            )
             envelope = _rlm_envelope(
                 host,
                 workbench_context,
                 canonical_sha256(request.root["spec"]),
                 required_capability="rlm.workbench.execute",
+                required_capabilities=required_capabilities,
             )
             current_capability = _workbench_capability(host)
-            try:
-                require_fully_configured_workbench_capability(current_capability)
-            except ValueError as error:
-                raise ReferenceHostError(str(error)) from error
+            if host.provider_ready_startup is None:
+                try:
+                    require_fully_configured_workbench_capability(current_capability)
+                except ValueError as error:
+                    raise ReferenceHostError(str(error)) from error
+            else:
+                _validate_provider_ready_workbench_admission(host, envelope, request)
             record = host.submit_rlm_workbench(envelope, request)
             operation = record.operation
             if not start_only and record.state is OperationState.ACCEPTED:
