@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """Deterministic validator for the clean-install-only provider-ready SDD rev2."""
+
+# Exact frozen digests and required phrases intentionally remain single literals, and this
+# standalone deterministic validator retains compact one-line checks for audit readability.
+# ruff: noqa: E501,E701,E702
 from __future__ import annotations
 
 import argparse
@@ -442,7 +446,6 @@ def _explicit_negation(text: str, start: int) -> bool:
 
 
 def _preservation_is_negated(text: str, action: re.Match[str], object_match: re.Match[str]) -> bool:
-    clause = re.split(r"[.;\n]", text[:action.start()])[-1]
     suffix = text[object_match.end():object_match.end() + 80]
     return bool(
         _explicit_negation(text, action.start())
@@ -576,8 +579,8 @@ def validate_matrix(root: Path, matrix: dict[str, Any], requirement_ids: set[str
         else: covered.add(requirement)
         for field in required:
             if not isinstance(item.get(field), str) or not item[field].strip(): failures.append(f"{row_id}: missing scalar {field}")
-        if all(isinstance(item.get(field), str) and item[field].strip() for field in ("operation", "phase", "variant")):
-            if item.get("stimulus") != expected_stimulus(item): failures.append(f"{row_id}: stimulus is not the exact operation/phase/variant enactment")
+        if all(isinstance(item.get(field), str) and item[field].strip() for field in ("operation", "phase", "variant")) and item.get("stimulus") != expected_stimulus(item):
+            failures.append(f"{row_id}: stimulus is not the exact operation/phase/variant enactment")
         try:
             required_wrong_effect = expected_wrong_effect(row_id)
         except KeyError:
@@ -655,7 +658,7 @@ def validate(root: Path) -> dict[str, Any]:
         if requirements.get("target_release") != "0.6.0a0-clean-install-only": failures.append("requirements target_release is not clean-install-only")
         if requirements.get("status") != "specification_only": failures.append("requirements status must remain specification_only")
         validate_product_contract(requirements, failures)
-    requirement_ids, requirement_by_id, summary_requirements = validate_requirements(root, requirements, failures) if requirements else (set(), {}, set())
+    requirement_ids, _requirement_by_id, summary_requirements = validate_requirements(root, requirements, failures) if requirements else (set(), {}, set())
     acceptance_count, covered, tier_counts = validate_matrix(root, matrix, requirement_ids, summary_requirements, set(matrix.get("non_counted_metadata", {}).get("summary_ids", [])), failures) if matrix else (0, set(), {tier: 0 for tier in ("T0", "T1", "T2", "T3", "T4", "T5")})
     texts = active_text(root) if (root / "verification/requirements.json").is_file() and (root / "verification/acceptance-matrix.json").is_file() else {}
     check_required_phrases(texts, failures)
