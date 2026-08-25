@@ -123,7 +123,7 @@ def _sidecar(path: Path) -> SidecarObservation:
 
 
 def _sqlite_read_only(database: Path) -> sqlite3.Connection:
-    uri = f"file:{quote(str(database), safe='/:')}?mode=ro"
+    uri = f"file:{quote(str(database), safe='/:')}?mode=ro&immutable=1"
     connection = sqlite3.connect(uri, uri=True, isolation_level=None, timeout=0)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA query_only=ON")
@@ -331,10 +331,12 @@ def inspect_registry(paths: RuntimeHomePaths) -> RegistryObservation:
                 "SELECT version FROM schema_migrations ORDER BY version"
             )
         )
-        if versions != tuple(range(1, 6)):
+        supported_versions = (tuple(range(1, 6)), tuple(range(1, 7)))
+        if versions not in supported_versions:
             raise OperatorError(
                 "REGISTRY_VERSION_UNSUPPORTED",
-                f"expected contiguous registry versions 1..5, observed {versions!r}",
+                "expected contiguous registry versions 1..5 or 1..6, "
+                f"observed {versions!r}",
             )
         _assert_no_live_owner(connection, tables)
         integrity = str(connection.execute("PRAGMA integrity_check").fetchone()[0])
@@ -345,7 +347,7 @@ def inspect_registry(paths: RuntimeHomePaths) -> RegistryObservation:
                 "registry failed read-only SQLite integrity/foreign-key checks",
             )
         observation = RegistryObservation(
-            schema_version=5,
+            schema_version=versions[-1],
             schema_digest=_schema_digest(connection),
             row_set_digest=_row_set_digest(connection, tables),
             database=before[0],
@@ -492,7 +494,7 @@ def _unconfigured_methods() -> tuple[BackendAvailability, ...]:
 
 
 def activation_status(runtime_home: Path, *, now_ms: int | None = None) -> ActivationReadback:
-    """Return a strict read-only pre-activation projection for absent or exact-v5 roots."""
+    """Return a strict read-only projection without fabricating C1/C2 verification."""
 
     paths = RuntimeHomePaths.resolve(runtime_home)
     observed = time.time_ns() // 1_000_000 if now_ms is None else now_ms
@@ -539,11 +541,20 @@ def activation_status(runtime_home: Path, *, now_ms: int | None = None) -> Activ
             evidence_sources=(),
         )
     observation = inspect_registry(paths)
+    if observation.schema_version == 5:
+        return ActivationReadback.issue(
+            **common,
+            state="migration_required",
+            reason_code="REGISTRY_VERSION_UNSUPPORTED",
+            registry_schema_version=5,
+            registry_schema_digest=observation.schema_digest,
+            evidence_sources=("registry",),
+        )
     return ActivationReadback.issue(
         **common,
-        state="migration_required",
-        reason_code="REGISTRY_VERSION_UNSUPPORTED",
-        registry_schema_version=5,
+        state="recovery_required",
+        reason_code="RECONCILE_INPUT_REQUIRED",
+        registry_schema_version=6,
         registry_schema_digest=observation.schema_digest,
         evidence_sources=("registry",),
     )
@@ -562,13 +573,7 @@ def verify_activation_profile(
     """
 
     load_activation_profile(profile_path)
-    status = activation_status(runtime_home, now_ms=now_ms)
-    if status.registry_schema_version == 6:
-        raise OperatorError(
-            "RECONCILE_INPUT_REQUIRED",
-            "v6 activation verification requires the C1 authority composition",
-        )
-    return status
+    return activation_status(runtime_home, now_ms=now_ms)
 
 
 def emit_canonical(document: Any, *, stream: Any = None) -> None:

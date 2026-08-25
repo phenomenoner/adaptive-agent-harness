@@ -38,6 +38,7 @@ from aar.provider_ready_package_factory import (
 )
 from aar.provider_ready_runtime_models import (
     WORKBENCH_GRANT_SET_SCHEMA_VERSION,
+    ActivationReadback,
     WorkbenchGrantSet,
 )
 from aar.runtime import _install_evidence as evidence_module
@@ -620,6 +621,38 @@ def _installed_runtime(tmp_path: Path) -> Path:
         epoch_factory=lambda: EPOCH,
     )
     return target
+
+
+def test_installed_v6_activation_verify_reports_reconcile_without_mutation(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target = _installed_runtime(tmp_path)
+    before = _path_snapshot(target)
+
+    assert (
+        admin.main(
+            [
+                "activation",
+                "verify",
+                "--runtime-home",
+                str(target),
+                "--profile",
+                str(target / "authority" / "profile.json"),
+            ]
+        )
+        == 0
+    )
+
+    captured = capsys.readouterr()
+    readback = ActivationReadback.model_validate_json(captured.out, strict=True)
+    assert readback.state == "recovery_required"
+    assert readback.reason_code == "RECONCILE_INPUT_REQUIRED"
+    assert readback.registry_schema_version == 6
+    assert readback.evidence_sources == ("registry",)
+    assert "REGISTRY_VERSION_UNSUPPORTED" not in captured.out
+    assert captured.err == ""
+    assert _path_snapshot(target) == before
 
 
 def test_startup_readback_accepts_only_valid_postpublication_runtime_state(
