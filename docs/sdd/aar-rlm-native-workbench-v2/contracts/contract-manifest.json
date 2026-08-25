@@ -12,8 +12,8 @@
     },
     {
       "path": "contracts/aar-caller-work-v1.schema.json",
-      "sha256": "sha256:5e539d439c7d4a765fb4285a805d90950748e8c5d43a7ce74f147655d7760dfb",
-      "size_bytes": 178001
+      "sha256": "sha256:76deb95fb89081c7ec90734821689e14a893040696af6727725b059676c2b7e3",
+      "size_bytes": 229120
     },
     {
       "path": "contracts/aar-mcp-tools-v7-binding.json",
@@ -22,8 +22,8 @@
     },
     {
       "path": "contracts/aar-mcp-tools-v8-combined.json",
-      "sha256": "sha256:b4dc4988d081131bff451e740a29e8df55844c3e160a2142368e2bf77dfb5a6d",
-      "size_bytes": 1006917
+      "sha256": "sha256:36b41abbcab2e5b3a60dff6a1de85e7a3168cc01135d42c5a88b416abfbca424",
+      "size_bytes": 1036635
     },
     {
       "path": "contracts/aar-mcp-tools-v8.json",
@@ -62,17 +62,17 @@
     },
     {
       "path": "fixtures/invalid-capability-planner-digest.json",
-      "sha256": "sha256:c0a342852b531d0a8a9286eabb26e8b44f718fe0a29e5e97b792a3ceb368c056",
+      "sha256": "sha256:cba7ded0ce8ecdb79a8e51dbc940e61fd935fb1db9eced3abd38ff2128df33da",
       "size_bytes": 3750
     },
     {
       "path": "fixtures/invalid-capability-reference-only.json",
-      "sha256": "sha256:094ac2eb8d57049014eba384814cc0b77dcdec89f3e6921fa0f14fd13f477a46",
+      "sha256": "sha256:a00ad774a4e492db9a88802e3c56c76fcc55500739a045c562fcd28c762a2383",
       "size_bytes": 3718
     },
     {
       "path": "fixtures/invalid-capability-schema-digest.json",
-      "sha256": "sha256:8211cba59b2fc82d1ec709a23c9b1cc02ae9dfa6660179d0ec73e3f5f287363c",
+      "sha256": "sha256:050601c62be5e74d2f0fec3a1ab0bfc4dac42d3403e2214638c594799c0f5c26",
       "size_bytes": 3750
     },
     {
@@ -662,7 +662,7 @@
     },
     {
       "path": "fixtures/valid-workbench-capabilities.json",
-      "sha256": "sha256:3ff732ceadcbfa520bb742b1301c4440fc1d808b647b217a02fa07e2779d7a2c",
+      "sha256": "sha256:7ef487e45f197b9ef8fe8e8270a09123828f22b05b671d0001bae6002350bbac",
       "size_bytes": 3750
     },
     {
@@ -772,8 +772,8 @@
     }
   ],
   "generator": "generate_contracts.py",
-  "generator_sha256": "sha256:f274725b9ddac5a3d69fa24a0b43be7141465e12590b1a99ca953c4173e79f77",
+  "generator_sha256": "sha256:b5747f0c5c4ebb9748fec609b712755b5ebdb8d3c498fa9cf2f8c498640f2ed6",
   "json_schema_profile": "aar.json-schema-profile.v1",
-  "manifest_digest": "sha256:4868218f1684f50a6a9dde3afe0f1d6f8661ad0500a8a2249f0a3037a17fa2c5",
+  "manifest_digest": "sha256:79a3f634534bdbc69c04f9a07793092591e168945937dfc540fcfb43c3480b38",
   "schema_version": "aar.sdd-contract-manifest.v1"
 }

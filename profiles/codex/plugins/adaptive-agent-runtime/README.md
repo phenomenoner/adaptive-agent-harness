@@ -1,6 +1,6 @@
 # Codex host profile
 
-Release package: `0.5.0a0`; bundled operation skill: `0.10.0`. The
+Release package: `0.6.0a0`; bundled operation skill: `0.10.0`. The
 source repository's immutable release snapshot is `profiles/release-status-v1.json`; exact
 post-freeze evidence is bound by
 `adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. This profile does not establish official

@@ -1,0 +1,11 @@
+{
+  "activation_generation": 1,
+  "authority_digest": "sha256:f143f736b4d607194332c7785f2980a54a605f82a0d6f51876621b0ce15c86f2",
+  "authority_store_id": "local-file-authority-v1:runtime-primary",
+  "intent_digest": "sha256:458d7015fe2b80690cd554308fd4d73b488acab38e630eae6bd03f6bbf53b176",
+  "migration_attestation_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "previous_activation_authority_digest": null,
+  "profile_digest": "sha256:c25846c3dfa89128569c6222cd4062ad486c84feb5630e590dfed4a02c625082",
+  "profile_id": "hermes-caller-luna-max-v1",
+  "schema_version": "aar.activation-generation-authority.v1"
+}

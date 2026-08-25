@@ -93,7 +93,7 @@ def test_codex_profile_uses_package_exported_host_launcher() -> None:
 
 def test_hermes_distribution_tracks_current_profile_release() -> None:
     distribution = (ROOT / HERMES_ROOT / "distribution.yaml").read_text(encoding="utf-8")
-    assert "version: 0.5.0a0\n" in distribution
+    assert "version: 0.6.0a0\n" in distribution
 
 
 def test_hermes_runtime_config_and_review_map_are_equivalent() -> None:

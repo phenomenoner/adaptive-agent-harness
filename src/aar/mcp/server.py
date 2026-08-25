@@ -79,7 +79,10 @@ from aar.rlm_workbench_models import (
     RlmWorkbenchCapability,
     RlmWorkbenchExecuteInput,
     RlmWorkbenchFailure,
+    derive_required_workbench_methods,
+    normalize_workbench_planner_mode,
     require_fully_configured_workbench_capability,
+    workbench_method_capabilities,
 )
 from aar.runtime.brokers import (
     BrokerBudgetExceeded,
@@ -92,6 +95,8 @@ from aar.runtime.ipython_backend import WorkspaceWorkerLost, WorkspaceWorkerProt
 from aar.runtime.model_broker import ModelBrokerRegistry, StaticModelBrokerRegistry
 from aar.runtime.models import WorkspaceExecuteSpec, WorkspaceHandle
 from aar.runtime.ownership import RuntimeOwnershipLock
+from aar.runtime.provider_ready_activation import SessionGrantDenied
+from aar.runtime.provider_ready_startup import ProviderReadyStartup
 from aar.runtime.reference_host import (
     BudgetDenied,
     CapabilityMismatch,
@@ -147,10 +152,11 @@ from aar.schemas import (
     SessionRef,
     WorkspaceRef,
 )
-from aar.versions import PACKAGE_VERSION, SCHEMA_VERSIONS
+from aar.versions import FROZEN_COMPATIBILITY_PACKAGE_VERSION, PACKAGE_VERSION, SCHEMA_VERSIONS
 
 SERVER_NAME = "aar-mcp"
 MCP_TOOL_SURFACE_VERSION = SUCCESSOR_SURFACE_VERSION
+MCP_TOOL_SURFACE_PACKAGE_VERSION = FROZEN_COMPATIBILITY_PACKAGE_VERSION
 MCP_PROTOCOL_VERSIONS = (
     *reversed(MODERN_PROTOCOL_VERSIONS),
     *reversed(HANDSHAKE_PROTOCOL_VERSIONS),
@@ -400,6 +406,7 @@ def _failure(
         CapabilityMismatch
         | GrantDenied
         | BrokerGrantDenied
+        | SessionGrantDenied
         | WorkspaceBindingDenied
         | WorkspaceSessionMismatch,
     ):
@@ -539,24 +546,52 @@ def _rlm_envelope(
     host: ReferenceHost,
     context: McpRlmMutationContext | McpRlmWorkbenchMutationContext,
     input_digest: str,
+    *,
+    required_capability: str,
+    required_capabilities: tuple[str, ...] = (),
 ) -> RequestEnvelope:
     _validate_read_context(host, context)
     remaining_ms = context.deadline_unix_ms - host.now_ms()
     if remaining_ms > context.budget_wall_time_ms:
         raise BudgetDenied("wall-time budget does not cover the request deadline")
-    unknown = sorted(set(context.grant_ids) - set(REFERENCE_GRANT_CAPABILITIES))
-    if unknown:
-        raise GrantDenied("reference host did not issue grant ids: " + ", ".join(unknown))
-    principal = PrincipalRef(value=context.principal_id)
-    grants = tuple(
-        Grant(
-            grant_id=grant_id,
-            capability=REFERENCE_GRANT_CAPABILITIES[grant_id],
-            issued_to=principal,
-            expires_at_unix_ms=context.deadline_unix_ms,
-        )
-        for grant_id in context.grant_ids
+    budget = Budget(
+        wall_time_ms=context.budget_wall_time_ms,
+        model_requests=context.budget_model_requests,
+        input_tokens=context.budget_input_tokens,
+        output_tokens=context.budget_output_tokens,
+        child_operations=context.budget_child_operations,
+        artifact_bytes=context.budget_artifact_bytes,
     )
+    principal = PrincipalRef(value=context.principal_id)
+    if host.provider_ready_startup is None:
+        unknown = sorted(set(context.grant_ids) - set(REFERENCE_GRANT_CAPABILITIES))
+        if unknown:
+            raise GrantDenied("reference host did not issue grant ids: " + ", ".join(unknown))
+        grants = tuple(
+            Grant(
+                grant_id=grant_id,
+                capability=REFERENCE_GRANT_CAPABILITIES[grant_id],
+                issued_to=principal,
+                expires_at_unix_ms=context.deadline_unix_ms,
+            )
+            for grant_id in context.grant_ids
+        )
+        if required_capability not in {grant.capability for grant in grants}:
+            raise GrantDenied(
+                f"reference host did not issue required capability: {required_capability}"
+            )
+    else:
+        grants = host.provider_ready_startup.resolve_session_grants(
+            tuple(context.grant_ids),
+            principal_id=context.principal_id,
+            session_id=context.session_id,
+            runtime_generation=context.runtime_generation,
+            now_unix_ms=host.now_ms(),
+            deadline_unix_ms=context.deadline_unix_ms,
+            required_capability=required_capability,
+            required_capabilities=required_capabilities,
+            budget=budget,
+        )
     return RequestEnvelope(
         request_id=context.request_id,
         idempotency_key=context.idempotency_key,
@@ -568,14 +603,7 @@ def _rlm_envelope(
         capability_digest=context.capability_digest,
         deadline_unix_ms=context.deadline_unix_ms,
         grants=grants,
-        budget=Budget(
-            wall_time_ms=context.budget_wall_time_ms,
-            model_requests=context.budget_model_requests,
-            input_tokens=context.budget_input_tokens,
-            output_tokens=context.budget_output_tokens,
-            child_operations=context.budget_child_operations,
-            artifact_bytes=context.budget_artifact_bytes,
-        ),
+        budget=budget,
         trace_id=f"trace-{context.request_id}",
         input_digest=input_digest,
     )
@@ -627,7 +655,7 @@ def _workbench_failure(
     retryable = False
     if isinstance(error, RlmWorkbenchDeadlineExceeded | DeadlineExpired):
         category, code = "deadline", "DEADLINE_EXCEEDED"
-    elif isinstance(error, GrantDenied | BrokerGrantDenied):
+    elif isinstance(error, GrantDenied | BrokerGrantDenied | SessionGrantDenied):
         category, code = "authority", "GRANT_DENIED"
     elif isinstance(error, BudgetDenied | BrokerBudgetExceeded):
         category, code = "budget", "BUDGET_EXCEEDED"
@@ -704,6 +732,55 @@ def _workbench_capability(host: ReferenceHost) -> RlmWorkbenchCapability:
     return host.workbench_capability()
 
 
+def _validate_provider_ready_workbench_admission(
+    host: ReferenceHost,
+    envelope: RequestEnvelope,
+    request: RlmWorkbenchExecuteInput,
+) -> None:
+    """Enforce method-scoped authority before the registry accept boundary."""
+
+    if host.provider_ready_startup is None:
+        return
+    granted = {
+        grant.capability
+        for grant in envelope.grants
+        if grant.issued_to == envelope.principal
+        and grant.expires_at_unix_ms >= envelope.deadline_unix_ms
+    }
+    methods = derive_required_workbench_methods(
+        request.root,
+        effective_capabilities=granted,
+    )
+    required = set(workbench_method_capabilities(methods))
+    missing = sorted(required - granted)
+    if missing:
+        raise GrantDenied("required workbench method grants are absent: " + ", ".join(missing))
+
+    capability = _workbench_capability(host)
+    rows = {row["method"]: row for row in capability.root["methods"]}
+    planner_mode = normalize_workbench_planner_mode(request.root)
+    for method in methods:
+        row = rows.get(method)
+        if row is None:
+            raise GrantDenied(f"required workbench method is not published: {method}")
+        if (
+            not row["configured"]
+            or row["reference_only"]
+            or row["backend_kind"] not in {"caller_driver", "native"}
+        ):
+            raise GrantDenied(f"required workbench method has no current authority: {method}")
+        if row["adapter_generation"] != host.runtime_generation:
+            raise GrantDenied(f"required workbench method has stale authority: {method}")
+        if method == "model.request":
+            expected_backend = (
+                "caller_driver" if planner_mode == "caller_delegated_ticketed" else "native"
+            )
+            if row["backend_kind"] != expected_backend:
+                raise GrantDenied(
+                    f"model.request backend does not match planner mode: {planner_mode}"
+                )
+
+
 def _run_caller_work_command(
     host: ReferenceHost,
     model_type: type[Any],
@@ -736,7 +813,11 @@ async def tool_surface_manifest(server: MCPServer) -> dict[str, Any]:
     tools = await server.list_tools()
     core = {
         "server_name": SERVER_NAME,
-        "server_version": PACKAGE_VERSION,
+        # The v8 descriptor is one of the provider-ready release's exact
+        # compatibility bytes. Runtime handshake/capabilities still report the
+        # current PACKAGE_VERSION; only this frozen descriptor retains its
+        # original package projection.
+        "server_version": MCP_TOOL_SURFACE_PACKAGE_VERSION,
         "sdk": {"name": "mcp", "version": importlib.metadata.version("mcp")},
         "protocol_versions": list(MCP_PROTOCOL_VERSIONS),
         "instructions": SERVER_INSTRUCTIONS,
@@ -799,7 +880,17 @@ def build_server(
     default_model_route_profile: str | None = None,
     mcp_sampling_transport: McpSamplingGatewayTransport | None = None,
     workbench_backend_availability: dict[str, dict[str, Any]] | None = None,
+    provider_ready_startup: ProviderReadyStartup | None = None,
 ) -> AarMcpApplication:
+    if provider_ready_startup is not None:
+        # Do this before the ownership lock or database-parent mkdir.  Supervisor
+        # also performs the cached preflight before its private directory exists.
+        provider_ready_startup.assert_database_path(database_path)
+        provider_ready_startup.validate_host_configuration(
+            programmable_backend=programmable_backend,
+            model_broker_registry=model_broker_registry,
+            default_model_route_profile=default_model_route_profile,
+        )
     database_path = database_path.resolve()
     database_path.parent.mkdir(parents=True, exist_ok=True)
     runtime_ownership = RuntimeOwnershipLock(database_path)
@@ -812,6 +903,7 @@ def build_server(
             model_broker_registry=model_broker_registry,
             default_model_route_profile=default_model_route_profile,
             workbench_backend_availability=workbench_backend_availability,
+            provider_ready_startup=provider_ready_startup,
             **({} if now_ms is None else {"now_ms": now_ms}),
         )
     except BaseException:
@@ -1740,7 +1832,12 @@ def build_server(
                         "start_only is unavailable for an operation-scoped MCP sampling route"
                     )
             spec = RlmJobSpec(query=query, strategy=strategy, max_steps=max_steps)
-            envelope = _rlm_envelope(host, context, canonical_sha256(spec))
+            envelope = _rlm_envelope(
+                host,
+                context,
+                canonical_sha256(spec),
+                required_capability="rlm.execute",
+            )
             loop = asyncio.get_running_loop()
 
             def bind_sampling(candidate: OperationRef) -> None:
@@ -2086,16 +2183,27 @@ def build_server(
             workbench_context = McpRlmWorkbenchMutationContext.model_validate(
                 request.root["context"], strict=True
             )
-            current_capability = _workbench_capability(host)
-            try:
-                require_fully_configured_workbench_capability(current_capability)
-            except ValueError as error:
-                raise ReferenceHostError(str(error)) from error
+            required_methods = derive_required_workbench_methods(request.root)
+            required_capabilities = (
+                workbench_method_capabilities(required_methods)
+                if host.provider_ready_startup is not None
+                else ()
+            )
             envelope = _rlm_envelope(
                 host,
                 workbench_context,
                 canonical_sha256(request.root["spec"]),
+                required_capability="rlm.workbench.execute",
+                required_capabilities=required_capabilities,
             )
+            current_capability = _workbench_capability(host)
+            if host.provider_ready_startup is None:
+                try:
+                    require_fully_configured_workbench_capability(current_capability)
+                except ValueError as error:
+                    raise ReferenceHostError(str(error)) from error
+            else:
+                _validate_provider_ready_workbench_admission(host, envelope, request)
             record = host.submit_rlm_workbench(envelope, request)
             operation = record.operation
             if not start_only and record.state is OperationState.ACCEPTED:
@@ -2348,6 +2456,7 @@ def build_server(
         sent_at_unix_ms: int | None,
         provider_or_child_request_id: str | None,
         observation: dict[str, Any],
+        model_response: dict[str, Any] | None,
         idempotency_key: str,
     ) -> dict[str, Any]:
         operation_ref: OperationRef | None = None
@@ -2370,6 +2479,7 @@ def build_server(
                 "sent_at_unix_ms": sent_at_unix_ms,
                 "provider_or_child_request_id": provider_or_child_request_id,
                 "observation": observation,
+                "model_response": model_response,
                 "idempotency_key": idempotency_key,
             }
             return await asyncio.to_thread(

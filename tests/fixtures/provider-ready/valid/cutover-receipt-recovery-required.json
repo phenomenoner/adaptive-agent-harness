@@ -1,0 +1,37 @@
+{
+  "activation_authority_digest": null,
+  "activation_generation": 1,
+  "candidate": {
+    "contract_manifest_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+    "package_version": "0.6.0a0",
+    "skill_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+    "source_commit": "0000000000000000000000000000000000000000",
+    "wheel_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb"
+  },
+  "canonical_v5_row_set_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "completed_at_unix_ms": 175,
+  "cutover_epoch": "cutover-001",
+  "database_checks": null,
+  "database_commit_state": "not_committed",
+  "db_committed_at_unix_ms": null,
+  "generated_profile_digest": null,
+  "generated_profile_output": "/runtime/profiles/final.json",
+  "intent_digest": "sha256:458d7015fe2b80690cd554308fd4d73b488acab38e630eae6bd03f6bbf53b176",
+  "migration_attestation_digest": null,
+  "migration_sql_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "outcome": "recovery_required",
+  "plan_digest": "sha256:36b79a786a35697e33a4e511a3af77b0e0e108f356493b17a2ed4bbdea6d9de0",
+  "post_migration_database_digest": null,
+  "pre_migration_database_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "prepared_marker_digest": "sha256:283ccda2e60736b4547cc407d6f22177907fb76b1d541d7385d17809b9f2ed3b",
+  "previous_activation_authority_digest": null,
+  "profile_id": "hermes-caller-luna-max-v1",
+  "receipt_digest": "sha256:b9b1f5e56f3ccba073e7103d557e9d3a2dcf6308c8fd685a61174fd5c9b1aa01",
+  "schema_version": "aar.cutover-receipt.v1",
+  "snapshot": {
+    "artifact_id": "snapshot-001",
+    "digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+    "size_bytes": 4096
+  },
+  "started_at_unix_ms": 100
+}

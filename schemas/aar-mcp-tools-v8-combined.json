@@ -13,7 +13,7 @@
   },
   "server_name": "aar-mcp",
   "server_version": "0.5.0a0",
-  "tool_surface_digest": "sha256:6a483f15a7805f49128590a280724766216074aa07f29cbbfe8d5a74d49a8d01",
+  "tool_surface_digest": "sha256:b12e88d11cabdd577953da291259ba9902a960275c641ba9829a4e8d1fb3d043",
   "tool_surface_version": "aar.mcp-tools.v8",
   "tools": [
     {
@@ -26446,6 +26446,386 @@
         },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
+        "allOf": [
+          {
+            "else": {
+              "properties": {
+                "model_response": {
+                  "type": "null"
+                }
+              }
+            },
+            "if": {
+              "properties": {
+                "observation": {
+                  "properties": {
+                    "kind": {
+                      "const": "model"
+                    },
+                    "outcome": {
+                      "const": "succeeded"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "outcome"
+                  ]
+                }
+              },
+              "required": [
+                "observation"
+              ]
+            },
+            "then": {
+              "properties": {
+                "model_response": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "output_text": {
+                      "maxLength": 1048576,
+                      "type": "string"
+                    },
+                    "route_receipt": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "effective": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "model": {
+                              "maxLength": 128,
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                              "type": "string"
+                            },
+                            "provider": {
+                              "maxLength": 128,
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                              "type": "string"
+                            },
+                            "provider_driver": {
+                              "maxLength": 128,
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                              "type": "string"
+                            },
+                            "reasoning_effort": {
+                              "oneOf": [
+                                {
+                                  "maxLength": 128,
+                                  "minLength": 1,
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "schema_version": {
+                              "const": "aar.model-route.v1",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "schema_version",
+                            "provider_driver",
+                            "provider",
+                            "model",
+                            "reasoning_effort"
+                          ],
+                          "type": "object"
+                        },
+                        "fallback_chain": {
+                          "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "model": {
+                                "maxLength": 128,
+                                "minLength": 1,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                                "type": "string"
+                              },
+                              "provider": {
+                                "maxLength": 128,
+                                "minLength": 1,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                                "type": "string"
+                              },
+                              "provider_driver": {
+                                "maxLength": 128,
+                                "minLength": 1,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                                "type": "string"
+                              },
+                              "reasoning_effort": {
+                                "oneOf": [
+                                  {
+                                    "maxLength": 128,
+                                    "minLength": 1,
+                                    "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "schema_version": {
+                                "const": "aar.model-route.v1",
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "schema_version",
+                              "provider_driver",
+                              "provider",
+                              "model",
+                              "reasoning_effort"
+                            ],
+                            "type": "object"
+                          },
+                          "maxItems": 8,
+                          "minItems": 0,
+                          "type": "array"
+                        },
+                        "finish_reason": {
+                          "maxLength": 128,
+                          "minLength": 1,
+                          "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                          "type": "string"
+                        },
+                        "lookup_supported": {
+                          "type": "boolean"
+                        },
+                        "provider_response_id": {
+                          "oneOf": [
+                            {
+                              "maxLength": 128,
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "receipt_digest": {
+                          "pattern": "^sha256:[0-9a-f]{64}$",
+                          "type": "string"
+                        },
+                        "requested": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "cache_policy": {
+                              "enum": [
+                                "disabled",
+                                "run-scoped",
+                                "provider-managed"
+                              ],
+                              "type": "string"
+                            },
+                            "catalog_digest": {
+                              "pattern": "^sha256:[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "fallback_policy": {
+                              "enum": [
+                                "none",
+                                "explicit"
+                              ],
+                              "type": "string"
+                            },
+                            "max_output_tokens": {
+                              "maximum": 9223372036854775807,
+                              "minimum": 1,
+                              "type": "integer"
+                            },
+                            "model": {
+                              "maxLength": 128,
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                              "type": "string"
+                            },
+                            "profile_digest": {
+                              "pattern": "^sha256:[0-9a-f]{64}$",
+                              "type": "string"
+                            },
+                            "profile_id": {
+                              "maxLength": 128,
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                              "type": "string"
+                            },
+                            "provider": {
+                              "maxLength": 128,
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                              "type": "string"
+                            },
+                            "provider_driver": {
+                              "maxLength": 128,
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                              "type": "string"
+                            },
+                            "reasoning_effort": {
+                              "oneOf": [
+                                {
+                                  "maxLength": 128,
+                                  "minLength": 1,
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "schema_version": {
+                              "const": "aar.model-route.v1",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "schema_version",
+                            "profile_id",
+                            "catalog_digest",
+                            "profile_digest",
+                            "provider_driver",
+                            "provider",
+                            "model",
+                            "reasoning_effort",
+                            "max_output_tokens",
+                            "fallback_policy",
+                            "cache_policy"
+                          ],
+                          "type": "object"
+                        },
+                        "schema_version": {
+                          "const": "aar.model-response.v1",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "schema_version",
+                        "requested",
+                        "effective",
+                        "finish_reason",
+                        "provider_response_id",
+                        "fallback_chain",
+                        "lookup_supported",
+                        "receipt_digest"
+                      ],
+                      "type": "object"
+                    },
+                    "schema_version": {
+                      "const": "aar.model-response.v1",
+                      "type": "string"
+                    },
+                    "usage": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "accounting_source": {
+                          "enum": [
+                            "reference",
+                            "provider_reported",
+                            "estimated"
+                          ],
+                          "type": "string"
+                        },
+                        "cache_read_tokens": {
+                          "oneOf": [
+                            {
+                              "maximum": 9223372036854775807,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "cache_write_tokens": {
+                          "oneOf": [
+                            {
+                              "maximum": 9223372036854775807,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "input_tokens": {
+                          "maximum": 9223372036854775807,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "output_tokens": {
+                          "maximum": 9223372036854775807,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "reasoning_tokens": {
+                          "oneOf": [
+                            {
+                              "maximum": 9223372036854775807,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "retry_ordinal": {
+                          "maximum": 9223372036854775807,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "schema_version": {
+                          "const": "aar.model-usage.v1",
+                          "type": "string"
+                        },
+                        "total_tokens": {
+                          "maximum": 9223372036854775807,
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "wasted": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "schema_version",
+                        "accounting_source",
+                        "input_tokens",
+                        "output_tokens",
+                        "cache_read_tokens",
+                        "cache_write_tokens",
+                        "reasoning_tokens",
+                        "total_tokens",
+                        "retry_ordinal",
+                        "wasted"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "output_text",
+                    "route_receipt",
+                    "usage"
+                  ],
+                  "type": "object"
+                }
+              }
+            }
+          }
+        ],
         "properties": {
           "claim_fence": {
             "pattern": "^sha256:[0-9a-f]{64}$",
@@ -26490,6 +26870,357 @@
             "minLength": 1,
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]*$",
             "type": "string"
+          },
+          "model_response": {
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "output_text": {
+                    "maxLength": 1048576,
+                    "type": "string"
+                  },
+                  "route_receipt": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "effective": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "model": {
+                            "maxLength": 128,
+                            "minLength": 1,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                            "type": "string"
+                          },
+                          "provider": {
+                            "maxLength": 128,
+                            "minLength": 1,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                            "type": "string"
+                          },
+                          "provider_driver": {
+                            "maxLength": 128,
+                            "minLength": 1,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                            "type": "string"
+                          },
+                          "reasoning_effort": {
+                            "oneOf": [
+                              {
+                                "maxLength": 128,
+                                "minLength": 1,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "schema_version": {
+                            "const": "aar.model-route.v1",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "schema_version",
+                          "provider_driver",
+                          "provider",
+                          "model",
+                          "reasoning_effort"
+                        ],
+                        "type": "object"
+                      },
+                      "fallback_chain": {
+                        "items": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "model": {
+                              "maxLength": 128,
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                              "type": "string"
+                            },
+                            "provider": {
+                              "maxLength": 128,
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                              "type": "string"
+                            },
+                            "provider_driver": {
+                              "maxLength": 128,
+                              "minLength": 1,
+                              "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                              "type": "string"
+                            },
+                            "reasoning_effort": {
+                              "oneOf": [
+                                {
+                                  "maxLength": 128,
+                                  "minLength": 1,
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "schema_version": {
+                              "const": "aar.model-route.v1",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "schema_version",
+                            "provider_driver",
+                            "provider",
+                            "model",
+                            "reasoning_effort"
+                          ],
+                          "type": "object"
+                        },
+                        "maxItems": 8,
+                        "minItems": 0,
+                        "type": "array"
+                      },
+                      "finish_reason": {
+                        "maxLength": 128,
+                        "minLength": 1,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                        "type": "string"
+                      },
+                      "lookup_supported": {
+                        "type": "boolean"
+                      },
+                      "provider_response_id": {
+                        "oneOf": [
+                          {
+                            "maxLength": 128,
+                            "minLength": 1,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "receipt_digest": {
+                        "pattern": "^sha256:[0-9a-f]{64}$",
+                        "type": "string"
+                      },
+                      "requested": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "cache_policy": {
+                            "enum": [
+                              "disabled",
+                              "run-scoped",
+                              "provider-managed"
+                            ],
+                            "type": "string"
+                          },
+                          "catalog_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "fallback_policy": {
+                            "enum": [
+                              "none",
+                              "explicit"
+                            ],
+                            "type": "string"
+                          },
+                          "max_output_tokens": {
+                            "maximum": 9223372036854775807,
+                            "minimum": 1,
+                            "type": "integer"
+                          },
+                          "model": {
+                            "maxLength": 128,
+                            "minLength": 1,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                            "type": "string"
+                          },
+                          "profile_digest": {
+                            "pattern": "^sha256:[0-9a-f]{64}$",
+                            "type": "string"
+                          },
+                          "profile_id": {
+                            "maxLength": 128,
+                            "minLength": 1,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                            "type": "string"
+                          },
+                          "provider": {
+                            "maxLength": 128,
+                            "minLength": 1,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                            "type": "string"
+                          },
+                          "provider_driver": {
+                            "maxLength": 128,
+                            "minLength": 1,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                            "type": "string"
+                          },
+                          "reasoning_effort": {
+                            "oneOf": [
+                              {
+                                "maxLength": 128,
+                                "minLength": 1,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9._~:/+\\\\-]*$",
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "schema_version": {
+                            "const": "aar.model-route.v1",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "schema_version",
+                          "profile_id",
+                          "catalog_digest",
+                          "profile_digest",
+                          "provider_driver",
+                          "provider",
+                          "model",
+                          "reasoning_effort",
+                          "max_output_tokens",
+                          "fallback_policy",
+                          "cache_policy"
+                        ],
+                        "type": "object"
+                      },
+                      "schema_version": {
+                        "const": "aar.model-response.v1",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "schema_version",
+                      "requested",
+                      "effective",
+                      "finish_reason",
+                      "provider_response_id",
+                      "fallback_chain",
+                      "lookup_supported",
+                      "receipt_digest"
+                    ],
+                    "type": "object"
+                  },
+                  "schema_version": {
+                    "const": "aar.model-response.v1",
+                    "type": "string"
+                  },
+                  "usage": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "accounting_source": {
+                        "enum": [
+                          "reference",
+                          "provider_reported",
+                          "estimated"
+                        ],
+                        "type": "string"
+                      },
+                      "cache_read_tokens": {
+                        "oneOf": [
+                          {
+                            "maximum": 9223372036854775807,
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "cache_write_tokens": {
+                        "oneOf": [
+                          {
+                            "maximum": 9223372036854775807,
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "input_tokens": {
+                        "maximum": 9223372036854775807,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "output_tokens": {
+                        "maximum": 9223372036854775807,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "reasoning_tokens": {
+                        "oneOf": [
+                          {
+                            "maximum": 9223372036854775807,
+                            "minimum": 0,
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "retry_ordinal": {
+                        "maximum": 9223372036854775807,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "schema_version": {
+                        "const": "aar.model-usage.v1",
+                        "type": "string"
+                      },
+                      "total_tokens": {
+                        "maximum": 9223372036854775807,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "wasted": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "schema_version",
+                      "accounting_source",
+                      "input_tokens",
+                      "output_tokens",
+                      "cache_read_tokens",
+                      "cache_write_tokens",
+                      "reasoning_tokens",
+                      "total_tokens",
+                      "retry_ordinal",
+                      "wasted"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "output_text",
+                  "route_receipt",
+                  "usage"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "observation": {
             "oneOf": [
@@ -26925,6 +27656,7 @@
           "sent_at_unix_ms",
           "provider_or_child_request_id",
           "observation",
+          "model_response",
           "idempotency_key"
         ],
         "type": "object"

@@ -8,12 +8,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_package_metadata_declares_portable_contract_and_evidence_assets() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert project["project"]["scripts"]["aar-codex-mcp"] == (
-        "aar.compat.codex_mcp:main"
-    )
-    assert project["project"]["scripts"]["aar-codex-setup"] == (
-        "aar.compat.codex_setup:main"
-    )
+    assert project["project"]["scripts"]["aar-codex-mcp"] == ("aar.compat.codex_mcp:main")
+    assert project["project"]["scripts"]["aar-codex-setup"] == ("aar.compat.codex_setup:main")
     assert project["project"]["scripts"]["aar-public-plugin-build"] == (
         "aar.compat.public_plugin:main"
     )
@@ -34,6 +30,7 @@ def test_package_metadata_declares_portable_contract_and_evidence_assets() -> No
         "profiles": "aar/bundled/profiles",
         "schemas": "aar/bundled/schemas",
         "skills/aar-operations": "aar/bundled/aar-operations",
+        "src/aar/runtime/assets/migration-v6.sql": "aar/runtime/assets/migration-v6.sql",
         "tests/fixtures": "aar/bundled/fixtures",
     }
     required = (
@@ -42,6 +39,7 @@ def test_package_metadata_declares_portable_contract_and_evidence_assets() -> No
         ROOT / "schemas/aar-mcp-tools-v7.json",
         ROOT / "schemas/aar-mcp-tools-v8.json",
         ROOT / "schemas/aar-mcp-tools-v8-combined.json",
+        ROOT / "schemas/aar-provider-ready-schemas-v1.json",
         ROOT / "schemas/aar-broker-catalog-v2.json",
         ROOT / "schemas/aar-acceptance-evidence-v1.schema.json",
         ROOT / "schemas/aar-artifact-publication-v1.schema.json",
@@ -50,6 +48,7 @@ def test_package_metadata_declares_portable_contract_and_evidence_assets() -> No
         ROOT / "schemas/aar-rlm-workbench-v1.schema.json",
         ROOT / "schemas/aar-workspace-broker-frame-v1.schema.json",
         ROOT / "tests/fixtures/manifest.json",
+        ROOT / "tests/fixtures/provider-ready/manifest.json",
         ROOT / "benchmarks/rlm-evidence-v1.json",
         ROOT / "docs/CODEX-INSTALL.md",
         ROOT / "integration/ahc/rlm-contract-v1.json",

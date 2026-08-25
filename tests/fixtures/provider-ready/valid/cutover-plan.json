@@ -1,0 +1,70 @@
+{
+  "activation_intent_digest": "sha256:458d7015fe2b80690cd554308fd4d73b488acab38e630eae6bd03f6bbf53b176",
+  "allowed_recovery_actions": [
+    "abort",
+    "apply",
+    "status"
+  ],
+  "authority_store_id": "local-file-authority-v1:runtime-primary",
+  "candidate": {
+    "contract_manifest_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+    "package_version": "0.6.0a0",
+    "skill_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+    "source_commit": "0000000000000000000000000000000000000000",
+    "wheel_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb"
+  },
+  "canonical_v5_row_set_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "created_at_unix_ms": 100,
+  "cutover_epoch": "cutover-001",
+  "database_checks": {
+    "foreign_key_violation_count": 0,
+    "integrity_result": "ok"
+  },
+  "database_file": {
+    "artifact_id": "database-primary",
+    "digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+    "size_bytes": 8192
+  },
+  "database_identity": "database-primary",
+  "expires_at_unix_ms": 200,
+  "final_profile_output": "/runtime/profiles/final.json",
+  "migration_sql_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "nonterminal_counts": {
+    "attempts": 0,
+    "caller_tickets": 0,
+    "operations": 0,
+    "workbench_jobs": 0,
+    "workers": 0
+  },
+  "owner": {
+    "authority_store_id": "local-file-authority-v1:runtime-primary",
+    "exclusive_lock_state": "available",
+    "operator_identity_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+    "runtime_owner_state": "absent"
+  },
+  "plan_digest": "sha256:36b79a786a35697e33a4e511a3af77b0e0e108f356493b17a2ed4bbdea6d9de0",
+  "previous_activation_authority_digest": null,
+  "profile_id": "hermes-caller-luna-max-v1",
+  "proposed_activation_generation": 1,
+  "runtime_home_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "schema_version": "aar.cutover-plan.v1",
+  "shm": {
+    "digest": null,
+    "file_identity": null,
+    "size_bytes": null,
+    "state": "absent"
+  },
+  "snapshot": {
+    "backup_mode": "sqlite_backup",
+    "destination": "/runtime/snapshots/snapshot-001.db",
+    "snapshot_id": "snapshot-001"
+  },
+  "source_registry_schema_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "source_registry_version": 5,
+  "wal": {
+    "digest": null,
+    "file_identity": null,
+    "size_bytes": null,
+    "state": "absent"
+  }
+}

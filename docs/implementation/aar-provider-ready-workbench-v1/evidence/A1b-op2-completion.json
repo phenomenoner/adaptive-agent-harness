@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "aar.implementation-evidence.v1",
+  "slice": "A1b-op2",
+  "status": "focused_green",
+  "packet": {
+    "path": "docs/implementation/aar-provider-ready-workbench-v1/work-packages/A1b-op2-readback-grant-models.md",
+    "sha256": "30b0eb7f5fad76fccee96c46ad9ca2f69900c6438fcb6d00ea59d7219fd090ac",
+    "reviewBatch": "deleg_e07daeda",
+    "s0Verdict": "PASS/BATCH_COMPLETE/findings=[]",
+    "packetVerdict": "PASS/BATCH_COMPLETE/findings=[]"
+  },
+  "taskStartParent": "5310aea7cda83d0b558f028af094a058649a110b",
+  "productCommit": "d9e0705fc80d46adf48ae1b9112ce1f05a11e089",
+  "ownedPaths": [
+    {
+      "path": "src/aar/provider_ready_runtime_models.py",
+      "sha256": "0146cc4d31aa472e51c615d2bd3cfa6124ed0b4a6eae5f6fba107f1a2cafb9b6"
+    },
+    {
+      "path": "tests/test_provider_ready_runtime_models.py",
+      "sha256": "3e66f35d9c58129e35ffb7a4f1eef1f23b9779ad503862aefb566efbe0192e7b"
+    }
+  ],
+  "verification": {
+    "focusedPytest": "22 passed in 1.31s",
+    "fullRuff": "PASS",
+    "whitespaceRuff": "PASS",
+    "scope": "exactly two owned paths",
+    "secretScan": "PASS",
+    "centralCorrections": [
+      "recomputed root digests for every non-digest readback mutation",
+      "added degraded operator-triple positive witness",
+      "added exact collection maxima and max-plus-one discriminators",
+      "added explicit numeric-bool discriminators",
+      "preserved source-dependent unconfigured broker/tool/route observations"
+    ]
+  },
+  "claims": {
+    "productSlice": "focused_green",
+    "acceptanceRowsClosed": [],
+    "t2OrHigherRun": false,
+    "runtimeBehaviorImplemented": false,
+    "liveProviderUsed": false,
+    "releaseCandidateFormed": false
+  }
+}

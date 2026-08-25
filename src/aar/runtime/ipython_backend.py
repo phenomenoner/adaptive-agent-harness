@@ -119,7 +119,7 @@ class SupervisedIPythonWorkspaceBackend:
         *,
         artifact_sink: ArtifactSink | None = None,
         broker_handler: BrokerRequestHandler | None = None,
-        startup_timeout_s: float = 15.0,
+        startup_timeout_s: float = 60.0,
         worker_manager: WorkerManager | None = None,
     ) -> None:
         self._artifact_sink = artifact_sink

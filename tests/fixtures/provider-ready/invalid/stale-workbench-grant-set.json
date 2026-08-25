@@ -1,0 +1,28 @@
+{
+  "activation_authority_digest": "sha256:2b280d0a8ac242fb690cd38c477d535530fd0141678065dcce1cd1e09fc6b85c",
+  "activation_generation": 1,
+  "budget_ceiling": {
+    "artifact_bytes": 33554432,
+    "child_operations": 64,
+    "input_tokens": 9223372036854775807,
+    "model_requests": 128,
+    "output_tokens": 9223372036854775807,
+    "wall_time_ms": 900000
+  },
+  "capabilities": [
+    "rlm.workbench.execute",
+    "rlm.workbench.read"
+  ],
+  "capability_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "grant_set_digest": "sha256:78d08780fb6e3956c85e23412cc93677aa67bbe61f064c05698299e699e9d6ea",
+  "max_ttl_ms": 900000,
+  "principal_ids": [
+    "aar-eval-runner"
+  ],
+  "profile_digest": "sha256:c25846c3dfa89128569c6222cd4062ad486c84feb5630e590dfed4a02c625082",
+  "profile_id": "hermes-caller-luna-max-v1",
+  "route_catalog_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "runtime_generation": 7,
+  "schema_version": "aar.workbench-grant-set.v1",
+  "session_binding_policy": "bind_exact_request_session"
+}

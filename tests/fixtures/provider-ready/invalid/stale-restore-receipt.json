@@ -1,0 +1,52 @@
+{
+  "activation_authority_digest_after_restore": "sha256:2b280d0a8ac242fb690cd38c477d535530fd0141678065dcce1cd1e09fc6b85c",
+  "activation_authority_digest_before_restore": "sha256:2b280d0a8ac242fb690cd38c477d535530fd0141678065dcce1cd1e09fc6b85c",
+  "activation_authority_disposition": "unchanged",
+  "completed_at_unix_ms": 175,
+  "cutover_plan_digest": "sha256:36b79a786a35697e33a4e511a3af77b0e0e108f356493b17a2ed4bbdea6d9de0",
+  "cutover_prepared_marker_digest": "sha256:283ccda2e60736b4547cc407d6f22177907fb76b1d541d7385d17809b9f2ed3b",
+  "cutover_terminal_marker_digest": "sha256:d8a7c436fb9d37eb445638dee03d88ab12958e9444987bd5f4e2795d32a9ba93",
+  "database_checks": {
+    "foreign_key_violation_count": 0,
+    "integrity_result": "ok"
+  },
+  "frontier_proof": {
+    "no_activation_history_record": true,
+    "no_committed_v6_attestation": true,
+    "no_v6_runtime_or_workbench_write": true
+  },
+  "outcome": "restored_pre_frontier",
+  "pre_restore_database": {
+    "artifact_id": "pre-restore-db",
+    "digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+    "size_bytes": 4096
+  },
+  "pre_restore_shm": {
+    "digest": null,
+    "file_identity": null,
+    "size_bytes": null,
+    "state": "absent"
+  },
+  "pre_restore_wal": {
+    "digest": null,
+    "file_identity": null,
+    "size_bytes": null,
+    "state": "absent"
+  },
+  "receipt_digest": "sha256:dd09fb2833cfe723020186210c8ed4030c78c4b619092d1dba1bcf6070f31002",
+  "replacement_commit_state": "committed",
+  "replacement_committed_at_unix_ms": 150,
+  "restore_epoch": "restore-001",
+  "restore_prepared_marker_digest": "sha256:39d32280f9d40de67b8743ad04c67d05953febde5b2b2980156d71f79431afb9",
+  "restored_database_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "runtime_home_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "schema_version": "aar.restore-receipt.v1",
+  "sidecar_disposition": "unchanged",
+  "snapshot": {
+    "artifact_id": "snapshot-001",
+    "digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+    "size_bytes": 4096
+  },
+  "started_at_unix_ms": 100,
+  "target_database_identity": "database-primary"
+}

@@ -1,0 +1,29 @@
+{
+  "schema_version": "aar.prw-baseline-summary.v1",
+  "generated_at": "2026-08-21T18:45:17Z",
+  "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
+  "environment_class": "linux-native-detached-verification-worktree",
+  "python": "3.12",
+  "pytest": {
+    "passed": 743,
+    "skipped": 5,
+    "warnings": 1,
+    "duration_seconds": 1093.46,
+    "exit_code": 0
+  },
+  "ruff": {
+    "result": "All checks passed!",
+    "exit_code": 0
+  },
+  "classification": "PASS",
+  "raw_local_log": {
+    "published": false,
+    "sha256": "db0b388398da243cb66045de6026ef5e031a33dbcb7ac0e7959761e5eeebeacb",
+    "size_bytes": 2349
+  },
+  "limitations": [
+    "The raw log is retained outside the public repository and outside cleanroom; this summary binds it by digest and size.",
+    "This Linux-native PASS does not close the separately observed DrvFS launcher/supervisor T3/ENV-5 risk.",
+    "No provider-backed inference, live evaluation, installation, cutover, push, tag, publication, or release is claimed."
+  ]
+}

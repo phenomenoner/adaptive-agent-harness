@@ -11,6 +11,14 @@ from typing import Any
 
 import pytest
 
+from aar.broker_models import (
+    EffectiveModelRoute,
+    ModelResponse,
+    ModelRouteBinding,
+    ModelRouteReceipt,
+    ModelUsageRecord,
+)
+from aar.canonical import canonical_sha256
 from aar.runtime.caller_work import build_reconcile_fence
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -205,6 +213,28 @@ def commit_input(ticket: Any, *, idempotency_key: str) -> dict[str, Any]:
     claimant = ticket.claimant
     physical = ticket.physical_attempt
     assert claimant is not None and physical is not None
+    binding = ModelRouteBinding.model_validate(
+        ticket.root["request"]["route_binding"], strict=True
+    )
+    route_receipt = ModelRouteReceipt.issue(
+        requested=binding,
+        effective=EffectiveModelRoute(
+            provider_driver=binding.provider_driver,
+            provider=binding.provider,
+            model=binding.model,
+            reasoning_effort=binding.reasoning_effort,
+        ),
+        finish_reason="stop",
+        provider_response_id="provider-request-1",
+        lookup_supported=True,
+    )
+    usage = ModelUsageRecord(
+        accounting_source="provider_reported",
+        input_tokens=7,
+        output_tokens=3,
+        total_tokens=10,
+    )
+    response = ModelResponse(output_text="ok", route_receipt=route_receipt, usage=usage)
     return {
         **common_input(ticket, idempotency_key=idempotency_key),
         "claim_id": claimant.claim_id,
@@ -218,10 +248,11 @@ def commit_input(ticket: Any, *, idempotency_key: str) -> dict[str, Any]:
             "outcome": "succeeded",
             "output_text": "ok",
             "output_digest": digest_bytes(b"ok"),
-            "route_receipt_digest": "sha256:" + "b" * 64,
-            "usage_receipt_digest": "sha256:" + "c" * 64,
-            "host_receipt_digest": "sha256:" + "d" * 64,
+            "route_receipt_digest": route_receipt.receipt_digest,
+            "usage_receipt_digest": canonical_sha256(usage),
+            "host_receipt_digest": canonical_sha256(response),
         },
+        "model_response": response.model_dump(mode="json"),
     }
 
 
@@ -321,6 +352,34 @@ def candidate_receipt(
     return {**payload, "receipt_digest": canonical_digest(payload)}
 
 
+def sealed_model_candidate(
+    ticket: Any,
+    *,
+    suffix: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    command = commit_input(ticket, idempotency_key=f"sealed-{suffix}")
+    payload: dict[str, Any] = {
+        "schema_version": "aar.caller-work-candidate-receipt.v1",
+        "ticket_id": ticket.ticket_id,
+        "ticket_digest": ticket.ticket_digest,
+        "physical_attempt_id": ticket.physical_attempt.physical_attempt_id,
+        "sent_request_digest": ticket.request_digest,
+        "sent_at_unix_ms": FIXED_NOW_MS + 2,
+        "provider_or_child_request_id": f"provider-{suffix}",
+        "observation": command["observation"],
+        "callback_principal_id": "fixture-principal",
+        "callback_session_id": "fixture-session",
+        "callback_adapter_id": "fixture-adapter",
+        "callback_adapter_generation": 1,
+        "observed_at_unix_ms": FIXED_NOW_MS + 3,
+        "signature_digest": "sha256:" + "e" * 64,
+    }
+    return (
+        {**payload, "receipt_digest": canonical_digest(payload)},
+        command["model_response"],
+    )
+
+
 def model_document(value: Any) -> dict[str, Any]:
     document = json.loads(value.model_dump_json())
     assert isinstance(document, dict)
@@ -377,11 +436,19 @@ class MutableClock:
 def new_repository(tmp_path: Path, clock: MutableClock) -> Any:
     from aar.rlm_workbench_models import CallerWorkTicket
     from aar.runtime.caller_work import CallerWorkRepository
+    from aar.runtime.model_broker import ModelExecutionJournal
 
     database = tmp_path / "registry.sqlite"
     ticket_document = pending_ticket()
     create_caller_work_registry(database, ticket_document)
-    repo = CallerWorkRepository(database, now_ms=clock)
+    journal = ModelExecutionJournal(database)
+
+    class LifecycleRepository(CallerWorkRepository):
+        def close(self) -> None:
+            super().close()
+            journal.close()
+
+    repo = LifecycleRepository(database, now_ms=clock, model_executions=journal)
     repo.create_ticket(CallerWorkTicket.model_validate(ticket_document, strict=True))
     return repo
 
@@ -618,14 +685,8 @@ def test_stale_claimant_and_reconciler_cannot_both_win_same_ticket_revision(
             mark_send_started_input(reserved, idempotency_key="mark-stale-race")
         )
         commit_command = commit_input(started, idempotency_key="commit-race")
-        receipt = candidate_receipt(started, suffix="race")
-        receipt["sent_at_unix_ms"] = commit_command["sent_at_unix_ms"]
-        receipt["provider_or_child_request_id"] = commit_command["provider_or_child_request_id"]
-        receipt["observation"] = commit_command["observation"]
-        receipt_without_digest = dict(receipt)
-        receipt_without_digest.pop("receipt_digest")
-        receipt["receipt_digest"] = canonical_digest(receipt_without_digest)
-        repo.append_candidate_receipt(receipt)
+        receipt, callback_response = sealed_model_candidate(started, suffix="race")
+        repo.append_model_candidate_receipt(receipt, callback_response)
         barrier = Barrier(2)
 
         def claimant_commit() -> Any:
@@ -717,8 +778,8 @@ def test_provider_acceptance_crash_does_not_redispatch_and_late_receipt_settles(
             == first_attempt.provider_or_child_idempotency_key
         )
 
-        late = candidate_receipt(resumed, suffix="late-first-attempt")
-        repo.append_candidate_receipt(late)
+        late, late_response = sealed_model_candidate(resumed, suffix="late-first-attempt")
+        repo.append_model_candidate_receipt(late, late_response)
         completed = repo.settle_candidate(
             **settle_candidate_input(
                 resumed,
@@ -733,7 +794,7 @@ def test_provider_acceptance_crash_does_not_redispatch_and_late_receipt_settles(
         repo.close()
 
 
-def test_restart_lookup_receipt_settles_without_physical_redispatch(
+def test_restart_raw_model_lookup_stays_unknown_without_physical_redispatch(
     tmp_path: Path,
 ) -> None:
     from aar.runtime.caller_work import CallerWorkDispatcher
@@ -759,10 +820,17 @@ def test_restart_lookup_receipt_settles_without_physical_redispatch(
         )
         adapter.result = candidate_receipt(started, suffix="lookup-result")
 
-        settled = CallerWorkDispatcher(repo, adapter).resume(TICKET_ID)
-        assert settled.state == "settled_success"
+        unresolved = CallerWorkDispatcher(repo, adapter).resume(TICKET_ID)
+        assert unresolved.state == "outcome_unknown"
         assert adapter.calls == 1
         assert len(repo.candidate_receipts(TICKET_ID)) == 1
+        with sqlite3.connect(repo.database_path) as connection:
+            assert connection.execute(
+                "SELECT COUNT(*) FROM model_executions WHERE state = 'result_committed'"
+            ).fetchone() == (0,)
+            assert connection.execute(
+                "SELECT COUNT(*) FROM rlm_workbench_successor_outbox"
+            ).fetchone() == (0,)
     finally:
         repo.close()
 
@@ -810,8 +878,8 @@ def test_cancellation_vs_late_success_race_keeps_single_state_and_all_evidence(
         started = repo.mark_send_started(
             mark_send_started_input(reserved, idempotency_key="mark-cancel-success")
         )
-        receipt = candidate_receipt(started, suffix="late-success")
-        repo.append_candidate_receipt(receipt)
+        receipt, callback_response = sealed_model_candidate(started, suffix="late-success")
+        repo.append_model_candidate_receipt(receipt, callback_response)
         barrier = Barrier(2)
 
         def cancel() -> Any:
@@ -1069,6 +1137,152 @@ def test_cancel_command_replay_does_not_repeat_terminal_projection(
         repo.close()
 
 
+def test_model_journal_and_commit_roll_back_if_candidate_insert_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = new_repository(tmp_path, MutableClock(FIXED_NOW_MS))
+    try:
+        reserved = repo.claim(
+            claim_input(repo.get(TICKET_ID), idempotency_key="rollback-claim")
+        )
+        started = repo.mark_send_started(
+            mark_send_started_input(reserved, idempotency_key="rollback-mark")
+        )
+        command = commit_input(started, idempotency_key="rollback-commit")
+
+        def fail_candidate_insert(*_args: object, **_kwargs: object) -> bool:
+            raise RuntimeError("injected failure after journal insert")
+
+        monkeypatch.setattr(repo, "_insert_candidate", fail_candidate_insert)
+        with pytest.raises(RuntimeError, match="injected failure after journal insert"):
+            repo.commit(command)
+
+        with sqlite3.connect(repo.database_path) as connection:
+            durable = connection.execute(
+                """
+                SELECT ticket.state, ticket.revision,
+                       (SELECT COUNT(*) FROM model_route_bindings
+                        WHERE operation_id = ticket.operation_id),
+                       (SELECT COUNT(*) FROM model_executions
+                        WHERE operation_id = ticket.operation_id),
+                       (SELECT COUNT(*) FROM caller_work_candidate_receipts
+                        WHERE ticket_id = ticket.ticket_id),
+                       (SELECT COUNT(*) FROM caller_work_command_receipts
+                        WHERE operation_id = ticket.operation_id
+                          AND command_kind = 'commit')
+                FROM caller_work_tickets AS ticket WHERE ticket.ticket_id = ?
+                """,
+                (TICKET_ID,),
+            ).fetchone()
+        assert durable == ("send_started", started.revision, 0, 0, 0, 0)
+    finally:
+        repo.close()
+
+
+def test_raw_model_candidate_cannot_settle_without_journal_authority(tmp_path: Path) -> None:
+    from aar.runtime.caller_work import CallerWorkConflict
+
+    repo = new_repository(tmp_path, MutableClock(FIXED_NOW_MS))
+    try:
+        reserved = repo.claim(claim_input(repo.get(TICKET_ID), idempotency_key="raw-claim"))
+        started = repo.mark_send_started(
+            mark_send_started_input(reserved, idempotency_key="raw-mark")
+        )
+        receipt = candidate_receipt(started, suffix="raw-model")
+        repo.append_candidate_receipt(receipt, source_kind="provider_lookup")
+
+        with pytest.raises(CallerWorkConflict, match="journal is absent"):
+            repo.settle_candidate(
+                **settle_candidate_input(
+                    started,
+                    receipt["receipt_digest"],
+                    idempotency_key="raw-settle",
+                )
+            )
+
+        assert repo.get(TICKET_ID).state == "send_started"
+        with sqlite3.connect(repo.database_path) as connection:
+            assert connection.execute(
+                "SELECT COUNT(*) FROM model_executions WHERE state = 'result_committed'"
+            ).fetchone() == (0,)
+            assert connection.execute(
+                "SELECT COUNT(*) FROM rlm_workbench_successor_outbox"
+            ).fetchone() == (0,)
+    finally:
+        repo.close()
+
+
+def test_sealed_model_callback_replays_and_changed_evidence_conflicts(tmp_path: Path) -> None:
+    from aar.runtime.caller_work import CallerWorkConflict
+
+    repo = new_repository(tmp_path, MutableClock(FIXED_NOW_MS))
+    try:
+        reserved = repo.claim(claim_input(repo.get(TICKET_ID), idempotency_key="sealed-claim"))
+        started = repo.mark_send_started(
+            mark_send_started_input(reserved, idempotency_key="sealed-mark")
+        )
+        receipt, response = sealed_model_candidate(started, suffix="sealed-replay")
+
+        first = repo.append_model_candidate_receipt(receipt, response)
+        replay = repo.append_model_candidate_receipt(
+            copy.deepcopy(receipt),
+            copy.deepcopy(response),
+        )
+        assert first.replayed is False
+        assert replay.replayed is True
+
+        changed = copy.deepcopy(response)
+        changed["output_text"] = "changed"
+        with pytest.raises(CallerWorkConflict, match="does not match observation"):
+            repo.append_model_candidate_receipt(receipt, changed)
+
+        settled = repo.settle_candidate(
+            **settle_candidate_input(
+                started,
+                receipt["receipt_digest"],
+                idempotency_key="sealed-settle",
+            )
+        )
+        assert settled.state == "settled_success"
+    finally:
+        repo.close()
+
+
+def test_sealed_model_callback_rolls_back_if_candidate_insert_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = new_repository(tmp_path, MutableClock(FIXED_NOW_MS))
+    try:
+        reserved = repo.claim(
+            claim_input(repo.get(TICKET_ID), idempotency_key="callback-rollback-claim")
+        )
+        started = repo.mark_send_started(
+            mark_send_started_input(reserved, idempotency_key="callback-rollback-mark")
+        )
+        receipt, response = sealed_model_candidate(started, suffix="callback-rollback")
+
+        def fail_candidate_insert(*_args: object, **_kwargs: object) -> bool:
+            raise RuntimeError("injected callback candidate failure")
+
+        monkeypatch.setattr(repo, "_insert_candidate", fail_candidate_insert)
+        with pytest.raises(RuntimeError, match="injected callback candidate failure"):
+            repo.append_model_candidate_receipt(receipt, response)
+
+        with sqlite3.connect(repo.database_path) as connection:
+            assert connection.execute(
+                "SELECT COUNT(*) FROM model_route_bindings"
+            ).fetchone() == (0,)
+            assert connection.execute("SELECT COUNT(*) FROM model_executions").fetchone() == (0,)
+            assert connection.execute(
+                "SELECT COUNT(*) FROM caller_work_candidate_receipts"
+            ).fetchone() == (0,)
+        assert repo.get(TICKET_ID).state == "send_started"
+    finally:
+        repo.close()
+
+
 def test_commit_command_replay_does_not_duplicate_receipt_or_outbox(
     tmp_path: Path,
 ) -> None:
@@ -1253,8 +1467,8 @@ def test_settle_candidate_exact_retry_replays_terminal_truth(tmp_path: Path) -> 
         started = repo.mark_send_started(
             mark_send_started_input(reserved, idempotency_key="mark-settlement-replay")
         )
-        receipt = candidate_receipt(started, suffix="settlement-replay")
-        repo.append_candidate_receipt(receipt)
+        receipt, callback_response = sealed_model_candidate(started, suffix="settlement-replay")
+        repo.append_model_candidate_receipt(receipt, callback_response)
         command = settle_candidate_input(
             started,
             receipt["receipt_digest"],

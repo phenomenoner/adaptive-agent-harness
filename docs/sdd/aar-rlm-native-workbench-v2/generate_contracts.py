@@ -139,6 +139,50 @@ model_route_binding = strict_object(
     }
 )
 
+effective_model_route = strict_object(
+    {
+        "schema_version": const("aar.model-route.v1"),
+        "provider_driver": MODEL_ROUTE_VALUE,
+        "provider": MODEL_ROUTE_VALUE,
+        "model": MODEL_ROUTE_VALUE,
+        "reasoning_effort": {"oneOf": [MODEL_ROUTE_VALUE, {"type": "null"}]},
+    }
+)
+model_usage_record = strict_object(
+    {
+        "schema_version": const("aar.model-usage.v1"),
+        "accounting_source": enum("reference", "provider_reported", "estimated"),
+        "input_tokens": COUNTER,
+        "output_tokens": COUNTER,
+        "cache_read_tokens": {"oneOf": [COUNTER, {"type": "null"}]},
+        "cache_write_tokens": {"oneOf": [COUNTER, {"type": "null"}]},
+        "reasoning_tokens": {"oneOf": [COUNTER, {"type": "null"}]},
+        "total_tokens": COUNTER,
+        "retry_ordinal": COUNTER,
+        "wasted": {"type": "boolean"},
+    }
+)
+model_route_receipt = strict_object(
+    {
+        "schema_version": const("aar.model-response.v1"),
+        "requested": model_route_binding,
+        "effective": effective_model_route,
+        "finish_reason": MODEL_ROUTE_VALUE,
+        "provider_response_id": {"oneOf": [MODEL_ROUTE_VALUE, {"type": "null"}]},
+        "fallback_chain": array(effective_model_route, maximum=8),
+        "lookup_supported": {"type": "boolean"},
+        "receipt_digest": DIGEST,
+    }
+)
+model_response = strict_object(
+    {
+        "schema_version": const("aar.model-response.v1"),
+        "output_text": {"type": "string", "maxLength": 1_048_576},
+        "route_receipt": model_route_receipt,
+        "usage": model_usage_record,
+    }
+)
+
 workbench_route_binding = deepcopy(model_route_binding)
 workbench_route_binding["properties"]["fallback_policy"] = const("none")
 
@@ -1305,9 +1349,28 @@ commit_input = strict_object(
         "sent_at_unix_ms": {"oneOf": [TIMESTAMP_MS, {"type": "null"}]},
         "provider_or_child_request_id": {"oneOf": [IDENTITY, {"type": "null"}]},
         "observation": observation_union,
+        "model_response": {"oneOf": [model_response, {"type": "null"}]},
         "idempotency_key": IDENTITY,
     }
 )
+commit_input["allOf"] = [
+    {
+        "if": {
+            "properties": {
+                "observation": {
+                    "properties": {
+                        "kind": {"const": "model"},
+                        "outcome": {"const": "succeeded"},
+                    },
+                    "required": ["kind", "outcome"],
+                }
+            },
+            "required": ["observation"],
+        },
+        "then": {"properties": {"model_response": model_response}},
+        "else": {"properties": {"model_response": {"type": "null"}}},
+    }
+]
 reconcile_input = strict_object(
     {
         "context": caller_context,
@@ -1363,6 +1426,11 @@ caller_contract = {
         "CallerWorkReconcileInput": reconcile_input,
         "CallerWorkObservation": observation_union,
         "ModelObservation": model_observation,
+        "ModelRouteBinding": model_route_binding,
+        "EffectiveModelRoute": effective_model_route,
+        "ModelUsageRecord": model_usage_record,
+        "ModelRouteReceipt": model_route_receipt,
+        "ModelResponse": model_response,
         "ChildObservation": child_observation,
         "EvidenceObservation": evidence_observation,
         "EffectObservation": effect_observation,

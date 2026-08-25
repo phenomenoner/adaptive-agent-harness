@@ -1,0 +1,526 @@
+{
+  "schema_version": "aar.prw-evidence-index.v1",
+  "status": "a1c_gf_packet_pass_writer_pending",
+  "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
+  "entries": [
+    {
+      "id": "historical-sdd-custody",
+      "class": "local_only_digest_bound",
+      "claim": "Preserved reviewed predecessor SDD generation; not the active successor authority.",
+      "complete_tree_digest": "sha256:bb0287e1718033c773e763096b202591307458e1524ab8de9ea8d5a29039afee",
+      "semantic_tree_digest": "sha256:30dbc6ffb52a289792d7b37d782ce8b537fd0741957af9854b9538a863a01047",
+      "receipt_sha256": "sha256:9243d6f8306c774ba0ed752eec0a4121019b6a36edf8a4bb0799423b465b6418",
+      "public_path": null
+    },
+    {
+      "id": "exact-base-linux-baseline",
+      "class": "public_sanitized_summary",
+      "claim": "Exact source baseline pytest and Ruff terminal PASS.",
+      "path": "evidence/baseline-linux-native-summary.json",
+      "sha256": "sha256:0925863fa0b06f5bca8b6a41847e2a92fe20bc887a070e633afe7095749ae9c4"
+    },
+    {
+      "id": "lane-a-seam-map",
+      "class": "local_only_worker_receipt",
+      "claim": "Read-only Lane A seam map source-checked by PMO; no product mutation.",
+      "delegation_id": "deleg_8636461a",
+      "public_path": null
+    },
+    {
+      "id": "a1a-packet-audit",
+      "class": "local_only_worker_receipt",
+      "claim": "Independent audits returned BLOCKERS and caused S0 successor reopening.",
+      "delegation_ids": [
+        "deleg_d872cd9e",
+        "deleg_36f3e761"
+      ],
+      "public_path": null
+    },
+    {
+      "id": "s0-successor-validation-generation-5-rejected",
+      "class": "public_spec_receipt",
+      "claim": "Generation-5 successor receipt was generated twice with byte-identical output and bound four frozen predecessor inputs; later exact-byte semantic review returned BLOCKED, so these bytes are historical only.",
+      "path": null,
+      "status": "historical_rejected_after_validator_pass",
+      "semantic_tree_digest": "sha256:932e362b368bc66eee77b8d9c9e270c106299011b3aaffa315d918b4b3671082",
+      "complete_tree_digest": "sha256:28b8f30cab53d7bf380d28397aa17852d3e57df70138b688b74b2039d4b0e46d",
+      "receipt_sha256": "sha256:fa22511d3627c96509a4625bad24ef42a148bf3fbec0adf3c35c65c4c51a919e"
+    },
+    {
+      "id": "s0-fixed-byte-review-1",
+      "class": "local_only_worker_receipt",
+      "claim": "Sol/xhigh fixed-byte review returned four complete blockers: canonical package version, six-method activation domain, frozen capability/reference semantics, and durable activation-generation CAS. All are amended in the new successor generation; re-review remains required.",
+      "delegation_id": "deleg_c97ebbe8",
+      "reviewed_tree_digest": "sha256:16444e0d8810293d0bd98f357d37a9cc3a0e55f60b3c15e31592389c86beffe0",
+      "outcome": "blockers_closed_pending_re_review",
+      "public_path": null
+    },
+    {
+      "id": "a1a-packet-review-1-superseded",
+      "class": "local_only_worker_receipt",
+      "claim": "The corrected A1a packet passed against the superseded S0 digest. The packet was rebound to amended contract domains and requires a new current-byte review before dispatch.",
+      "delegation_id": "deleg_c97ebbe8",
+      "reviewed_packet_sha256": "sha256:e7952f5d675503a9e0a0fc89e73475fae28ac92058b55859591e6076a979387d",
+      "outcome": "pass_superseded_by_s0_amendment",
+      "public_path": null
+    },
+    {
+      "id": "lane-b-migration-seam-map",
+      "class": "local_only_worker_receipt",
+      "claim": "Read-only v0.5 migration/cutover/fresh-init/restore seam map; source recommendations only, reconciled against the scout-hardened S0 before packetization.",
+      "delegation_id": "deleg_0a245634",
+      "task_index": 0,
+      "outcome": "source_map_only",
+      "public_path": null
+    },
+    {
+      "id": "lane-c-activation-seam-map",
+      "class": "local_only_worker_receipt",
+      "claim": "Read-only v0.5 activation/supervisor/grant/factory seam map; source recommendations only, not implementation or contract authority.",
+      "delegation_id": "deleg_0a245634",
+      "task_index": 1,
+      "outcome": "source_map_only",
+      "public_path": null
+    },
+    {
+      "id": "lane-de-planner-admission-seam-map",
+      "class": "local_only_worker_receipt",
+      "claim": "Read-only v0.5 durable planner/method-admission seam map; discovered frozen planner-owner and lifecycle collisions now bound by the current S0.",
+      "delegation_id": "deleg_0a245634",
+      "task_index": 2,
+      "outcome": "source_map_integrated_into_s0",
+      "public_path": null
+    },
+    {
+      "id": "s0-fixed-byte-review-2",
+      "class": "local_only_worker_receipt",
+      "claim": "Fixed-byte custody passed but semantic review returned seven blockers covering cell-free planner successor authority, explicit crash reconcile, read-only WAL planning, complete schema inventories, evidence-classification ownership, append-only activation history/server-side grants, and mandatory admission gates. Generation 4 closes them and requires re-review.",
+      "delegation_id": "deleg_34864d9f",
+      "reviewed_tree_digest": "sha256:3ff239e73a993a24373fab729398d5ccf9f3fb4bd9fc1ff95c953f5da237a85a",
+      "outcome": "blockers_closed_in_generation_4_pending_re_review",
+      "public_path": null
+    },
+    {
+      "id": "a1a-packet-review-2-superseded",
+      "class": "local_only_worker_receipt",
+      "claim": "The two-path A1a packet passed completeness/collision review against generation 3. Generation-4 authority wording changed the packet bytes, so that PASS is historical and current bytes require re-review.",
+      "delegation_id": "deleg_34864d9f",
+      "reviewed_packet_sha256": "sha256:9bc474c39d883068d49f222924dd9cb42f6fee18179db6dc212d11474dce203b",
+      "generation_4_packet_sha256": "sha256:badcf1f2c07ce7a117f6d5cea12cdc33525546296655c6188b34ae6f34c9b0c0",
+      "outcome": "pass_superseded_by_generation_4",
+      "public_path": null
+    },
+    {
+      "id": "s0-fixed-byte-review-3-generation-4",
+      "class": "local_only_worker_receipt",
+      "claim": "Generation-4 S0 current-byte review returned five blockers: direct-v6 attestation conflict, prepared-successor crash convergence, stdout-only planning, component-wise route evidence, and service-managed planner constructor binding. Generation 5 amends all five and requires re-review.",
+      "delegation_id": "deleg_10561d11",
+      "reviewed_tree_digest": "sha256:8126a1e839ade2ff76202d50015f05636921c8cd3a6067bca24ad61762ed82fc",
+      "outcome": "blockers_amended_in_generation_5_pending_re_review",
+      "public_path": null
+    },
+    {
+      "id": "a1a-packet-review-3-generation-4-superseded",
+      "class": "local_only_worker_receipt",
+      "claim": "The Generation-4 two-path A1a packet passed completeness and collision review. Generation-5 authority changes altered its bytes, so that PASS is historical.",
+      "delegation_id": "deleg_10561d11",
+      "reviewed_packet_sha256": "sha256:badcf1f2c07ce7a117f6d5cea12cdc33525546296655c6188b34ae6f34c9b0c0",
+      "outcome": "pass_superseded_by_generation_5",
+      "public_path": null
+    },
+    {
+      "id": "s0-fixed-byte-review-4-generation-5-rejected",
+      "class": "local_only_worker_receipt",
+      "claim": "Generation-5 exact-byte S0 review verified all supplied identities, then returned actual BLOCKED with a batch-complete eight-family semantic blocker set. Generation-6 amends the supported blockers and requires a new exact-byte review.",
+      "delegation_id": "deleg_b7d68ad4",
+      "reviewed_staged_tree": "eed8ab17a6436f47d9bf3df9fc26ada6a129533a",
+      "reviewed_tree_digest": "sha256:932e362b368bc66eee77b8d9c9e270c106299011b3aaffa315d918b4b3671082",
+      "outcome": "blocked_batch_complete_generation_6_amended",
+      "public_path": null
+    },
+    {
+      "id": "a1a-packet-review-4-generation-5-rejected",
+      "class": "local_only_worker_receipt",
+      "claim": "Generation-5 exact-byte A1a packet review verified its packet/S0/source identities, then returned INCOMPLETE with a path-authority collision and bounded packet-clarity gaps. Generation-6 repairs the packet and review envelope; no writer was dispatched.",
+      "delegation_id": "deleg_b7d68ad4",
+      "reviewed_packet_sha256": "sha256:649b3a13801842bc52889a299180c1dec9225d637e4e827238b9cc0845716e6f",
+      "outcome": "incomplete_generation_6_rebound_required",
+      "public_path": null
+    },
+    {
+      "id": "s0-successor-validation-generation-6-rejected",
+      "class": "public_spec_receipt",
+      "claim": "Generation-6 deterministic receipt passed twice byte-identically, but independent exhaustive semantic review returned BLOCKED / BATCH_COMPLETE with eight blockers. Preserved as digest-only historical evidence; no current path is claimed.",
+      "path": null,
+      "status": "historical_rejected_after_validator_pass",
+      "semantic_tree_digest": "sha256:a8911cd9426f9168bfc8933bcbb33af0f2658abcc22fe906627a23f90abcd3c3",
+      "complete_tree_digest": "sha256:75eed22dd34f1b38aebe0f9dc72f4105f7e32f16d3c96f91e529ca270954dac5",
+      "receipt_sha256": "sha256:ecc8fdeb29ec8cac9643cd6029f997568c4889e80f4c14712736831fdd902e5d",
+      "review_batch": "deleg_9d1b67c8",
+      "review_outcome": "BLOCKED_BATCH_COMPLETE",
+      "successor": "generation_7"
+    },
+    {
+      "id": "a1a-packet-generation-6-rejected",
+      "class": "public_control_packet",
+      "claim": "Generation-6 A1a packet review returned BLOCKED / BATCH_COMPLETE because its planner field inventory collided with S0. Preserved as digest-only historical evidence; no current path is claimed.",
+      "path": null,
+      "packet_sha256": "sha256:ad4c04877ca85d1a110315def3c242a1103a45c1852b5c1fcf1d167af6720848",
+      "s0_semantic_tree_digest": "sha256:a8911cd9426f9168bfc8933bcbb33af0f2658abcc22fe906627a23f90abcd3c3",
+      "outcome": "BLOCKED_BATCH_COMPLETE",
+      "review_batch": "deleg_9d1b67c8",
+      "successor": "generation_7"
+    },
+    {
+      "id": "s0-successor-validation-generation-7-rejected",
+      "class": "deterministic_validation_current_byte",
+      "path": null,
+      "status": "historical_blocked_batch_complete",
+      "semantic_tree_digest": "sha256:6fb8058fc6218a158f8b3d63e3379ed74f4fcc2ca7f038b76db3099b63e94f24",
+      "complete_tree_digest": "sha256:2ca913846047ab17360616fca5e474da8edbd6ba85ea8ac83008eb2ce9cf88f0",
+      "requirements_sha256": "sha256:d410f0e4c154c473786c0b7fa760bd700b59debec412eede816530c9fcf8c490",
+      "acceptance_matrix_sha256": "sha256:ca972fe63646350dca1bb8d1b4146e75b0ac8eb9a1bab51af24635cbde7dcca6",
+      "receipt_sha256": "sha256:c9406aa8802fd3caf7a87ed741212cf701339055a1d671c82ba4b03311b9a98b",
+      "claim": "Generation-7 validator and identity passed, but independent S0 review returned BLOCKED / BATCH_COMPLETE with three findings. Preserved digest-only; current path is not claimed.",
+      "review_batch": "deleg_5f4ad782",
+      "review_outcome": "BLOCKED_BATCH_COMPLETE",
+      "successor": "generation_8"
+    },
+    {
+      "id": "a1a-packet-generation-7-pass-nontransferable",
+      "class": "writer_packet_current_byte",
+      "path": null,
+      "packet_sha256": "sha256:8502ecca0601380a618bcb7c2982811542b1936514b96d1a9a0af12f60ecd9fa",
+      "s0_semantic_tree_digest": "sha256:6fb8058fc6218a158f8b3d63e3379ed74f4fcc2ca7f038b76db3099b63e94f24",
+      "outcome": "PASS_BATCH_COMPLETE_NONTRANSFERABLE",
+      "claim": "Generation-7 packet returned PASS / BATCH_COMPLETE, but its S0 was blocked; PASS is historical and cannot transfer. Preserved digest-only; current path is not claimed.",
+      "review_batch": "deleg_5f4ad782",
+      "successor": "generation_8"
+    },
+    {
+      "id": "s0-successor-validation-generation-8-rejected",
+      "claim": "Generation-8 identity and validator passed, but independent S0 review returned BLOCKED / BATCH_COMPLETE with two acceptance contradictions. Preserved digest-only; current path not claimed.",
+      "public_path": null,
+      "local_only": true,
+      "status": "historical_blocked_batch_complete",
+      "outcome": "BLOCKED_BATCH_COMPLETE",
+      "semantic_tree_digest": "sha256:460dfaeec75cd74ec1240d6b7083df2478e80a5cb8ed4c6f11ab8eb80202d108",
+      "complete_sdd_tree_digest": "sha256:ec93ddfa3af7f65d911e9bc6b2f14a6c0f7b0f311375bf294cae26425c570310",
+      "requirements_digest": "sha256:50b41b0552807d92eb209aad4bee61688852cd2a93e88b3deef245dd90870290",
+      "acceptance_matrix_digest": "sha256:779c967f2758aaf861fcda2dd5d0203b069671eb41ed5a795e8870915ee7eb1a",
+      "receipt_digest": "sha256:f5028f700a17132fb29db5216482eea829fde3801e8dae9fdb2b62a4aa2ed4ce",
+      "validator_runs": 2,
+      "validator_receipts_byte_identical": true,
+      "requirement_count": 38,
+      "acceptance_row_count": 45,
+      "artifact_file_count": 19,
+      "mandatory_release_gate_count": 39,
+      "non_release_live_row_count": 6,
+      "t5_row_count": 0,
+      "review_batch": "deleg_e9f44138",
+      "successor": "generation_9"
+    },
+    {
+      "id": "a1a-packet-generation-8-pass-nontransferable",
+      "claim": "Generation-8 A1a returned PASS / BATCH_COMPLETE but S0 was blocked; historical non-transferable PASS. Current path not claimed.",
+      "public_path": null,
+      "local_only": true,
+      "status": "historical_pass_nontransferable",
+      "outcome": "PASS_BATCH_COMPLETE_NONTRANSFERABLE",
+      "packet_digest": "sha256:ce70b9057a259c4d13da2827105eba84e67f7abb0ab08a487d9e59f6b62f9948",
+      "s0_semantic_tree_digest": "sha256:460dfaeec75cd74ec1240d6b7083df2478e80a5cb8ed4c6f11ab8eb80202d108",
+      "s0_complete_tree_digest": "sha256:ec93ddfa3af7f65d911e9bc6b2f14a6c0f7b0f311375bf294cae26425c570310",
+      "s0_receipt_digest": "sha256:f5028f700a17132fb29db5216482eea829fde3801e8dae9fdb2b62a4aa2ed4ce",
+      "s0_requirements_digest": "sha256:50b41b0552807d92eb209aad4bee61688852cd2a93e88b3deef245dd90870290",
+      "s0_acceptance_matrix_digest": "sha256:779c967f2758aaf861fcda2dd5d0203b069671eb41ed5a795e8870915ee7eb1a",
+      "accepted_product_source_parent": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
+      "review_batch": "deleg_e9f44138",
+      "successor": "generation_9"
+    },
+    {
+      "id": "s0-successor-validation-generation-9-rejected",
+      "class": "deterministic_validation_current_byte",
+      "claim": "Generation-9 identity and semantics passed, but independent S0 review found incomplete validator marker enforcement for four A-ADM-004 axes. Historical digest-only.",
+      "path": null,
+      "status": "historical_blocked_batch_complete",
+      "semantic_tree_digest": "sha256:d9c40be9236b4ab98ebc373715bd568d493913a8fbfd892482a6d39ddebadf63",
+      "complete_tree_digest": "sha256:38ef5b93ca62a40b8069a2825d792b1bd0d05a43322960f3e3e515110beacdee",
+      "requirements_sha256": "sha256:50b41b0552807d92eb209aad4bee61688852cd2a93e88b3deef245dd90870290",
+      "acceptance_matrix_sha256": "sha256:0bf0d9e7f341282f2db0e22240a43df850e16f302faff97e441a5a01716ecdc1",
+      "receipt_sha256": "sha256:56401e63c8693f8f9fa51b132038d719ee30c91a8c5b8b8f916a482a244617e4",
+      "validator_runs": 2,
+      "validator_receipts_byte_identical": true,
+      "requirement_count": 38,
+      "acceptance_row_count": 45,
+      "artifact_file_count": 19,
+      "mandatory_release_gate_count": 39,
+      "non_release_t4_count": 6,
+      "t5_row_count": 0,
+      "public_path": null,
+      "local_only": true,
+      "outcome": "BLOCKED_BATCH_COMPLETE",
+      "review_batch": "deleg_b25672f4",
+      "successor": "generation_10"
+    },
+    {
+      "id": "a1a-packet-generation-9-pass-nontransferable",
+      "class": "writer_packet_current_byte",
+      "claim": "Generation-9 A1a PASS/BATCH_COMPLETE; non-transferable because S0 was blocked. Historical digest-only.",
+      "path": null,
+      "packet_sha256": "sha256:92d93c72178b6a465066e2444644fe8c7aed340e978c773327f0c3b578c59889",
+      "s0_semantic_tree_digest": "sha256:d9c40be9236b4ab98ebc373715bd568d493913a8fbfd892482a6d39ddebadf63",
+      "s0_complete_tree_digest": "sha256:38ef5b93ca62a40b8069a2825d792b1bd0d05a43322960f3e3e515110beacdee",
+      "s0_receipt_sha256": "sha256:56401e63c8693f8f9fa51b132038d719ee30c91a8c5b8b8f916a482a244617e4",
+      "s0_requirements_sha256": "sha256:50b41b0552807d92eb209aad4bee61688852cd2a93e88b3deef245dd90870290",
+      "s0_acceptance_matrix_sha256": "sha256:0bf0d9e7f341282f2db0e22240a43df850e16f302faff97e441a5a01716ecdc1",
+      "accepted_product_source_parent": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
+      "outcome": "PASS_BATCH_COMPLETE_NONTRANSFERABLE",
+      "public_path": null,
+      "local_only": true,
+      "status": "historical_pass_nontransferable",
+      "review_batch": "deleg_b25672f4",
+      "successor": "generation_10"
+    },
+    {
+      "id": "s0-successor-validation-generation-10",
+      "class": "deterministic_validation_current_byte",
+      "claim": "Generation-10 adds the four missing independent A-ADM-004 validator discriminators only; normal PASS x2 and four counterfactual mutation probes reject cleanly; review pending.",
+      "path": "../../sdd/aar-provider-ready-workbench-v1/verification/spec-validation-receipt.json",
+      "status": "independent_pass_batch_complete",
+      "semantic_tree_digest": "sha256:cf6874ee870a1e2bcca3fb83b785213ea8b2f0205e4a54afaf9161b609925ab1",
+      "complete_tree_digest": "sha256:fb4dbd69802191f411c6df9281b57e8ca45085012179ff56c403ca940dfbef3a",
+      "requirements_sha256": "sha256:50b41b0552807d92eb209aad4bee61688852cd2a93e88b3deef245dd90870290",
+      "acceptance_matrix_sha256": "sha256:0bf0d9e7f341282f2db0e22240a43df850e16f302faff97e441a5a01716ecdc1",
+      "receipt_sha256": "sha256:bd63c52ce6eb88bc6ceac7a5adb1d80f546bfbe2cd7eae08728b39e5ca4154f2",
+      "validator_runs": 2,
+      "validator_receipts_byte_identical": true,
+      "counterfactual_mutation_probes": 4,
+      "requirement_count": 38,
+      "acceptance_row_count": 45,
+      "artifact_file_count": 19,
+      "mandatory_release_gate_count": 39,
+      "non_release_t4_count": 6,
+      "t5_row_count": 0,
+      "outcome": "PASS_BATCH_COMPLETE",
+      "review_batch": "deleg_a9235660",
+      "findings": []
+    },
+    {
+      "id": "a1a-packet-generation-10-rev1-rejected",
+      "class": "writer_packet_current_byte",
+      "claim": "Generation-10 A1a rev1 binding/collision passed but packet completeness was BLOCKED/BATCH_COMPLETE by collection-schema discriminator gap. Historical digest-only.",
+      "path": null,
+      "packet_sha256": "sha256:92f8f64e538fd8669d28c5ade27649fb61eb8e94f510193b69b149bbc940a6b7",
+      "s0_semantic_tree_digest": "sha256:cf6874ee870a1e2bcca3fb83b785213ea8b2f0205e4a54afaf9161b609925ab1",
+      "s0_complete_tree_digest": "sha256:fb4dbd69802191f411c6df9281b57e8ca45085012179ff56c403ca940dfbef3a",
+      "s0_receipt_sha256": "sha256:bd63c52ce6eb88bc6ceac7a5adb1d80f546bfbe2cd7eae08728b39e5ca4154f2",
+      "s0_requirements_sha256": "sha256:50b41b0552807d92eb209aad4bee61688852cd2a93e88b3deef245dd90870290",
+      "s0_acceptance_matrix_sha256": "sha256:0bf0d9e7f341282f2db0e22240a43df850e16f302faff97e441a5a01716ecdc1",
+      "accepted_product_source_parent": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
+      "outcome": "BLOCKED_BATCH_COMPLETE",
+      "public_path": null,
+      "local_only": true,
+      "status": "historical_blocked_batch_complete",
+      "review_batch": "deleg_a9235660",
+      "successor": "a1a-packet-generation-10-rev2"
+    },
+    {
+      "id": "a1a-packet-generation-10-rev2",
+      "class": "writer_packet_current_byte",
+      "claim": "Generation-10 A1a rev2 adds direct model_json_schema minItems/maxItems assertions for all four bounded collections; fresh packet review pending against preserved S0 PASS.",
+      "path": "work-packages/A1a-activation-adapter-models.md",
+      "packet_sha256": "sha256:6d2326a68cdbaf7bad0326cd5d28207ffefa9a7f3ceb855b6ecf3d85912798ba",
+      "predecessor_packet_sha256": "sha256:92f8f64e538fd8669d28c5ade27649fb61eb8e94f510193b69b149bbc940a6b7",
+      "s0_semantic_tree_digest": "sha256:cf6874ee870a1e2bcca3fb83b785213ea8b2f0205e4a54afaf9161b609925ab1",
+      "s0_complete_tree_digest": "sha256:fb4dbd69802191f411c6df9281b57e8ca45085012179ff56c403ca940dfbef3a",
+      "s0_receipt_sha256": "sha256:bd63c52ce6eb88bc6ceac7a5adb1d80f546bfbe2cd7eae08728b39e5ca4154f2",
+      "s0_review_outcome": "PASS_BATCH_COMPLETE",
+      "accepted_product_source_parent": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
+      "outcome": "PASS_BATCH_COMPLETE",
+      "status": "independent_pass_batch_complete",
+      "review_batch": "deleg_b45d4517",
+      "finding_set_status": "BATCH_COMPLETE",
+      "collection_schema_discriminator": "PASS",
+      "collision": "PASS",
+      "findings": []
+    },
+    {
+      "id": "a1a-product-slice",
+      "status": "focused_green",
+      "outcome": "FOCUSED_GREEN",
+      "commit": "3ca321fd0df5a20a969965a0c1705fdd02dc83b6",
+      "owned_paths": [
+        "src/aar/provider_ready_models.py",
+        "tests/test_provider_ready_models.py"
+      ],
+      "source_sha256": "6da479d7460fee05a8adbc78a570180b0d26b6781c955f30b53865e49f268afa",
+      "test_sha256": "351255db3af8075150bcc006c45a58555feea8f51859aabaf3d5fc63f7653f1f",
+      "red_evidence": [
+        "assertion-level module missing: 1 failed",
+        "behavioral strict extra-field failure"
+      ],
+      "verification": [
+        "focused pytest: 15 passed",
+        "ruff full: PASS",
+        "ruff W291,W293: PASS"
+      ],
+      "central_review_note": "PMO added exact-min/max/max+1 behavioral coverage and replaced strict-list false positives with Python-mode tuple payloads before final green; product model bytes unchanged by central review.",
+      "acceptance_rows_closed": [],
+      "scope": "A1a prerequisite only; no shared registry/schema/generator/package/runtime integration claimed."
+    }
+  ],
+  "generated_at": "2026-08-22T19:17:55Z",
+  "items": [
+    {
+      "id": "a1b-op1-focused-green",
+      "kind": "product-commit-and-focused-test",
+      "status": "PASS",
+      "commit": "d03a10f4ac1cc18b43addb0e62245073f7274e3e",
+      "paths": [
+        "src/aar/provider_ready_operator_models.py",
+        "tests/test_provider_ready_operator_models.py"
+      ],
+      "tests": "15 passed; Ruff full and W291/W293 PASS",
+      "note": "Prerequisite strict-model slice only; no acceptance row closed and no operator I/O/runtime behavior implemented."
+    },
+    {
+      "id": "generation-11-op2-review-candidate",
+      "kind": "sdd-and-packet-fixed-byte-candidate",
+      "status": "REVIEW_PENDING",
+      "generation": 11,
+      "identities": {
+        "semanticTree": "sha256:feaa05ebecbb935163cfce48a606e00feedbf7a77d2c49cb49ddaa27927a362b",
+        "completeTree": "sha256:cd8998358ace9c8554129b0185b5e700dc453b13084c7ae382c39394cefe8498",
+        "receiptSha256": "8c724dfba6bee39039afb2f4069d9986c1b3b5212dbf0f4fd40c60fa0359be38",
+        "contractsSha256": "89f11e63ec765f1ab797c3504b5c8ab3dc4dfbd38fa86c5a13bb3e1a88a1e372",
+        "validatorSha256": "2d5393efef3db9c422822b2ab2db6f690ff9d4694f8e1fc094e31aaa5fe80ca2",
+        "op2PacketSha256": "51afade318d70548ebc293027c1e90cb6ffa0407d8f9a78371ce7301159f988e"
+      },
+      "note": "Clarifies readback backend truth, source-dependent readback nullability, internal issued-grant timestamp authority and discriminating test oracles; A1a/op1 product bytes unchanged."
+    },
+    {
+      "id": "generation-12-op2-review-candidate",
+      "kind": "sdd-and-packet-fixed-byte-candidate",
+      "status": "REVIEW_PENDING",
+      "generation": 12,
+      "identities": {
+        "semanticTree": "sha256:090fdfce7aa7d2afd74200c683bd817af8ac525e088e42ea27fc6234b02a3933",
+        "completeTree": "sha256:0785dab4a48c94602580e4fa1ec7d163d2867dc966c96d47d87599c29e524e17",
+        "receiptSha256": "08b5ea13635ff2fee7f00e86963a26d2fb3f66914cfafcc40d75fd6e8d8a73d8",
+        "contractsSha256": "94440288984d622be04dc0c4709302ca3cc65ed81689219cb178aa710b600966",
+        "validatorSha256": "24cca00238fff61e0925f61d81427a7923071ef26f3294431fb6be0dd7b22059",
+        "op2PacketSha256": "17f2db67acda5f7098fa9906eadc3c69ae5c7070df23b0e690fac143faa3ee33"
+      },
+      "note": "Closes Generation-11 reference-row/runtime-generation, profile-verified observation, pure evidence-tier and witness-oracle blockers; product bytes unchanged."
+    },
+    {
+      "id": "generation-13-op2-review-candidate",
+      "kind": "sdd-and-packet-fixed-byte-candidate",
+      "status": "PASS",
+      "generation": 13,
+      "identities": {
+        "semanticTree": "sha256:f676ed30a08e3f9cbfe38b091f69c69857fe7da047612a964565a76d0ab702fb",
+        "completeTree": "sha256:d9373a26bb56e3604b08857eb81b0770bbcfd5f81f8d6174f89e130256330d6d",
+        "receiptSha256": "c416093655ad0d2c311f132ea1e0e6408d8d60222b74cf9ea6cd04a2de2d3d8c",
+        "contractsSha256": "638cd1ed531ccc5ad0f3930d10fbab6b7f7a790516b71ca4c53759e496ccd591",
+        "validatorSha256": "8a51ed6a86fa9f87c5752ba6f3b146ed3de8891d0d3d7804c97eac400f9c1fdf",
+        "op2PacketSha256": "30b0eb7f5fad76fccee96c46ad9ca2f69900c6438fcb6d00ea59d7219fd090ac"
+      },
+      "note": "Closes the sole Generation-12 migration-required capability/method underconstraint; no scope or product change.",
+      "reviewBatch": "deleg_e07daeda",
+      "candidateCommit": "e5f0691a88d27fcb635f663cdf6765dc6cc65f97"
+    },
+    {
+      "id": "generation-13-op2-dual-pass",
+      "kind": "terminal-review-evidence",
+      "status": "PASS",
+      "reviewBatch": "deleg_e07daeda",
+      "s0": "PASS/BATCH_COMPLETE/findings=[]",
+      "packet": "PASS/BATCH_COMPLETE/findings=[]",
+      "candidateCommit": "e5f0691a88d27fcb635f663cdf6765dc6cc65f97",
+      "writerGate": "PENDING_TASK_START_AND_COLLISION"
+    },
+    {
+      "id": "a1b-op2-focused-green",
+      "kind": "focused-product-evidence",
+      "status": "PASS",
+      "path": "evidence/A1b-op2-completion.json",
+      "productCommit": "d9e0705fc80d46adf48ae1b9112ce1f05a11e089",
+      "acceptanceRowsClosed": []
+    },
+    {
+      "id": "a1b-eval-rev2-pass",
+      "kind": "terminal-review-evidence",
+      "status": "PASS",
+      "packetSha256": "b29c453f2bbda7cb3f48081cc18c6ea5f10459261dde489a259e5f93603889cb",
+      "reviewBatch": "deleg_c40c636e",
+      "packetCommit": "0b91f748cda1573621166c4020b1027345a30356",
+      "verdict": "PASS/BATCH_COMPLETE/findings=[]",
+      "acceptanceRowsClosed": []
+    },
+    {
+      "id": "a1b-eval-completion",
+      "kind": "focused-implementation-evidence",
+      "status": "focused_green",
+      "path": "docs/implementation/aar-provider-ready-workbench-v1/evidence/A1b-eval-completion.json",
+      "productCommit": "d406f4d0c6c5997e72beb7c9733a7955367ce836",
+      "acceptanceRowsClosed": []
+    },
+    {
+      "id": "a1c-r-rev2-pass",
+      "kind": "terminal-review-evidence",
+      "status": "PASS",
+      "packetSha256": "c0d703b30c04524f9b60521cc5427b4633e9fce40fe4cff4b1f7849f49bfb1af",
+      "reviewBatch": "deleg_c288c446",
+      "packetCommit": "84088a36d55ec40588c3cfde75fdc81f5cb09502",
+      "verdict": "PASS/BATCH_COMPLETE/findings=[]",
+      "schemaProfile": "excluded_not_passed",
+      "acceptanceRowsClosed": []
+    },
+    {
+      "id": "a1c-r-completion",
+      "kind": "focused-implementation-evidence",
+      "status": "focused_green",
+      "path": "docs/implementation/aar-provider-ready-workbench-v1/evidence/A1c-R-completion.json",
+      "finalHead": "0048d4110d9a272b67a05ce5b9360a28036a5de2",
+      "acceptanceRowsClosed": []
+    },
+    {
+      "id": "a1c-gf-rev3-pass",
+      "kind": "terminal-review-evidence",
+      "status": "PASS",
+      "packetSha256": "ce11b9de0a85938b892becc93e24e1d2a4f4fea935813475ae6756a372292092",
+      "specRawSha256": "a49428b890f0c8e612fe677b24ca4fd3decc83ad71674a699eddc8f7403605a8",
+      "specDigest": "sha256:1b45466190c7b54d493ef3d68857633f5b8f2643cd827a602faa976aafc85379",
+      "reviewBatch": "deleg_462ba005",
+      "reviewRoute": "Terra/high",
+      "packetCommit": "ea6254f11abb2c108f5c4e8233dc991484998d7c",
+      "verdict": "PASS/BATCH_COMPLETE/findings=[]",
+      "acceptanceRowsClosed": []
+    }
+  ],
+  "generation11": {
+    "semanticTree": "sha256:feaa05ebecbb935163cfce48a606e00feedbf7a77d2c49cb49ddaa27927a362b",
+    "completeTree": "sha256:cd8998358ace9c8554129b0185b5e700dc453b13084c7ae382c39394cefe8498",
+    "receiptSha256": "8c724dfba6bee39039afb2f4069d9986c1b3b5212dbf0f4fd40c60fa0359be38",
+    "contractsSha256": "89f11e63ec765f1ab797c3504b5c8ab3dc4dfbd38fa86c5a13bb3e1a88a1e372",
+    "validatorSha256": "2d5393efef3db9c422822b2ab2db6f690ff9d4694f8e1fc094e31aaa5fe80ca2",
+    "op2PacketSha256": "51afade318d70548ebc293027c1e90cb6ffa0407d8f9a78371ce7301159f988e"
+  },
+  "generation12": {
+    "semanticTree": "sha256:090fdfce7aa7d2afd74200c683bd817af8ac525e088e42ea27fc6234b02a3933",
+    "completeTree": "sha256:0785dab4a48c94602580e4fa1ec7d163d2867dc966c96d47d87599c29e524e17",
+    "receiptSha256": "08b5ea13635ff2fee7f00e86963a26d2fb3f66914cfafcc40d75fd6e8d8a73d8",
+    "contractsSha256": "94440288984d622be04dc0c4709302ca3cc65ed81689219cb178aa710b600966",
+    "validatorSha256": "24cca00238fff61e0925f61d81427a7923071ef26f3294431fb6be0dd7b22059",
+    "op2PacketSha256": "17f2db67acda5f7098fa9906eadc3c69ae5c7070df23b0e690fac143faa3ee33"
+  },
+  "generation13": {
+    "semanticTree": "sha256:f676ed30a08e3f9cbfe38b091f69c69857fe7da047612a964565a76d0ab702fb",
+    "completeTree": "sha256:d9373a26bb56e3604b08857eb81b0770bbcfd5f81f8d6174f89e130256330d6d",
+    "receiptSha256": "c416093655ad0d2c311f132ea1e0e6408d8d60222b74cf9ea6cd04a2de2d3d8c",
+    "contractsSha256": "638cd1ed531ccc5ad0f3930d10fbab6b7f7a790516b71ca4c53759e496ccd591",
+    "validatorSha256": "8a51ed6a86fa9f87c5752ba6f3b146ed3de8891d0d3d7804c97eac400f9c1fdf",
+    "op2PacketSha256": "30b0eb7f5fad76fccee96c46ad9ca2f69900c6438fcb6d00ea59d7219fd090ac"
+  }
+}

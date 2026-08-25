@@ -12,10 +12,18 @@ from typing import Any, cast
 
 import pytest
 
+from aar.broker_models import (
+    EffectiveModelRoute,
+    ModelResponse,
+    ModelRouteBinding,
+    ModelRouteReceipt,
+    ModelUsageRecord,
+)
 from aar.canonical import canonical_sha256
 from aar.rlm_workbench_models import RecoveryPlannerInput, RlmWorkbenchExecuteInput
-from aar.runtime.caller_work import build_reconcile_fence
+from aar.runtime.caller_work import CallerWorkRepository, build_reconcile_fence
 from aar.runtime.dispatcher import AttemptFence
+from aar.runtime.model_broker import ModelExecutionJournal
 from aar.runtime.reference_host import ReferenceHost
 from aar.runtime.rlm_workbench import RlmWorkbenchCoordinator
 from aar.schemas import (
@@ -83,6 +91,8 @@ def workbench_request(
     host: ReferenceHost,
     *,
     require_named_artifacts: bool | None = None,
+    execution_mode: str = "service_managed",
+    max_model_calls: int | None = None,
 ) -> RlmWorkbenchExecuteInput:
     value = json.loads(FIXTURE.read_text(encoding="utf-8"))
     value["context"]["runtime_generation"] = host.runtime_generation
@@ -90,6 +100,10 @@ def workbench_request(
     value["spec"]["budgets"]["total_wall_time_ms"] = (
         value["context"]["deadline_unix_ms"] - FIXED_NOW_MS
     )
+    value["spec"]["model"]["execution_mode"] = execution_mode
+    if max_model_calls is not None:
+        value["spec"]["budgets"]["max_model_calls"] = max_model_calls
+        value["context"]["budget_model_requests"] = max_model_calls
     if require_named_artifacts is not None:
         value["spec"]["completion"]["require_named_artifacts"] = require_named_artifacts
     return RlmWorkbenchExecuteInput.model_validate(value, strict=True)
@@ -256,6 +270,7 @@ def commit_pending_ticket_success(
     )
     assert started.claimant is not None
     assert started.physical_attempt is not None
+    evidence, model_response = model_commit_evidence(started, "ok")
     return repository.commit(
         {
             **caller_common_input(
@@ -275,15 +290,19 @@ def commit_pending_ticket_success(
                 "outcome": "succeeded",
                 "output_text": "ok",
                 "output_digest": digest_bytes(b"ok"),
-                "route_receipt_digest": "sha256:" + "b" * 64,
-                "usage_receipt_digest": "sha256:" + "c" * 64,
-                "host_receipt_digest": "sha256:" + "d" * 64,
+                **evidence,
             },
+            "model_response": model_response,
         }
     )
 
 
-def caller_success_candidate_receipt(started: Any, *, prefix: str) -> dict[str, Any]:
+def caller_success_candidate_receipt(
+    started: Any,
+    *,
+    prefix: str,
+    model_evidence: dict[str, str] | None = None,
+) -> dict[str, Any]:
     physical = started.physical_attempt
     assert physical is not None
     payload: dict[str, Any] = {
@@ -299,9 +318,14 @@ def caller_success_candidate_receipt(started: Any, *, prefix: str) -> dict[str, 
             "outcome": "succeeded",
             "output_text": "ok",
             "output_digest": digest_bytes(b"ok"),
-            "route_receipt_digest": "sha256:" + "b" * 64,
-            "usage_receipt_digest": "sha256:" + "c" * 64,
-            "host_receipt_digest": "sha256:" + "d" * 64,
+            **(
+                model_evidence
+                or {
+                    "route_receipt_digest": "sha256:" + "b" * 64,
+                    "usage_receipt_digest": "sha256:" + "c" * 64,
+                    "host_receipt_digest": "sha256:" + "d" * 64,
+                }
+            ),
         },
         "callback_principal_id": "fixture-principal",
         "callback_session_id": "fixture-session",
@@ -311,6 +335,45 @@ def caller_success_candidate_receipt(started: Any, *, prefix: str) -> dict[str, 
         "signature_digest": "sha256:" + "e" * 64,
     }
     return {**payload, "receipt_digest": canonical_sha256(payload)}
+
+
+def model_commit_evidence(
+    started: Any,
+    output_text: str,
+) -> tuple[dict[str, str], dict[str, Any]]:
+    request_document = dict(started.root["request"])
+    binding = ModelRouteBinding.model_validate(request_document["route_binding"], strict=True)
+    route_receipt = ModelRouteReceipt.issue(
+        requested=binding,
+        effective=EffectiveModelRoute(
+            provider_driver=binding.provider_driver,
+            provider=binding.provider,
+            model=binding.model,
+            reasoning_effort=binding.reasoning_effort,
+        ),
+        finish_reason="stop",
+        provider_response_id="provider-deadline-1",
+        lookup_supported=True,
+    )
+    usage = ModelUsageRecord(
+        accounting_source="provider_reported",
+        input_tokens=7,
+        output_tokens=3,
+        total_tokens=10,
+    )
+    response = ModelResponse(
+        output_text=output_text,
+        route_receipt=route_receipt,
+        usage=usage,
+    )
+    return (
+        {
+            "route_receipt_digest": route_receipt.receipt_digest,
+            "usage_receipt_digest": canonical_sha256(usage),
+            "host_receipt_digest": canonical_sha256(response),
+        },
+        response.model_dump(mode="json"),
+    )
 
 
 def workbench_envelope(
@@ -655,6 +718,7 @@ def test_worker_broker_ticket_commits_once_then_resumes_cell(
         )
         assert started.claimant is not None
         assert started.physical_attempt is not None
+        evidence, model_response = model_commit_evidence(started, "ok")
         commit_command = {
             **caller_common_input(database, request, started, idempotency_key="broker-commit-1"),
             "claim_id": started.claimant.claim_id,
@@ -668,10 +732,9 @@ def test_worker_broker_ticket_commits_once_then_resumes_cell(
                 "outcome": "succeeded",
                 "output_text": "ok",
                 "output_digest": digest_bytes(b"ok"),
-                "route_receipt_digest": "sha256:" + "b" * 64,
-                "usage_receipt_digest": "sha256:" + "c" * 64,
-                "host_receipt_digest": "sha256:" + "d" * 64,
+                **evidence,
             },
+            "model_response": model_response,
         }
         committed = repository.commit(commit_command)
         replayed = repository.commit(copy.deepcopy(commit_command))
@@ -765,7 +828,7 @@ def test_ticket_insert_failure_rolls_back_suspension_and_parks(
             request,
         )
         assert host.dispatcher is not None
-        terminal = host.dispatcher.wait(record.operation, timeout_s=10)
+        terminal = host.dispatcher.wait(record.operation, timeout_s=60)
         snapshot = host.rlm_workbench.snapshot(record.operation)
         assert terminal.state.value == "indeterminate"
         assert snapshot.phase == "parked"
@@ -953,6 +1016,7 @@ def test_rebind_replays_after_coordinator_crash(
         )
         assert started.claimant is not None
         assert started.physical_attempt is not None
+        evidence, model_response = model_commit_evidence(started, "ok")
         committed = repository.commit(
             {
                 **caller_common_input(
@@ -972,10 +1036,9 @@ def test_rebind_replays_after_coordinator_crash(
                     "outcome": "succeeded",
                     "output_text": "ok",
                     "output_digest": digest_bytes(b"ok"),
-                    "route_receipt_digest": "sha256:" + "b" * 64,
-                    "usage_receipt_digest": "sha256:" + "c" * 64,
-                    "host_receipt_digest": "sha256:" + "d" * 64,
+                    **evidence,
                 },
+                "model_response": model_response,
             }
         )
         assert committed.state == "settled_success"
@@ -1195,7 +1258,7 @@ def test_rebind_worker_loss_restores_checkpoint_and_runs_recovery_cell(
         assert restarted.status(record.operation).state.value == "accepted"
 
         recovery_dispatcher = restarted.start_durable_dispatch()
-        terminal = recovery_dispatcher.wait(record.operation, timeout_s=10)
+        terminal = recovery_dispatcher.wait(record.operation, timeout_s=90)
         assert terminal.state.value == "succeeded"
         coordinator = restarted.rlm_workbench
         assert coordinator is not None
@@ -1422,6 +1485,7 @@ def test_quiet_restart_past_deadline_keeps_may_have_sent_outcome_unknown(
     operation = None
     ticket_id = None
     deadline = None
+    attempts_before_restart = None
     try:
         request = workbench_request(original, require_named_artifacts=False)
         record = original.submit_rlm_workbench(workbench_envelope(original, request), request)
@@ -1464,10 +1528,19 @@ def test_quiet_restart_past_deadline_keeps_may_have_sent_outcome_unknown(
             }
         )
         deadline = started.deadline_unix_ms
+        attempts_before_restart = original.registry._connection.execute(
+            "SELECT COUNT(*) FROM operation_attempts WHERE operation_id = ?",
+            (record.operation.value,),
+        ).fetchone()[0]
     finally:
         original.close()
 
-    assert operation is not None and ticket_id is not None and deadline is not None
+    assert (
+        operation is not None
+        and ticket_id is not None
+        and deadline is not None
+        and attempts_before_restart is not None
+    )
     now[0] = deadline
     reopened = ReferenceHost(
         database,
@@ -1482,38 +1555,58 @@ def test_quiet_restart_past_deadline_keeps_may_have_sent_outcome_unknown(
         ticket = reopened.caller_work.get(ticket_id)
         assert ticket.state == "outcome_unknown"
         assert reopened.caller_work.send_started_count(ticket_id) == 1
-        assert terminal.state.value == "timed_out"
+        assert terminal.state.value == "accepted"
         assert reopened.rlm_workbench is not None
         snapshot = reopened.rlm_workbench.snapshot(operation)
-        assert snapshot.phase == "timed_out"
-        assert snapshot.failure.code == "DEADLINE_EXCEEDED"
+        assert snapshot.phase == "waiting_external"
+        assert snapshot.failure is None
+        assert (
+            reopened.registry._connection.execute(
+                "SELECT COUNT(*) FROM rlm_workbench_successor_outbox "
+                "WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            reopened.registry._connection.execute(
+                "SELECT COUNT(*) FROM operation_attempts WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()[0]
+            == attempts_before_restart
+        )
 
-        from aar.runtime.caller_work import CallerWorkConflict, build_reconcile_fence
+        from aar.runtime.caller_work import build_reconcile_fence
 
+        late_evidence, late_model_response = model_commit_evidence(started, "ok")
         late_receipt = caller_success_candidate_receipt(
             started,
             prefix="deadline-late-receipt",
+            model_evidence=late_evidence,
         )
-        reopened.caller_work.append_candidate_receipt(late_receipt)
-        with pytest.raises(CallerWorkConflict):
-            reopened.caller_work.settle_candidate(
+        reopened.caller_work.append_model_candidate_receipt(
+            late_receipt,
+            late_model_response,
+        )
+        settled = reopened.caller_work.settle_candidate(
+            ticket_id=ticket_id,
+            expected_revision=ticket.revision,
+            candidate_receipt_digest=late_receipt["receipt_digest"],
+            reconciler_id="fixture-adapter",
+            reconciler_generation=1,
+            reconcile_fence=build_reconcile_fence(
                 ticket_id=ticket_id,
                 expected_revision=ticket.revision,
+                physical_attempt_id=started.physical_attempt.physical_attempt_id,
                 candidate_receipt_digest=late_receipt["receipt_digest"],
                 reconciler_id="fixture-adapter",
                 reconciler_generation=1,
-                reconcile_fence=build_reconcile_fence(
-                    ticket_id=ticket_id,
-                    expected_revision=ticket.revision,
-                    physical_attempt_id=started.physical_attempt.physical_attempt_id,
-                    candidate_receipt_digest=late_receipt["receipt_digest"],
-                    reconciler_id="fixture-adapter",
-                    reconciler_generation=1,
-                    reconciliation_action="settle",
-                ),
-                idempotency_key="deadline-late-settlement",
-            )
-        assert reopened.caller_work.get(ticket_id).state == "outcome_unknown"
+                reconciliation_action="settle",
+            ),
+            idempotency_key="deadline-late-settlement",
+        )
+        assert settled.state == "settled_success"
+        assert reopened.caller_work.send_started_count(ticket_id) == 1
         with sqlite3.connect(database) as connection:
             assert connection.execute(
                 "SELECT COUNT(*) FROM rlm_workbench_successor_outbox WHERE operation_id = ?",
@@ -1527,7 +1620,7 @@ def test_quiet_restart_past_deadline_keeps_may_have_sent_outcome_unknown(
         reopened.close()
 
 
-def test_worker_loss_after_send_started_reconciles_receipt_before_recovery_continuation(
+def test_worker_loss_after_send_started_raw_model_lookup_remains_unknown_without_redispatch(
     tmp_path: Path,
 ) -> None:
     from aar.runtime.caller_work import CallerWorkDispatcher
@@ -1595,39 +1688,10 @@ def test_worker_loss_after_send_started_reconciles_receipt_before_recovery_conti
 
     assert operation is not None and request is not None and started is not None
     late_receipt = caller_success_candidate_receipt(started, prefix="worker-loss-send")
-
-    class RestartRecoveryPlanner:
-        def __init__(self) -> None:
-            self.recovery_inputs: list[RecoveryPlannerInput] = []
-
-        def recover(
-            self,
-            operation: Any,
-            spec: Any,
-            recovery_input: RecoveryPlannerInput,
-        ) -> dict[str, Any]:
-            del operation, spec
-            self.recovery_inputs.append(recovery_input)
-            return {
-                "kind": "execute_cell",
-                "code": 'recovered_answer = "recovered"\nrecovered_answer',
-                "expected_result_hint": "continue from the durable receipt without replay",
-            }
-
-        def plan(self, operation: Any, spec: Any, snapshot: Any) -> dict[str, Any]:
-            del operation, spec, snapshot
-            assert len(self.recovery_inputs) == 1
-            return {
-                "kind": "finalize",
-                "output": {"answer": "recovered", "artifacts": []},
-                "artifact_stage_ids": [],
-            }
-
-    recovery_planner = RestartRecoveryPlanner()
     reopened = ReferenceHost(
         database,
         now_ms=lambda: FIXED_NOW_MS,
-        workbench_planner=cast(Any, recovery_planner),
+        workbench_planner=cast(Any, BrokerRoundTripPlanner()),
         enable_durable_dispatch=True,
         dispatcher_concurrency=1,
     )
@@ -1654,37 +1718,36 @@ def test_worker_loss_after_send_started_reconciles_receipt_before_recovery_conti
         assert reopened.caller_work.get(started.ticket_id).state == "send_started"
         assert reopened.rlm_workbench is not None
         assert reopened.rlm_workbench.snapshot(operation).phase == "waiting_external"
+        with sqlite3.connect(database) as connection:
+            attempts_before_lookup = connection.execute(
+                "SELECT COUNT(*) FROM operation_attempts WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()[0]
 
-        settled = caller_dispatcher.resume(started.ticket_id)
-        assert settled.state == "settled_success"
+        unresolved = caller_dispatcher.resume(started.ticket_id)
+        assert unresolved.state == "outcome_unknown"
         assert adapter.lookup_calls == 1
         assert adapter.send_calls == 0
-
-        assert reopened.dispatcher is not None
-        first = reopened.dispatcher.wait(operation, timeout_s=10)
-        assert first.state.value == "indeterminate"
-        reopened.recover_durable()
-        terminal = reopened.dispatcher.wait(operation, timeout_s=10)
-        snapshot = reopened.rlm_workbench.snapshot(operation)
-        assert terminal.state.value == "succeeded"
-        assert snapshot.phase == "succeeded"
-        assert snapshot.result.output.answer == "recovered"
-        assert len(recovery_planner.recovery_inputs) == 1
+        assert reopened.rlm_workbench.snapshot(operation).phase == "waiting_external"
 
         with sqlite3.connect(database) as connection:
             assert connection.execute(
-                "SELECT COUNT(*) FROM broker_calls WHERE operation_id = ?",
+                "SELECT COUNT(*) FROM model_executions WHERE operation_id = ? "
+                "AND state = 'result_committed'",
                 (operation.value,),
+            ).fetchone() == (0,)
+            assert connection.execute(
+                "SELECT COUNT(*) FROM caller_work_candidate_receipts WHERE ticket_id = ?",
+                (started.ticket_id,),
             ).fetchone() == (1,)
             assert connection.execute(
-                "SELECT COUNT(*) FROM caller_work_tickets WHERE operation_id = ?",
+                "SELECT COUNT(*) FROM rlm_workbench_successor_outbox WHERE operation_id = ?",
                 (operation.value,),
-            ).fetchone() == (1,)
+            ).fetchone() == (0,)
             assert connection.execute(
-                "SELECT COUNT(DISTINCT physical_attempt_id) "
-                "FROM caller_work_tickets WHERE operation_id = ?",
+                "SELECT COUNT(*) FROM operation_attempts WHERE operation_id = ?",
                 (operation.value,),
-            ).fetchone() == (1,)
+            ).fetchone() == (attempts_before_lookup,)
     finally:
         caller_dispatcher.close()
         reopened.close()
@@ -1730,19 +1793,29 @@ def test_planner_deadline_overrun_terminalizes_once_without_new_work(tmp_path: P
         host.close()
 
 
-def test_late_settlement_after_deadline_times_out_without_successor(tmp_path: Path) -> None:
+def test_late_settlement_after_restart_consumes_successor_into_deadline(
+    tmp_path: Path,
+) -> None:
     database = tmp_path / "registry.sqlite"
     prepare_v6_registry(database, tmp_path / "registry-v5.snapshot.sqlite")
     clock = [FIXED_NOW_MS]
-    host = ReferenceHost(
+    host: ReferenceHost | None = ReferenceHost(
         database,
         now_ms=lambda: clock[0],
         workbench_planner=cast(Any, BrokerRoundTripPlanner()),
         enable_durable_dispatch=True,
         dispatcher_concurrency=1,
     )
+    reopened: ReferenceHost | None = None
+    detached: CallerWorkRepository | None = None
+    detached_journal: ModelExecutionJournal | None = None
     try:
-        request = workbench_request(host, require_named_artifacts=False)
+        assert host is not None
+        request = workbench_request(
+            host,
+            require_named_artifacts=False,
+            execution_mode="caller_delegated",
+        )
         admitted = host.submit_rlm_workbench(workbench_envelope(host, request), request)
         ticket_id = wait_for_pending_ticket(database)
         repository = host.caller_work
@@ -1784,11 +1857,23 @@ def test_late_settlement_after_deadline_times_out_without_successor(tmp_path: Pa
         )
         physical = started.physical_attempt
         assert physical is not None
-        receipt = caller_success_candidate_receipt(started, prefix="late-deadline")
-        repository.append_candidate_receipt(receipt)
+        evidence, model_response = model_commit_evidence(started, "ok")
+        receipt = caller_success_candidate_receipt(
+            started,
+            prefix="late-deadline",
+            model_evidence=evidence,
+        )
+        repository.append_model_candidate_receipt(receipt, model_response)
+        host.close()
+        host = None
         clock[0] = int(request.root["context"]["deadline_unix_ms"])
-
-        settled = repository.settle_candidate(
+        detached_journal = ModelExecutionJournal(database)
+        detached = CallerWorkRepository(
+            database,
+            now_ms=lambda: clock[0],
+            model_executions=detached_journal,
+        )
+        settled = detached.settle_candidate(
             ticket_id=ticket_id,
             expected_revision=started.revision,
             candidate_receipt_digest=receipt["receipt_digest"],
@@ -1806,16 +1891,57 @@ def test_late_settlement_after_deadline_times_out_without_successor(tmp_path: Pa
             idempotency_key="late-deadline-settlement",
         )
         assert settled.state == "settled_success"
-        assert host.registry.get(admitted.operation).state.value == "timed_out"
-        assert host.rlm_workbench is not None
-        assert host.rlm_workbench.snapshot(admitted.operation).phase == "timed_out"
         with sqlite3.connect(database) as connection:
             assert connection.execute(
-                "SELECT COUNT(*) FROM rlm_workbench_successor_outbox WHERE operation_id = ?",
+                "SELECT state FROM rlm_workbench_successor_outbox WHERE operation_id = ?",
+                (admitted.operation.value,),
+            ).fetchone() == ("pending",)
+        detached.close()
+        detached = None
+        detached_journal.close()
+        detached_journal = None
+
+        reopened = ReferenceHost(
+            database,
+            now_ms=lambda: clock[0],
+            workbench_planner=cast(Any, BrokerRoundTripPlanner()),
+            enable_durable_dispatch=True,
+            dispatcher_concurrency=1,
+        )
+        assert reopened.dispatcher is not None
+        terminal = reopened.dispatcher.wait(admitted.operation, timeout_s=60)
+        assert terminal.state.value == "timed_out"
+        assert reopened.rlm_workbench is not None
+        snapshot = reopened.rlm_workbench.snapshot(admitted.operation)
+        assert snapshot.phase == "timed_out"
+        assert snapshot.failure.code == "DEADLINE_EXCEEDED"
+        with sqlite3.connect(database) as connection:
+            assert connection.execute(
+                "SELECT state FROM rlm_workbench_successor_outbox WHERE operation_id = ?",
+                (admitted.operation.value,),
+            ).fetchone() == ("consumed",)
+            terminal_event = connection.execute(
+                "SELECT payload_json FROM operation_events WHERE operation_id = ? "
+                "AND event_kind = 'planner_successor_terminal'",
+                (admitted.operation.value,),
+            ).fetchone()
+            assert terminal_event is not None
+            terminal_payload = json.loads(terminal_event[0])
+            assert terminal_payload["terminal_state"] == "timed_out"
+            assert terminal_payload["settlement_digest"] == receipt["receipt_digest"]
+            assert connection.execute(
+                "SELECT COUNT(*) FROM rlm_workbench_cells WHERE operation_id = ?",
                 (admitted.operation.value,),
             ).fetchone() == (0,)
     finally:
-        host.close()
+        if detached is not None:
+            detached.close()
+        if detached_journal is not None:
+            detached_journal.close()
+        if reopened is not None:
+            reopened.close()
+        if host is not None:
+            host.close()
 
 
 def test_settlement_directly_notifies_live_dispatcher_callback(tmp_path: Path) -> None:

@@ -1,0 +1,507 @@
+{
+  "schema_version": "aar.prw-implementation-ledger.v1",
+  "generated_at": "2026-08-22T19:17:55Z",
+  "status": "a1c_gf_packet_pass_writer_pending",
+  "accepted_source_commit": "bd30df40a9f3e77bcf2d244dbf4fd9bba0148ba1",
+  "implementation_branch": "codex/aar-provider-ready-workbench-v1-impl",
+  "historical_spec_tree_digest": "sha256:bb0287e1718033c773e763096b202591307458e1524ab8de9ea8d5a29039afee",
+  "active_spec_tree_digest": "sha256:cf6874ee870a1e2bcca3fb83b785213ea8b2f0205e4a54afaf9161b609925ab1",
+  "requirements_file_sha256": "50b41b0552807d92eb209aad4bee61688852cd2a93e88b3deef245dd90870290",
+  "acceptance_matrix_file_sha256": "0bf0d9e7f341282f2db0e22240a43df850e16f302faff97e441a5a01716ecdc1",
+  "spec_receipt_sha256": "bd63c52ce6eb88bc6ceac7a5adb1d80f546bfbe2cd7eae08728b39e5ca4154f2",
+  "counts": {
+    "rows": 45,
+    "mandatory_t0_t3": 39,
+    "not_authorized": 6,
+    "evidence_ready": 1,
+    "t5_rows": 0
+  },
+  "rows": [
+    {
+      "id": "A-CUST-001",
+      "tier": "T0",
+      "lane": "PMO/V",
+      "required_for_implementation_verified": true,
+      "status": "evidence_ready",
+      "evidence": [
+        "evidence/entry-custody.json"
+      ]
+    },
+    {
+      "id": "A-NEC-001",
+      "tier": "T0",
+      "lane": "PMO/V",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-MIG-001",
+      "tier": "T1",
+      "lane": "B",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-MIG-002",
+      "tier": "T1",
+      "lane": "B",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-MIG-003",
+      "tier": "T1",
+      "lane": "B",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-MIG-004",
+      "tier": "T1",
+      "lane": "B",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-MIG-005",
+      "tier": "T1",
+      "lane": "B",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-MIG-006",
+      "tier": "T1",
+      "lane": "B",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-MIG-007",
+      "tier": "T1",
+      "lane": "B",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-ACT-001",
+      "tier": "T0",
+      "lane": "A",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-ACT-002",
+      "tier": "T2",
+      "lane": "C",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-ACT-003",
+      "tier": "T2",
+      "lane": "C",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-ACT-004",
+      "tier": "T2",
+      "lane": "C",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-ACT-005",
+      "tier": "T1",
+      "lane": "B/C",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-AUTH-001",
+      "tier": "T2",
+      "lane": "C",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-AUTH-002",
+      "tier": "T2",
+      "lane": "C",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-AUTH-003",
+      "tier": "T2",
+      "lane": "C",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-PLAN-001",
+      "tier": "T2",
+      "lane": "D",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-PLAN-002",
+      "tier": "T2",
+      "lane": "D",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-PLAN-003",
+      "tier": "T2",
+      "lane": "D",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-PLAN-004",
+      "tier": "T2",
+      "lane": "D",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-PLAN-005",
+      "tier": "T2",
+      "lane": "D",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-PLAN-006",
+      "tier": "T2",
+      "lane": "D",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-ADM-001",
+      "tier": "T2",
+      "lane": "E",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-ADM-002",
+      "tier": "T2",
+      "lane": "E",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-ROUTE-001",
+      "tier": "T4",
+      "lane": "G",
+      "required_for_implementation_verified": false,
+      "status": "not_authorized",
+      "evidence": []
+    },
+    {
+      "id": "A-ROUTE-002",
+      "tier": "T4",
+      "lane": "G",
+      "required_for_implementation_verified": false,
+      "status": "not_authorized",
+      "evidence": []
+    },
+    {
+      "id": "A-ROUTE-003",
+      "tier": "T4",
+      "lane": "G",
+      "required_for_implementation_verified": false,
+      "status": "not_authorized",
+      "evidence": []
+    },
+    {
+      "id": "A-ROUTE-004",
+      "tier": "T2",
+      "lane": "D",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-COMP-001",
+      "tier": "T0",
+      "lane": "A",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-COMP-002",
+      "tier": "T3",
+      "lane": "F",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-OPS-001",
+      "tier": "T1",
+      "lane": "B",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-SEC-001",
+      "tier": "T0",
+      "lane": "A/F",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-TEST-001",
+      "tier": "T3",
+      "lane": "V",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-LIVE-001",
+      "tier": "T4",
+      "lane": "G",
+      "required_for_implementation_verified": false,
+      "status": "not_authorized",
+      "evidence": []
+    },
+    {
+      "id": "A-REL-001",
+      "tier": "T0",
+      "lane": "PMO/V",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-ADM-003",
+      "tier": "T2",
+      "lane": "E",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-ADM-004",
+      "tier": "T2",
+      "lane": "E",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-ADM-005",
+      "tier": "T2",
+      "lane": "E",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-ROUTE-005",
+      "tier": "T4",
+      "lane": "G",
+      "required_for_implementation_verified": false,
+      "status": "not_authorized",
+      "evidence": []
+    },
+    {
+      "id": "A-ROUTE-006",
+      "tier": "T4",
+      "lane": "G",
+      "required_for_implementation_verified": false,
+      "status": "not_authorized",
+      "evidence": []
+    },
+    {
+      "id": "A-EVAL-007",
+      "tier": "T0",
+      "lane": "A1b",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-MIG-008",
+      "tier": "T1",
+      "lane": "B",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-MIG-009",
+      "tier": "T1",
+      "lane": "B",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "A-MIG-010",
+      "tier": "T1",
+      "lane": "B",
+      "required_for_implementation_verified": true,
+      "status": "planned",
+      "evidence": []
+    }
+  ],
+  "s0_review_status": "generation_10_pass_batch_complete",
+  "a1a_packet_sha256": "6d2326a68cdbaf7bad0326cd5d28207ffefa9a7f3ceb855b6ecf3d85912798ba",
+  "a1a_packet_review_status": "generation_10_rev2_pass_batch_complete",
+  "entry_gate_status": "dual_pass",
+  "current_product_commit": "3ca321fd0df5a20a969965a0c1705fdd02dc83b6",
+  "current_lane": "A1b_packet_preparation",
+  "implementationEvidence": {
+    "A1b-op1": {
+      "status": "focused_green",
+      "commit": "d03a10f4ac1cc18b43addb0e62245073f7274e3e",
+      "ownedPaths": [
+        "src/aar/provider_ready_operator_models.py",
+        "tests/test_provider_ready_operator_models.py"
+      ],
+      "focusedPytest": {
+        "result": "15 passed",
+        "command": "pytest -q -p no:cacheprovider tests/test_provider_ready_operator_models.py"
+      },
+      "ruff": {
+        "full": "PASS",
+        "whitespace": "PASS"
+      },
+      "sourceSha256": "23af271b740bc4dc9409380bea5a3c4d0377b1ae7cf39d152b16b4de083086b4",
+      "testSha256": "12b1000581727c2eb45195bdaa3d677b43b3c204e216d647c0e9e24da0b45ab9",
+      "acceptanceRowClosure": []
+    },
+    "A1b-op2-packet": {
+      "status": "reviewed_pass",
+      "revision": 4,
+      "packetSha256": "30b0eb7f5fad76fccee96c46ad9ca2f69900c6438fcb6d00ea59d7219fd090ac",
+      "sddSemanticTree": "sha256:f676ed30a08e3f9cbfe38b091f69c69857fe7da047612a964565a76d0ab702fb",
+      "rowClosure": [],
+      "reviewBatch": "deleg_e07daeda",
+      "findingSetStatus": "BATCH_COMPLETE",
+      "findings": [],
+      "candidateCommit": "e5f0691a88d27fcb635f663cdf6765dc6cc65f97"
+    },
+    "A1b-op2-product": {
+      "status": "focused_green",
+      "productCommit": "d9e0705fc80d46adf48ae1b9112ce1f05a11e089",
+      "evidence": "evidence/A1b-op2-completion.json",
+      "focusedPytest": "22 passed in 1.31s",
+      "ruff": "PASS",
+      "rowClosure": []
+    },
+    "A1b-eval-packet": {
+      "status": "reviewed_pass",
+      "revision": 2,
+      "packetSha256": "b29c453f2bbda7cb3f48081cc18c6ea5f10459261dde489a259e5f93603889cb",
+      "reviewBatch": "deleg_c40c636e",
+      "findingSetStatus": "BATCH_COMPLETE",
+      "findings": [],
+      "packetCommit": "0b91f748cda1573621166c4020b1027345a30356",
+      "rowClosure": []
+    },
+    "A1b-eval": {
+      "status": "focused_green",
+      "packetSha256": "b29c453f2bbda7cb3f48081cc18c6ea5f10459261dde489a259e5f93603889cb",
+      "packetReview": "deleg_c40c636e",
+      "productCommit": "d406f4d0c6c5997e72beb7c9733a7955367ce836",
+      "focusedPytest": "50 passed in 1.50s",
+      "ruff": "PASS",
+      "rowClosure": []
+    },
+    "A1c-R-packet": {
+      "status": "reviewed_pass",
+      "revision": 2,
+      "packetSha256": "c0d703b30c04524f9b60521cc5427b4633e9fce40fe4cff4b1f7849f49bfb1af",
+      "reviewBatch": "deleg_c288c446",
+      "findingSetStatus": "BATCH_COMPLETE",
+      "findings": [],
+      "packetCommit": "84088a36d55ec40588c3cfde75fdc81f5cb09502",
+      "schemaProfileDecision": "excluded_not_passed",
+      "rowClosure": []
+    },
+    "A1c-R": {
+      "status": "focused_green",
+      "productCommits": [
+        "51a09742105bbc040bfe9e626aff8e9f86dc7563",
+        "0048d4110d9a272b67a05ce5b9360a28036a5de2"
+      ],
+      "focusedPytest": "27 passed in 1.43s",
+      "ruff": "PASS",
+      "schemaProfile": "excluded_known_incompatible",
+      "rowClosure": []
+    },
+    "A1c-GF-packet": {
+      "status": "reviewed_pass",
+      "revision": 3,
+      "packetSha256": "ce11b9de0a85938b892becc93e24e1d2a4f4fea935813475ae6756a372292092",
+      "specRawSha256": "a49428b890f0c8e612fe677b24ca4fd3decc83ad71674a699eddc8f7403605a8",
+      "specDigest": "sha256:1b45466190c7b54d493ef3d68857633f5b8f2643cd827a602faa976aafc85379",
+      "reviewBatch": "deleg_462ba005",
+      "reviewRoute": "Terra/high",
+      "findingSetStatus": "BATCH_COMPLETE",
+      "findings": [],
+      "packetCommit": "ea6254f11abb2c108f5c4e8233dc991484998d7c",
+      "rowClosure": []
+    }
+  },
+  "generation11": {
+    "semanticTree": "sha256:feaa05ebecbb935163cfce48a606e00feedbf7a77d2c49cb49ddaa27927a362b",
+    "completeTree": "sha256:cd8998358ace9c8554129b0185b5e700dc453b13084c7ae382c39394cefe8498",
+    "receiptSha256": "8c724dfba6bee39039afb2f4069d9986c1b3b5212dbf0f4fd40c60fa0359be38",
+    "contractsSha256": "89f11e63ec765f1ab797c3504b5c8ab3dc4dfbd38fa86c5a13bb3e1a88a1e372",
+    "validatorSha256": "2d5393efef3db9c422822b2ab2db6f690ff9d4694f8e1fc094e31aaa5fe80ca2",
+    "op2PacketSha256": "51afade318d70548ebc293027c1e90cb6ffa0407d8f9a78371ce7301159f988e"
+  },
+  "generation12": {
+    "semanticTree": "sha256:090fdfce7aa7d2afd74200c683bd817af8ac525e088e42ea27fc6234b02a3933",
+    "completeTree": "sha256:0785dab4a48c94602580e4fa1ec7d163d2867dc966c96d47d87599c29e524e17",
+    "receiptSha256": "08b5ea13635ff2fee7f00e86963a26d2fb3f66914cfafcc40d75fd6e8d8a73d8",
+    "contractsSha256": "94440288984d622be04dc0c4709302ca3cc65ed81689219cb178aa710b600966",
+    "validatorSha256": "24cca00238fff61e0925f61d81427a7923071ef26f3294431fb6be0dd7b22059",
+    "op2PacketSha256": "17f2db67acda5f7098fa9906eadc3c69ae5c7070df23b0e690fac143faa3ee33"
+  },
+  "generation13": {
+    "semanticTree": "sha256:f676ed30a08e3f9cbfe38b091f69c69857fe7da047612a964565a76d0ab702fb",
+    "completeTree": "sha256:d9373a26bb56e3604b08857eb81b0770bbcfd5f81f8d6174f89e130256330d6d",
+    "receiptSha256": "c416093655ad0d2c311f132ea1e0e6408d8d60222b74cf9ea6cd04a2de2d3d8c",
+    "contractsSha256": "638cd1ed531ccc5ad0f3930d10fbab6b7f7a790516b71ca4c53759e496ccd591",
+    "validatorSha256": "8a51ed6a86fa9f87c5752ba6f3b146ed3de8891d0d3d7804c97eac400f9c1fdf",
+    "op2PacketSha256": "30b0eb7f5fad76fccee96c46ad9ca2f69900c6438fcb6d00ea59d7219fd090ac"
+  }
+}

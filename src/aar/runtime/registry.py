@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Protocol, cast
 
+from aar.broker_models import ModelResponse, ModelRouteBinding, ModelUsageRecord
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.continuity_models import (
     DispatchState,
@@ -29,7 +31,7 @@ from aar.continuity_models import (
     OperationWorkspaceCheckpointBoundaryV1,
     OperationWorkspaceCheckpointSelectionV1,
 )
-from aar.rlm_workbench_models import CallerWorkTicket
+from aar.rlm_workbench_models import CallerWorkTicket, CandidateReceipt, RlmDirective
 from aar.runtime.models import OperationEvent, OperationRecord
 from aar.runtime.workspace_models import (
     ProgrammableWorkspaceHandle,
@@ -198,6 +200,31 @@ class StaleAttemptFence(RegistryError):
     """A lease, attempt, owner, or generation fence no longer matches."""
 
 
+@dataclass(frozen=True)
+class PlannerOwner:
+    """Exact durable logical owner for one root-planner step."""
+
+    phase: str
+    step_index: int
+    kind: str = "planner"
+
+    def __post_init__(self) -> None:
+        if type(self.kind) is not str or self.kind != "planner":
+            raise ValueError("planner owner kind must be planner")
+        if type(self.phase) is not str or self.phase not in {
+            "initial",
+            "correction",
+            "recovery",
+            "finalizer",
+        }:
+            raise ValueError("planner owner phase is not frozen")
+        if type(self.step_index) is not int or self.step_index < 0:
+            raise ValueError("planner owner step_index must be non-negative")
+
+    def as_wire(self) -> dict[str, Any]:
+        return {"kind": self.kind, "phase": self.phase, "step_index": self.step_index}
+
+
 def _operation_id(envelope: RequestEnvelope) -> OperationRef:
     material = "\0".join(
         (envelope.host.value, envelope.principal.value, envelope.idempotency_key)
@@ -232,11 +259,25 @@ def _attempt_identity(attempt_ref: Any) -> tuple[OperationRef, int, str]:
     return operation, attempt_no, attempt_id
 
 
+def sqlite_connection_path(database_path: Path | str) -> str:
+    """Preserve a retained /proc descriptor path; resolve ordinary caller paths."""
+
+    value = os.fspath(database_path)
+    parts = Path(value).parts
+    if parts[:4] == ("/", "proc", "self", "fd"):
+        if len(parts) < 6 or not parts[4].isdigit() or any(
+            part in {".", ".."} for part in parts[5:]
+        ):
+            raise ValueError("invalid descriptor-bound SQLite path")
+        return value
+    return str(Path(value).resolve())
+
+
 class OperationRegistry:
     """Persist accepted intent before acknowledgement and never infer uncertain success."""
 
     def __init__(self, database_path: Path, now_ms: Callable[[], int]) -> None:
-        self.database_path = database_path.resolve()
+        self.database_path = sqlite_connection_path(database_path)
         self._now_ms = now_ms
         self._lock = threading.RLock()
         self._connection = sqlite3.connect(
@@ -2123,6 +2164,1205 @@ class OperationRegistry:
             assert current is not None
             return self._dispatch_model(operation, current)
 
+    def _prepare_planner_successor_unlocked(
+        self,
+        *,
+        operation_id: str,
+        successor_attempt_id: str,
+        successor_attempt_no: int,
+        dispatcher_generation: int,
+        lease_epoch: int,
+        owner_digest: str,
+        now: int,
+    ) -> str:
+        rows = self._connection.execute(
+            """
+            SELECT outbox.suspension_revision, outbox.settlement_digest,
+                   outbox.outbox_digest, outbox.rebind_generation, outbox.state,
+                   outbox.successor_attempt_id, outbox.successor_attempt_fence,
+                   suspension.ticket_id, suspension.cell_execution_id,
+                   suspension.logical_owner_json, suspension.request_digest,
+                   suspension.state AS suspension_state,
+                   suspension.control_revision AS suspension_control_revision,
+                   job.phase AS job_phase, job.control_revision AS job_control_revision,
+                   job.cancellation_revision, job.cumulative_deadline_unix_ms,
+                   control.control_revision AS operation_control_revision,
+                   control.cancellation_requested,
+                   operation.state AS operation_state,
+                   operation.record_revision
+            FROM rlm_workbench_successor_outbox AS outbox
+            JOIN rlm_workbench_suspensions AS suspension
+              ON suspension.operation_id = outbox.operation_id
+             AND suspension.suspension_revision = outbox.suspension_revision
+            JOIN rlm_workbench_jobs AS job
+              ON job.operation_id = outbox.operation_id
+            JOIN operation_controls AS control
+              ON control.operation_id = outbox.operation_id
+            JOIN operations AS operation
+              ON operation.operation_id = outbox.operation_id
+            WHERE outbox.operation_id = ? AND outbox.state IN ('pending', 'prepared')
+            """,
+            (operation_id,),
+        ).fetchall()
+        if len(rows) != 1:
+            raise InvalidTransition("planner successor claim requires exactly one outbox")
+        row = rows[0]
+        if (
+            str(row["operation_state"]) != OperationState.ACCEPTED.value
+            or str(row["job_phase"]) != "accepted"
+            or str(row["suspension_state"]) not in {"settled", "cancelled"}
+            or row["cell_execution_id"] is not None
+            or int(row["job_control_revision"]) != int(row["operation_control_revision"])
+            or bool(row["cancellation_requested"])
+            or int(row["suspension_control_revision"]) + 1
+            != int(row["job_control_revision"])
+        ):
+            raise InvalidTransition("planner successor control authority is stale")
+        owner = json.loads(str(row["logical_owner_json"]))
+        try:
+            expected_owner = PlannerOwner(
+                phase=owner["phase"],
+                step_index=owner["step_index"],
+                kind=owner["kind"],
+            ).as_wire()
+        except (KeyError, TypeError, ValueError) as error:
+            raise InvalidTransition("planner successor owner is invalid") from error
+        if owner != expected_owner or set(owner) != {"kind", "phase", "step_index"}:
+            raise InvalidTransition("planner successor owner has non-frozen fields")
+        ticket = self._connection.execute(
+            """
+            SELECT state, settled_receipt_digest, request_digest, method,
+                   logical_owner_json
+            FROM caller_work_tickets
+            WHERE ticket_id = ? AND operation_id = ? AND suspension_revision = ?
+            """,
+            (row["ticket_id"], operation_id, row["suspension_revision"]),
+        ).fetchone()
+        if (
+            ticket is None
+            or str(ticket["state"])
+            not in {"settled_success", "settled_failure", "cancelled_certain"}
+            or str(ticket["settled_receipt_digest"]) != str(row["settlement_digest"])
+            or str(ticket["request_digest"]) != str(row["request_digest"])
+            or str(ticket["method"]) != "model.request"
+            or json.loads(str(ticket["logical_owner_json"])) != owner
+        ):
+            raise InvalidTransition("planner successor settlement binding is stale")
+        waiting_events = []
+        for event in self._connection.execute(
+            """
+            SELECT attempt_no, payload_json FROM operation_events
+            WHERE operation_id = ? AND event_kind = 'workbench_waiting_external'
+            ORDER BY sequence
+            """,
+            (operation_id,),
+        ).fetchall():
+            payload = json.loads(str(event["payload_json"])) if event["payload_json"] else {}
+            if payload.get("suspension_revision") == int(row["suspension_revision"]):
+                waiting_events.append((event, payload))
+        if len(waiting_events) != 1 or waiting_events[0][0]["attempt_no"] is None:
+            raise InvalidTransition("planner successor predecessor event is not unique")
+        predecessor_attempt_no = int(waiting_events[0][0]["attempt_no"])
+        predecessor = self._connection.execute(
+            """
+            SELECT state FROM operation_attempts
+            WHERE operation_id = ? AND attempt_no = ?
+            """,
+            (operation_id, predecessor_attempt_no),
+        ).fetchone()
+        if predecessor is None or str(predecessor["state"]) != "suspended_external":
+            raise StaleAttemptFence("planner predecessor attempt is not suspended")
+        active_prior_lease = self._connection.execute(
+            """
+            SELECT 1 FROM operation_leases
+            WHERE operation_id = ? AND attempt_no = ?
+              AND released_at_unix_ms IS NULL
+            """,
+            (operation_id, predecessor_attempt_no),
+        ).fetchone()
+        if active_prior_lease is not None:
+            raise StaleAttemptFence("planner predecessor still owns a lease")
+        successor_attempt_fence = canonical_sha256(
+            {
+                "dispatcher_generation": dispatcher_generation,
+                "lease_epoch": lease_epoch,
+                "owner_digest": owner_digest,
+            }
+        )
+        if str(row["state"]) == "prepared" and (
+            str(row["successor_attempt_id"]) == successor_attempt_id
+            and str(row["successor_attempt_fence"]) == successor_attempt_fence
+        ):
+            return str(row["outbox_digest"])
+        if str(row["state"]) == "prepared":
+            prior_successor = self._connection.execute(
+                """
+                SELECT attempt.state AS attempt_state, lease.released_at_unix_ms,
+                       lease.expires_at_unix_ms, attempt.attempt_no,
+                       dispatch.state AS dispatch_state,
+                       dispatch.current_attempt_no
+                FROM operation_attempts AS attempt
+                LEFT JOIN operation_leases AS lease
+                  ON lease.operation_id = attempt.operation_id
+                 AND lease.attempt_no = attempt.attempt_no
+                JOIN operation_dispatch AS dispatch
+                  ON dispatch.operation_id = attempt.operation_id
+                WHERE attempt.operation_id = ? AND attempt.attempt_id = ?
+                """,
+                (operation_id, str(row["successor_attempt_id"])),
+            ).fetchone()
+            if prior_successor is None or (
+                str(prior_successor["attempt_state"]) == "running"
+                and prior_successor["released_at_unix_ms"] is None
+                and prior_successor["expires_at_unix_ms"] is not None
+                and int(prior_successor["expires_at_unix_ms"]) > now
+            ) or (
+                str(prior_successor["dispatch_state"]) == _DISPATCH_RUNNING
+                and int(prior_successor["current_attempt_no"])
+                == int(prior_successor["attempt_no"])
+            ):
+                raise StaleAttemptFence("prepared planner successor owner is still live")
+        rebind_generation = int(row["rebind_generation"]) + 1
+        if str(row["state"]) == "pending":
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_successor_outbox
+                SET state = 'prepared', rebind_generation = ?,
+                    successor_attempt_id = ?, successor_attempt_fence = ?,
+                    prepared_at_unix_ms = ?
+                WHERE operation_id = ? AND suspension_revision = ?
+                  AND state = 'pending' AND rebind_generation = ?
+                """,
+                (
+                    rebind_generation,
+                    successor_attempt_id,
+                    successor_attempt_fence,
+                    now,
+                    operation_id,
+                    row["suspension_revision"],
+                    rebind_generation - 1,
+                ),
+            )
+        else:
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_successor_outbox
+                SET rebind_generation = ?, successor_attempt_id = ?,
+                    successor_attempt_fence = ?, prepared_at_unix_ms = ?
+                WHERE operation_id = ? AND suspension_revision = ?
+                  AND state = 'prepared' AND rebind_generation = ?
+                  AND successor_attempt_id = ? AND successor_attempt_fence = ?
+                """,
+                (
+                    rebind_generation,
+                    successor_attempt_id,
+                    successor_attempt_fence,
+                    now,
+                    operation_id,
+                    row["suspension_revision"],
+                    rebind_generation - 1,
+                    row["successor_attempt_id"],
+                    row["successor_attempt_fence"],
+                ),
+            )
+        if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+            raise StaleAttemptFence("planner successor outbox changed during prepare")
+        rebound = str(row["state"]) == "prepared"
+        event_kind = (
+            "planner_successor_prepare_rebound" if rebound else "planner_successor_prepared"
+        )
+        event_payload = {
+            "outbox_digest": str(row["outbox_digest"]),
+            "suspension_revision": int(row["suspension_revision"]),
+            "rebind_generation": rebind_generation,
+            "successor_attempt_id": successor_attempt_id,
+            "successor_attempt_fence": successor_attempt_fence,
+            "predecessor_attempt_no": predecessor_attempt_no,
+        }
+        if rebound:
+            event_payload.update(
+                {
+                    "old_successor_attempt_id": str(row["successor_attempt_id"]),
+                    "old_successor_attempt_fence": str(row["successor_attempt_fence"]),
+                    "old_rebind_generation": rebind_generation - 1,
+                    "new_successor_attempt_id": successor_attempt_id,
+                    "new_successor_attempt_fence": successor_attempt_fence,
+                    "new_rebind_generation": rebind_generation,
+                }
+            )
+        self._insert_event(
+            operation_id,
+            OperationState(row["operation_state"]),
+            OutcomeCertainty.CERTAIN,
+            int(row["record_revision"]),
+            now,
+            event_kind,
+            attempt_no=successor_attempt_no,
+            event_kind=event_kind,
+            payload=event_payload,
+        )
+        return str(row["outbox_digest"])
+
+
+    def prepared_planner_successor(
+        self,
+        attempt_ref: OperationAttemptRefV1,
+        dispatcher_generation: int,
+        lease_epoch: int,
+        owner_digest: str,
+    ) -> dict[str, Any] | None:
+        """Read the exact prepared root-planner successor owned by this attempt."""
+
+        with self._lock:
+            operation, attempt_no, attempt_id = _attempt_identity(attempt_ref)
+            runtime_generation = self._current_runtime_generation_unlocked()
+            self._validate_fence_unlocked(
+                operation,
+                attempt_no,
+                attempt_id,
+                runtime_generation,
+                dispatcher_generation,
+                lease_epoch,
+                owner_digest,
+            )
+            row = self._connection.execute(
+                """
+                SELECT outbox.*, suspension.ticket_id, suspension.request_digest,
+                       suspension.logical_owner_json, ticket.state AS ticket_state,
+                       ticket.settled_receipt_digest
+                FROM rlm_workbench_successor_outbox AS outbox
+                JOIN rlm_workbench_suspensions AS suspension
+                  ON suspension.operation_id = outbox.operation_id
+                 AND suspension.suspension_revision = outbox.suspension_revision
+                JOIN caller_work_tickets AS ticket
+                  ON ticket.ticket_id = suspension.ticket_id
+                WHERE outbox.operation_id = ? AND outbox.state = 'prepared'
+                  AND outbox.successor_attempt_id = ?
+                """,
+                (operation.value, attempt_id),
+            ).fetchone()
+            if row is None:
+                cell = self._connection.execute(
+                    """
+                    SELECT cell.cell_execution_id, cell.source_json, cell.source_digest,
+                           cell.pre_checkpoint_digest, cell.attempt_fence,
+                           authority.attempt_id AS authority_attempt_id,
+                           authority.attempt_fence AS authority_attempt_fence,
+                           authority.cell_execution_id AS authority_cell_execution_id
+                    FROM rlm_workbench_cells AS cell
+                    JOIN rlm_workbench_attempt_authority AS authority
+                      ON authority.operation_id = cell.operation_id
+                    WHERE cell.operation_id = ? AND cell.state = 'prepared'
+                      AND cell.attempt_id = ?
+                    """,
+                    (operation.value, attempt_id),
+                ).fetchone()
+                if cell is None:
+                    return None
+                expected_fence = canonical_sha256(
+                    {
+                        "dispatcher_generation": dispatcher_generation,
+                        "lease_epoch": lease_epoch,
+                        "owner_digest": owner_digest,
+                    }
+                )
+                if (
+                    str(cell["attempt_fence"]) != expected_fence
+                    or str(cell["authority_attempt_id"]) != attempt_id
+                    or str(cell["authority_attempt_fence"]) != expected_fence
+                    or str(cell["authority_cell_execution_id"])
+                    != str(cell["cell_execution_id"])
+                ):
+                    raise StaleAttemptFence("prepared planner cell recovery fence is stale")
+                directive = json.loads(str(cell["source_json"]))
+                if canonical_sha256(directive) != str(cell["source_digest"]):
+                    raise InvalidTransition("prepared planner cell source is corrupt")
+                return {
+                    "recovery_source": "prepared_cell",
+                    "operation_id": operation.value,
+                    "successor_attempt_id": attempt_id,
+                    "successor_attempt_fence": expected_fence,
+                    "cell_execution_id": str(cell["cell_execution_id"]),
+                    "pre_checkpoint_digest": str(cell["pre_checkpoint_digest"]),
+                    "directive": directive,
+                }
+            expected_fence = canonical_sha256(
+                {
+                    "dispatcher_generation": dispatcher_generation,
+                    "lease_epoch": lease_epoch,
+                    "owner_digest": owner_digest,
+                }
+            )
+            if str(row["successor_attempt_fence"]) != expected_fence:
+                raise StaleAttemptFence("prepared planner successor attempt fence is stale")
+            if str(row["settled_receipt_digest"]) != str(row["settlement_digest"]):
+                raise InvalidTransition("prepared planner successor settlement is stale")
+            return {
+                "operation_id": operation.value,
+                "suspension_revision": int(row["suspension_revision"]),
+                "settlement_digest": str(row["settlement_digest"]),
+                "outbox_digest": str(row["outbox_digest"]),
+                "rebind_generation": int(row["rebind_generation"]),
+                "successor_attempt_id": attempt_id,
+                "successor_attempt_fence": expected_fence,
+                "ticket_id": str(row["ticket_id"]),
+                "ticket_state": str(row["ticket_state"]),
+                "request_digest": str(row["request_digest"]),
+                "logical_owner": json.loads(str(row["logical_owner_json"])),
+            }
+
+    def consume_planner_successor(
+        self,
+        attempt_ref: OperationAttemptRefV1,
+        dispatcher_generation: int,
+        lease_epoch: int,
+        owner_digest: str,
+        *,
+        token: Mapping[str, Any],
+        directive: Mapping[str, Any] | None = None,
+        cell_projection: Mapping[str, Any] | None = None,
+        terminal_state: OperationState | None = None,
+        failure: Mapping[str, Any] | None = None,
+        correction_ticket: CallerWorkTicket | None = None,
+        ticket_writer: CallerTicketWriter | None = None,
+    ) -> OperationRecord:
+        """Atomically consume one prepared planner row and project one exact outcome."""
+
+        outcome_count = sum(
+            item is not None for item in (directive, terminal_state, correction_ticket)
+        )
+        if outcome_count != 1:
+            raise ValueError(
+                "planner consumption requires exactly one directive, terminal state, or correction"
+            )
+        if directive is not None:
+            try:
+                directive = RlmDirective.model_validate(dict(directive), strict=True).root
+            except ValueError as error:
+                raise InvalidTransition("planner directive is invalid") from error
+        if (correction_ticket is None) != (ticket_writer is None):
+            raise ValueError("planner correction requires both ticket and ticket writer")
+        execute_cell = directive is not None and directive.get("kind") == "execute_cell"
+        if execute_cell != (cell_projection is not None):
+            raise ValueError("execute_cell planner consumption requires one cell projection")
+        if terminal_state is not None and terminal_state not in {
+            OperationState.FAILED,
+            OperationState.CANCELLED,
+            OperationState.TIMED_OUT,
+        }:
+            raise ValueError("planner terminal state is unsupported")
+
+        with self._lock, self._connection:
+            operation, attempt_no, attempt_id = _attempt_identity(attempt_ref)
+            runtime_generation = self._current_runtime_generation_unlocked()
+            self._validate_fence_unlocked(
+                operation,
+                attempt_no,
+                attempt_id,
+                runtime_generation,
+                dispatcher_generation,
+                lease_epoch,
+                owner_digest,
+            )
+            row = self._connection.execute(
+                """
+                SELECT outbox.*, suspension.ticket_id, suspension.request_digest,
+                       suspension.logical_owner_json,
+                       job.phase AS job_phase, job.control_revision AS job_control_revision,
+                       job.cumulative_deadline_unix_ms,
+                       job.workspace_id, job.workspace_generation, job.workspace_revision,
+                       control.control_revision AS operation_control_revision,
+                       control.cancellation_requested, control.reason_code,
+                       operation.state AS operation_state,
+                       operation.record_revision,
+                       dispatch.state AS dispatch_state,
+                       dispatch.current_attempt_no,
+                       ticket.state AS ticket_state,
+                       ticket.settled_receipt_digest AS ticket_settlement_digest,
+                       ticket.request_digest AS ticket_request_digest,
+                       ticket.method AS ticket_method,
+                       ticket.logical_owner_json AS ticket_owner_json,
+                       ticket.physical_attempt_id, ticket.external_idempotency_key,
+                       ticket.sent_request_digest, ticket.adapter_id,
+                       ticket.adapter_generation, ticket.request_json AS ticket_request_json,
+                       job.route_binding_digest
+                FROM rlm_workbench_successor_outbox AS outbox
+                JOIN rlm_workbench_suspensions AS suspension
+                  ON suspension.operation_id = outbox.operation_id
+                 AND suspension.suspension_revision = outbox.suspension_revision
+                JOIN rlm_workbench_jobs AS job ON job.operation_id = outbox.operation_id
+                JOIN operation_controls AS control ON control.operation_id = outbox.operation_id
+                JOIN operations AS operation ON operation.operation_id = outbox.operation_id
+                JOIN operation_dispatch AS dispatch ON dispatch.operation_id = outbox.operation_id
+                JOIN caller_work_tickets AS ticket
+                  ON ticket.ticket_id = suspension.ticket_id
+                 AND ticket.operation_id = outbox.operation_id
+                 AND ticket.suspension_revision = outbox.suspension_revision
+                WHERE outbox.operation_id = ? AND outbox.state = 'prepared'
+                  AND outbox.successor_attempt_id = ?
+                """,
+                (operation.value, attempt_id),
+            ).fetchone()
+            if row is None:
+                raise InvalidTransition("prepared planner successor does not exist")
+            expected_fence = canonical_sha256(
+                {
+                    "dispatcher_generation": dispatcher_generation,
+                    "lease_epoch": lease_epoch,
+                    "owner_digest": owner_digest,
+                }
+            )
+            if (
+                str(row["outbox_digest"]) != str(token["outbox_digest"])
+                or str(token.get("operation_id")) != operation.value
+                or int(token.get("suspension_revision", -1))
+                != int(row["suspension_revision"])
+                or str(token.get("ticket_id")) != str(row["ticket_id"])
+                or str(token.get("request_digest")) != str(row["request_digest"])
+                or token.get("logical_owner")
+                != json.loads(str(row["logical_owner_json"]))
+                or int(row["rebind_generation"]) != int(token["rebind_generation"])
+                or str(row["successor_attempt_fence"]) != expected_fence
+                or str(row["settlement_digest"]) != str(token["settlement_digest"])
+                or str(row["job_phase"]) != "accepted"
+                or (
+                    int(row["job_control_revision"])
+                    != int(row["operation_control_revision"])
+                    and not (
+                        bool(row["cancellation_requested"])
+                        and int(row["operation_control_revision"])
+                        == int(row["job_control_revision"]) + 1
+                    )
+                )
+                or str(row["operation_state"]) != OperationState.RUNNING.value
+                or str(row["dispatch_state"]) != _DISPATCH_RUNNING
+                or int(row["current_attempt_no"]) != attempt_no
+            ):
+                raise StaleAttemptFence("planner successor consumption authority is stale")
+            owner = json.loads(str(row["logical_owner_json"]))
+            try:
+                expected_owner = PlannerOwner(
+                    phase=owner["phase"],
+                    step_index=owner["step_index"],
+                    kind=owner["kind"],
+                ).as_wire()
+            except (KeyError, TypeError, ValueError) as error:
+                raise InvalidTransition("planner successor owner is invalid") from error
+            if (
+                owner != expected_owner
+                or set(owner) != {"kind", "phase", "step_index"}
+                or str(row["ticket_state"])
+                not in {"settled_success", "settled_failure", "cancelled_certain"}
+                or str(row["ticket_settlement_digest"]) != str(row["settlement_digest"])
+                or str(row["ticket_request_digest"]) != str(row["request_digest"])
+                or str(row["ticket_method"]) != "model.request"
+                or json.loads(str(row["ticket_owner_json"])) != owner
+            ):
+                raise InvalidTransition("planner successor settlement binding is stale")
+            if (directive is not None or correction_ticket is not None) and str(
+                row["ticket_state"]
+            ) != "settled_success":
+                raise InvalidTransition(
+                    "planner directive or correction requires settled success"
+                )
+            if directive is not None or correction_ticket is not None:
+                candidate_row = self._connection.execute(
+                    """
+                    SELECT receipt_json FROM caller_work_candidate_receipts
+                    WHERE ticket_id = ? AND physical_attempt_id = ?
+                      AND receipt_digest = ?
+                    """,
+                    (
+                        row["ticket_id"],
+                        row["physical_attempt_id"],
+                        row["settlement_digest"],
+                    ),
+                ).fetchone()
+                if candidate_row is None:
+                    raise InvalidTransition("planner settlement candidate receipt is absent")
+                try:
+                    candidate = CandidateReceipt.model_validate_json(
+                        str(candidate_row["receipt_json"]), strict=True
+                    ).root
+                except ValueError as error:
+                    raise InvalidTransition("planner settlement candidate is invalid") from error
+                observation = candidate["observation"]
+                if (
+                    candidate["ticket_id"] != str(row["ticket_id"])
+                    or candidate["physical_attempt_id"]
+                    != str(row["physical_attempt_id"])
+                    or candidate["sent_request_digest"]
+                    != str(row["sent_request_digest"])
+                    or candidate["callback_adapter_id"] != str(row["adapter_id"])
+                    or candidate["callback_adapter_generation"]
+                    != int(row["adapter_generation"])
+                    or observation["kind"] != "model"
+                    or observation["outcome"] != "succeeded"
+                ):
+                    raise InvalidTransition("planner candidate lineage is stale")
+                journal = self._connection.execute(
+                    """
+                    SELECT request_digest, request_json, binding_json, state,
+                           response_digest, response_json, usage_json
+                    FROM model_executions
+                    WHERE operation_id = ? AND idempotency_key = ?
+                    """,
+                    (operation.value, row["external_idempotency_key"]),
+                ).fetchone()
+                if journal is None or str(journal["state"]) != "result_committed":
+                    raise InvalidTransition("planner model journal result is absent")
+                try:
+                    binding = ModelRouteBinding.model_validate_json(
+                        str(journal["binding_json"]), strict=True
+                    )
+                    response = ModelResponse.model_validate_json(
+                        str(journal["response_json"]), strict=True
+                    )
+                    usage = ModelUsageRecord.model_validate_json(
+                        str(journal["usage_json"]), strict=True
+                    )
+                    request_document = json.loads(str(journal["request_json"]))
+                    ticket_request = json.loads(str(row["ticket_request_json"]))
+                except (TypeError, ValueError, json.JSONDecodeError) as error:
+                    raise InvalidTransition("planner model journal bytes are invalid") from error
+                response_digest = canonical_sha256(response)
+                usage_digest = canonical_sha256(usage)
+                if (
+                    str(journal["request_digest"]) != str(row["ticket_request_digest"])
+                    or canonical_sha256(request_document)
+                    != str(row["ticket_request_digest"])
+                    or request_document != ticket_request
+                    or binding.model_dump(mode="json") != ticket_request["route_binding"]
+                    or canonical_sha256(binding) != str(row["route_binding_digest"])
+                    or response.route_receipt.requested != binding
+                    or response.usage != usage
+                    or str(journal["response_digest"]) != response_digest
+                    or observation["route_receipt_digest"]
+                    != response.route_receipt.receipt_digest
+                    or observation["usage_receipt_digest"] != usage_digest
+                    or observation["host_receipt_digest"] != response_digest
+                    or observation["output_text"] != response.output_text
+                    or observation["output_digest"]
+                    != "sha256:"
+                    + hashlib.sha256(response.output_text.encode("utf-8")).hexdigest()
+                ):
+                    raise InvalidTransition("planner model journal lineage is stale")
+            now = self._now_ms()
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_successor_outbox
+                SET state = 'consumed', consumed_at_unix_ms = ?
+                WHERE operation_id = ? AND suspension_revision = ?
+                  AND state = 'prepared' AND rebind_generation = ?
+                  AND successor_attempt_id = ? AND successor_attempt_fence = ?
+                """,
+                (
+                    now,
+                    operation.value,
+                    row["suspension_revision"],
+                    row["rebind_generation"],
+                    attempt_id,
+                    expected_fence,
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("planner successor changed during consumption")
+            selected_terminal = terminal_state
+            if bool(row["cancellation_requested"]):
+                selected_terminal = OperationState.CANCELLED
+            elif now >= int(row["cumulative_deadline_unix_ms"]):
+                selected_terminal = OperationState.TIMED_OUT
+            if selected_terminal is not None:
+                phase = {
+                    OperationState.FAILED: "failed",
+                    OperationState.CANCELLED: "cancelled",
+                    OperationState.TIMED_OUT: "timed_out",
+                }[selected_terminal]
+                failure_document = dict(failure or {})
+                if not failure_document:
+                    failure_document = {
+                        "schema_version": "aar.envelope.v1",
+                        "category": (
+                            "cancelled"
+                            if selected_terminal is OperationState.CANCELLED
+                            else (
+                                "deadline"
+                                if selected_terminal is OperationState.TIMED_OUT
+                                else "validation"
+                            )
+                        ),
+                        "code": (
+                            "DEADLINE_EXCEEDED"
+                            if selected_terminal is OperationState.TIMED_OUT
+                            else (
+                                "CONFLICT"
+                                if selected_terminal is OperationState.CANCELLED
+                                else "INVALID_ARGUMENT"
+                            )
+                        ),
+                        "message": (
+                            "planner consumption lost to cancellation"
+                            if selected_terminal is OperationState.CANCELLED
+                            else (
+                                "planner consumption reached its cumulative deadline"
+                                if selected_terminal is OperationState.TIMED_OUT
+                                else "planner terminal settlement failed"
+                            )
+                        ),
+                        "retryable": False,
+                        "certainty": "certain",
+                        "operation": operation.model_dump(mode="json"),
+                        "details": [],
+                    }
+                failure_json = canonical_json_bytes(failure_document).decode()
+                next_control_revision = int(row["operation_control_revision"]) + 1
+                outer_revision = int(row["record_revision"]) + 1
+                self._connection.execute(
+                    """
+                    UPDATE rlm_workbench_jobs
+                    SET phase = ?, control_revision = ?, failure_json = ?,
+                        certainty = 'certain', updated_at_unix_ms = ?
+                    WHERE operation_id = ? AND phase = 'accepted'
+                      AND control_revision = ?
+                    """,
+                    (
+                        phase,
+                        next_control_revision,
+                        failure_json,
+                        now,
+                        operation.value,
+                        row["job_control_revision"],
+                    ),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("workbench changed during planner terminal projection")
+                self._connection.execute(
+                    """
+                    UPDATE operation_controls SET control_revision = ?
+                    WHERE operation_id = ? AND control_revision = ?
+                    """,
+                    (
+                        next_control_revision,
+                        operation.value,
+                        row["operation_control_revision"],
+                    ),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("operation control changed during planner terminal")
+                self._connection.execute(
+                    """
+                    UPDATE operations
+                    SET state = ?, certainty = ?, record_revision = ?,
+                        reconciliation_required = 0, failure_json = ?,
+                        updated_at_unix_ms = ?
+                    WHERE operation_id = ? AND state = ? AND record_revision = ?
+                    """,
+                    (
+                        selected_terminal.value,
+                        OutcomeCertainty.CERTAIN.value,
+                        outer_revision,
+                        failure_json,
+                        now,
+                        operation.value,
+                        OperationState.RUNNING.value,
+                        row["record_revision"],
+                    ),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("outer operation changed during planner terminal")
+                self._connection.execute(
+                    """
+                    UPDATE operation_attempts
+                    SET state = ?, certainty = ?, ended_at_unix_ms = ?
+                    WHERE operation_id = ? AND attempt_no = ? AND attempt_id = ?
+                      AND state = ?
+                    """,
+                    (
+                        selected_terminal.value,
+                        OutcomeCertainty.CERTAIN.value,
+                        now,
+                        operation.value,
+                        attempt_no,
+                        attempt_id,
+                        OperationState.RUNNING.value,
+                    ),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("planner terminal attempt changed")
+                self._connection.execute(
+                    """
+                    UPDATE operation_leases SET released_at_unix_ms = ?
+                    WHERE operation_id = ? AND attempt_no = ? AND lease_epoch = ?
+                      AND released_at_unix_ms IS NULL
+                    """,
+                    (now, operation.value, attempt_no, lease_epoch),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("planner terminal lease changed")
+                self._connection.execute(
+                    """
+                    UPDATE operation_dispatch SET state = ?, finished_at_unix_ms = ?
+                    WHERE operation_id = ? AND state = ? AND current_attempt_no = ?
+                    """,
+                    (_DISPATCH_COMPLETED, now, operation.value, _DISPATCH_RUNNING, attempt_no),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("planner terminal dispatch changed")
+                self._connection.execute(
+                    """
+                    UPDATE rlm_workbench_artifact_stages
+                    SET state = 'discarded', updated_at_unix_ms = ?
+                    WHERE operation_id = ? AND state = 'staged'
+                    """,
+                    (now, operation.value),
+                )
+                self._insert_event(
+                    operation.value,
+                    selected_terminal,
+                    OutcomeCertainty.CERTAIN,
+                    outer_revision,
+                    now,
+                    "planner_successor_terminal",
+                    attempt_no=attempt_no,
+                    event_kind="planner_successor_terminal",
+                    payload={
+                        "outbox_digest": str(row["outbox_digest"]),
+                        "settlement_digest": str(row["settlement_digest"]),
+                        "rebind_generation": int(row["rebind_generation"]),
+                        "terminal_state": selected_terminal.value,
+                        "ticket_id": str(row["ticket_id"]),
+                        "request_digest": str(row["request_digest"]),
+                        "logical_owner": json.loads(str(row["logical_owner_json"])),
+                    },
+                )
+                return self._record_from_operation_id(operation)
+            if correction_ticket is not None:
+                assert ticket_writer is not None
+                ticket_document = dict(correction_ticket.root)
+                ticket_operation = OperationRef.model_validate(
+                    ticket_document["operation"], strict=True
+                )
+                if ticket_operation != operation:
+                    raise InvalidTransition(
+                        "planner correction ticket operation does not match the attempt"
+                    )
+                prior_owner = json.loads(str(row["logical_owner_json"]))
+                owner = ticket_document["owner"]
+                expected_owner = PlannerOwner(
+                    phase="correction",
+                    step_index=int(prior_owner["step_index"]) + 1,
+                ).as_wire()
+                if owner != expected_owner:
+                    raise InvalidTransition("planner correction owner is not the exact successor")
+                suspension_revision = int(row["suspension_revision"]) + 1
+                if int(ticket_document["suspension_revision"]) != suspension_revision:
+                    raise InvalidTransition("planner correction suspension revision is stale")
+                request = dict(ticket_document["request"])
+                if request.get("method") != "model.request":
+                    raise InvalidTransition("planner correction method must be model.request")
+                if ticket_document["request_digest"] != canonical_sha256(request):
+                    raise IdempotencyConflict("planner correction request digest is stale")
+                next_control_revision = int(row["operation_control_revision"]) + 1
+                owner_json = canonical_json_bytes(owner).decode()
+                self._connection.execute(
+                    """
+                    INSERT INTO rlm_workbench_suspensions(
+                        operation_id, suspension_revision, control_revision,
+                        cell_execution_id, logical_owner_json, logical_owner_digest,
+                        broker_method, contract_id, request_digest, ticket_id,
+                        checkpoint_digest, state, created_at_unix_ms, settled_at_unix_ms
+                    ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, NULL, 'pending', ?, NULL)
+                    """,
+                    (
+                        operation.value,
+                        suspension_revision,
+                        next_control_revision,
+                        owner_json,
+                        canonical_sha256(owner),
+                        request["method"],
+                        request["contract_id"],
+                        ticket_document["request_digest"],
+                        ticket_document["ticket_id"],
+                        now,
+                    ),
+                )
+                created = ticket_writer.create_ticket_in_transaction(
+                    self._connection, correction_ticket
+                )
+                if created != correction_ticket:
+                    raise IdempotencyConflict(
+                        "planner correction ticket changed during projection"
+                    )
+                self._connection.execute(
+                    """
+                    UPDATE rlm_workbench_jobs
+                    SET phase = 'waiting_external', control_revision = ?, updated_at_unix_ms = ?
+                    WHERE operation_id = ? AND phase = 'accepted' AND control_revision = ?
+                    """,
+                    (
+                        next_control_revision,
+                        now,
+                        operation.value,
+                        row["job_control_revision"],
+                    ),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("workbench changed during planner correction")
+                self._connection.execute(
+                    """
+                    UPDATE operation_controls SET control_revision = ?
+                    WHERE operation_id = ? AND control_revision = ?
+                      AND cancellation_requested = 0
+                    """,
+                    (
+                        next_control_revision,
+                        operation.value,
+                        row["operation_control_revision"],
+                    ),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("operation control changed during planner correction")
+                self._connection.execute(
+                    """
+                    UPDATE operation_attempts
+                    SET state = 'suspended_external', certainty = ?,
+                        recovery_reason = 'planner_correction_wait', ended_at_unix_ms = ?
+                    WHERE operation_id = ? AND attempt_no = ? AND attempt_id = ?
+                      AND state = ?
+                    """,
+                    (
+                        OutcomeCertainty.CERTAIN.value,
+                        now,
+                        operation.value,
+                        attempt_no,
+                        attempt_id,
+                        OperationState.RUNNING.value,
+                    ),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("attempt changed during planner correction")
+                self._connection.execute(
+                    """
+                    UPDATE operation_leases SET released_at_unix_ms = ?
+                    WHERE operation_id = ? AND attempt_no = ? AND lease_epoch = ?
+                      AND released_at_unix_ms IS NULL
+                    """,
+                    (now, operation.value, attempt_no, lease_epoch),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("lease changed during planner correction")
+                outer_revision = int(row["record_revision"]) + 1
+                self._connection.execute(
+                    """
+                    UPDATE operations
+                    SET state = ?, certainty = ?, record_revision = ?,
+                        reconciliation_required = 0, updated_at_unix_ms = ?
+                    WHERE operation_id = ? AND state = ? AND record_revision = ?
+                    """,
+                    (
+                        OperationState.ACCEPTED.value,
+                        OutcomeCertainty.CERTAIN.value,
+                        outer_revision,
+                        now,
+                        operation.value,
+                        OperationState.RUNNING.value,
+                        row["record_revision"],
+                    ),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("outer operation changed during planner correction")
+                self._connection.execute(
+                    """
+                    UPDATE operation_dispatch SET state = ?, finished_at_unix_ms = ?
+                    WHERE operation_id = ? AND state = ? AND current_attempt_no = ?
+                    """,
+                    (_DISPATCH_PARKED, now, operation.value, _DISPATCH_RUNNING, attempt_no),
+                )
+                if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise StaleAttemptFence("dispatch changed during planner correction")
+                self._insert_event(
+                    operation.value,
+                    OperationState.ACCEPTED,
+                    OutcomeCertainty.CERTAIN,
+                    outer_revision,
+                    now,
+                    "workbench_waiting_external",
+                    attempt_no=attempt_no,
+                    event_kind="workbench_waiting_external",
+                    payload={
+                        "suspension_revision": suspension_revision,
+                        "ticket_id": ticket_document["ticket_id"],
+                        "cell_execution_id": None,
+                    },
+                )
+                self._insert_event(
+                    operation.value,
+                    OperationState.ACCEPTED,
+                    OutcomeCertainty.CERTAIN,
+                    outer_revision,
+                    now,
+                    "planner_correction_requested",
+                    attempt_no=attempt_no,
+                    event_kind="planner_correction_requested",
+                    payload={
+                        "consumed_outbox_digest": str(row["outbox_digest"]),
+                        "settlement_digest": str(row["settlement_digest"]),
+                        "prior_ticket_id": str(row["ticket_id"]),
+                        "suspension_revision": suspension_revision,
+                        "ticket_id": ticket_document["ticket_id"],
+                        "request_digest": ticket_document["request_digest"],
+                        "logical_owner": owner,
+                    },
+                )
+                return self._record_from_operation_id(operation)
+            assert directive is not None
+            projected_cell_id: str | None = None
+            projected_checkpoint_digest: str | None = None
+            if execute_cell:
+                assert cell_projection is not None
+                required_projection = {
+                    "cell_index",
+                    "cell_execution_id",
+                    "source_json",
+                    "source_digest",
+                    "checkpoint_json",
+                    "pre_checkpoint_digest",
+                    "workspace_id",
+                    "workspace_generation",
+                    "workspace_revision",
+                    "backend_capability_digest",
+                    "environment_digest",
+                    "worker_owner_generation",
+                    "worker_process_identity_digest",
+                }
+                if set(cell_projection) != required_projection:
+                    raise InvalidTransition("planner cell projection shape is invalid")
+                source_json = str(cell_projection["source_json"])
+                try:
+                    source_document = json.loads(source_json)
+                    checkpoint_document = json.loads(str(cell_projection["checkpoint_json"]))
+                except json.JSONDecodeError as error:
+                    raise InvalidTransition("planner cell projection JSON is invalid") from error
+                cell_index = cell_projection["cell_index"]
+                if type(cell_index) is not int or cell_index < 0:
+                    raise InvalidTransition("planner cell index is invalid")
+                source_digest = str(cell_projection["source_digest"])
+                if (
+                    source_document != dict(directive)
+                    or canonical_sha256(source_document) != source_digest
+                    or canonical_json_bytes(source_document).decode("utf-8") != source_json
+                ):
+                    raise InvalidTransition("planner cell source binding is stale")
+                expected_cell_id = "cell-" + hashlib.sha256(
+                    f"{operation.value}\0{cell_index}\0{source_digest}".encode()
+                ).hexdigest()[:32]
+                projected_cell_id = str(cell_projection["cell_execution_id"])
+                projected_checkpoint_digest = str(cell_projection["pre_checkpoint_digest"])
+                if (
+                    projected_cell_id != expected_cell_id
+                    or checkpoint_document.get("content_digest") != projected_checkpoint_digest
+                    or canonical_json_bytes(checkpoint_document).decode("utf-8")
+                    != str(cell_projection["checkpoint_json"])
+                    or row["workspace_id"] is None
+                    or str(row["workspace_id"]) != str(cell_projection["workspace_id"])
+                    or int(row["workspace_generation"])
+                    != int(cell_projection["workspace_generation"])
+                    or int(row["workspace_revision"]) != int(cell_projection["workspace_revision"])
+                    or checkpoint_document.get("source_handle", {}).get("workspace", {}).get(
+                        "value"
+                    )
+                    != str(cell_projection["workspace_id"])
+                    or checkpoint_document.get("source_handle", {}).get("generation")
+                    != int(cell_projection["workspace_generation"])
+                    or checkpoint_document.get("source_handle", {}).get("revision")
+                    != int(cell_projection["workspace_revision"])
+                ):
+                    raise InvalidTransition("planner cell workspace/checkpoint binding is stale")
+                next_cell_index = int(
+                    self._connection.execute(
+                        "SELECT COUNT(*) FROM rlm_workbench_cells WHERE operation_id = ?",
+                        (operation.value,),
+                    ).fetchone()[0]
+                )
+                if cell_index != next_cell_index:
+                    raise InvalidTransition("planner cell index is not the durable next index")
+                worker_owner_generation = cell_projection["worker_owner_generation"]
+                if type(worker_owner_generation) is not int or worker_owner_generation <= 0:
+                    raise InvalidTransition("planner worker owner generation is invalid")
+                worker_identity = str(cell_projection["worker_process_identity_digest"])
+                if not worker_identity:
+                    raise InvalidTransition("planner worker identity is invalid")
+                self._connection.execute(
+                    """
+                    INSERT INTO workspace_checkpoint_catalog(
+                        manifest_digest, workspace_id, source_generation,
+                        source_revision, backend_capability_digest,
+                        environment_digest, creation_operation_id,
+                        manifest_json, created_at_unix_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(manifest_digest) DO NOTHING
+                    """,
+                    (
+                        projected_checkpoint_digest,
+                        cell_projection["workspace_id"],
+                        cell_projection["workspace_generation"],
+                        cell_projection["workspace_revision"],
+                        cell_projection["backend_capability_digest"],
+                        cell_projection["environment_digest"],
+                        operation.value,
+                        cell_projection["checkpoint_json"],
+                        now,
+                    ),
+                )
+                catalog = self._connection.execute(
+                    "SELECT manifest_json FROM workspace_checkpoint_catalog "
+                    "WHERE manifest_digest = ?",
+                    (projected_checkpoint_digest,),
+                ).fetchone()
+                if catalog is None or str(catalog["manifest_json"]) != str(
+                    cell_projection["checkpoint_json"]
+                ):
+                    raise InvalidTransition(
+                        "planner checkpoint digest conflicts with existing bytes"
+                    )
+                self._connection.execute(
+                    """
+                    INSERT INTO rlm_workbench_cells(
+                        operation_id, cell_execution_id, cell_index,
+                        source_json, source_digest, pre_checkpoint_digest,
+                        post_checkpoint_digest, state, attempt_id, attempt_fence,
+                        workspace_id, workspace_generation, pre_workspace_revision,
+                        post_workspace_revision, result_json, result_digest,
+                        created_at_unix_ms, updated_at_unix_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, NULL, 'prepared', ?, ?, ?, ?, ?,
+                              NULL, NULL, NULL, ?, ?)
+                    """,
+                    (
+                        operation.value,
+                        projected_cell_id,
+                        cell_index,
+                        source_json,
+                        source_digest,
+                        projected_checkpoint_digest,
+                        attempt_id,
+                        expected_fence,
+                        cell_projection["workspace_id"],
+                        cell_projection["workspace_generation"],
+                        cell_projection["workspace_revision"],
+                        now,
+                        now,
+                    ),
+                )
+                prior_authority = self._connection.execute(
+                    "SELECT * FROM rlm_workbench_attempt_authority WHERE operation_id = ?",
+                    (operation.value,),
+                ).fetchone()
+                if prior_authority is None:
+                    if cell_index != 0:
+                        raise InvalidTransition("planner cell lacks predecessor authority")
+                    self._connection.execute(
+                        """
+                        INSERT INTO rlm_workbench_attempt_authority(
+                            operation_id, attempt_id, attempt_fence,
+                            authority_generation, worker_owner_generation,
+                            worker_process_identity_digest, workspace_id,
+                            workspace_generation, workspace_revision,
+                            cell_execution_id, rebind_token_digest, updated_at_unix_ms
+                        ) VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, NULL, ?)
+                        """,
+                        (
+                            operation.value,
+                            attempt_id,
+                            expected_fence,
+                            worker_owner_generation,
+                            worker_identity,
+                            cell_projection["workspace_id"],
+                            cell_projection["workspace_generation"],
+                            cell_projection["workspace_revision"],
+                            projected_cell_id,
+                            now,
+                        ),
+                    )
+                else:
+                    predecessor = self._connection.execute(
+                        "SELECT cell_index, state FROM rlm_workbench_cells "
+                        "WHERE operation_id = ? AND cell_execution_id = ?",
+                        (operation.value, prior_authority["cell_execution_id"]),
+                    ).fetchone()
+                    if (
+                        predecessor is None
+                        or int(predecessor["cell_index"]) != cell_index - 1
+                        or str(predecessor["state"]) != "committed"
+                    ):
+                        raise InvalidTransition(
+                            "planner predecessor cell authority is not committed"
+                        )
+                    self._connection.execute(
+                        """
+                        UPDATE rlm_workbench_attempt_authority
+                        SET attempt_id = ?, attempt_fence = ?,
+                            authority_generation = authority_generation + 1,
+                            worker_owner_generation = ?,
+                            worker_process_identity_digest = ?, workspace_id = ?,
+                            workspace_generation = ?, workspace_revision = ?,
+                            cell_execution_id = ?, rebind_token_digest = NULL,
+                            updated_at_unix_ms = ?
+                        WHERE operation_id = ? AND attempt_id = ? AND attempt_fence = ?
+                          AND authority_generation = ? AND cell_execution_id = ?
+                        """,
+                        (
+                            attempt_id,
+                            expected_fence,
+                            worker_owner_generation,
+                            worker_identity,
+                            cell_projection["workspace_id"],
+                            cell_projection["workspace_generation"],
+                            cell_projection["workspace_revision"],
+                            projected_cell_id,
+                            now,
+                            operation.value,
+                            prior_authority["attempt_id"],
+                            prior_authority["attempt_fence"],
+                            prior_authority["authority_generation"],
+                            prior_authority["cell_execution_id"],
+                        ),
+                    )
+                    if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                        raise StaleAttemptFence("planner predecessor authority changed")
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_jobs SET phase = 'running', updated_at_unix_ms = ?
+                WHERE operation_id = ? AND phase = 'accepted'
+                  AND control_revision = ? AND cancellation_requested = 0
+                """,
+                (now, operation.value, row["job_control_revision"]),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("workbench changed during planner consumption")
+            self._insert_event(
+                operation.value,
+                OperationState.RUNNING,
+                OutcomeCertainty.CERTAIN,
+                int(row["record_revision"]),
+                now,
+                "planner_successor_consumed",
+                attempt_no=attempt_no,
+                event_kind="planner_successor_consumed",
+                payload={
+                    "outbox_digest": str(row["outbox_digest"]),
+                    "settlement_digest": str(row["settlement_digest"]),
+                    "rebind_generation": int(row["rebind_generation"]),
+                    "directive": dict(directive),
+                    "directive_digest": canonical_sha256(directive),
+                    "cell_execution_id": projected_cell_id,
+                    "pre_checkpoint_digest": projected_checkpoint_digest,
+                    "ticket_id": str(row["ticket_id"]),
+                    "request_digest": str(row["request_digest"]),
+                    "logical_owner": json.loads(str(row["logical_owner_json"])),
+                },
+            )
+            return self._record_from_operation_id(operation)
+
     def _prepare_workbench_successor_unlocked(
         self,
         *,
@@ -2341,6 +3581,119 @@ class OperationRegistry:
             raise StaleAttemptFence("workbench successor attempt changed during prepare")
         return token_digest
 
+    def _takeover_prepared_planner_cell_unlocked(
+        self,
+        *,
+        operation_id: str,
+        successor_attempt_id: str,
+        successor_attempt_no: int,
+        dispatcher_generation: int,
+        lease_epoch: int,
+        owner_digest: str,
+        now: int,
+    ) -> str | None:
+        row = self._connection.execute(
+            """
+            SELECT cell.cell_execution_id, cell.attempt_id, cell.attempt_fence,
+                   cell.pre_checkpoint_digest,
+                   authority.authority_generation,
+                   authority.attempt_id AS authority_attempt_id,
+                   authority.attempt_fence AS authority_attempt_fence,
+                   authority.cell_execution_id AS authority_cell_execution_id,
+                   prior.attempt_no AS prior_attempt_no, prior.state AS prior_attempt_state
+            FROM rlm_workbench_cells AS cell
+            JOIN rlm_workbench_attempt_authority AS authority
+              ON authority.operation_id = cell.operation_id
+            JOIN operation_attempts AS prior
+              ON prior.operation_id = cell.operation_id
+             AND prior.attempt_id = cell.attempt_id
+            WHERE cell.operation_id = ? AND cell.state = 'prepared'
+            """,
+            (operation_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        if (
+            int(row["prior_attempt_no"]) != successor_attempt_no - 1
+            or str(row["prior_attempt_state"]) != OperationState.INDETERMINATE.value
+            or str(row["authority_attempt_id"]) != str(row["attempt_id"])
+            or str(row["authority_attempt_fence"]) != str(row["attempt_fence"])
+            or str(row["authority_cell_execution_id"]) != str(row["cell_execution_id"])
+        ):
+            raise StaleAttemptFence("prepared planner cell predecessor authority is stale")
+        successor_fence = canonical_sha256(
+            {
+                "dispatcher_generation": dispatcher_generation,
+                "lease_epoch": lease_epoch,
+                "owner_digest": owner_digest,
+            }
+        )
+        self._connection.execute(
+            """
+            UPDATE rlm_workbench_cells
+            SET attempt_id = ?, attempt_fence = ?, updated_at_unix_ms = ?
+            WHERE operation_id = ? AND cell_execution_id = ? AND state = 'prepared'
+              AND attempt_id = ? AND attempt_fence = ?
+            """,
+            (
+                successor_attempt_id,
+                successor_fence,
+                now,
+                operation_id,
+                row["cell_execution_id"],
+                row["attempt_id"],
+                row["attempt_fence"],
+            ),
+        )
+        if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+            raise StaleAttemptFence("prepared planner cell changed during takeover")
+        self._connection.execute(
+            """
+            UPDATE rlm_workbench_attempt_authority
+            SET attempt_id = ?, attempt_fence = ?,
+                authority_generation = authority_generation + 1,
+                rebind_token_digest = NULL, updated_at_unix_ms = ?
+            WHERE operation_id = ? AND attempt_id = ? AND attempt_fence = ?
+              AND authority_generation = ? AND cell_execution_id = ?
+            """,
+            (
+                successor_attempt_id,
+                successor_fence,
+                now,
+                operation_id,
+                row["authority_attempt_id"],
+                row["authority_attempt_fence"],
+                row["authority_generation"],
+                row["cell_execution_id"],
+            ),
+        )
+        if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+            raise StaleAttemptFence("prepared planner authority changed during takeover")
+        self._connection.execute(
+            """
+            UPDATE operation_attempts SET checkpoint_digest = ?
+            WHERE operation_id = ? AND attempt_no = ? AND attempt_id = ?
+              AND state = 'running'
+            """,
+            (
+                row["pre_checkpoint_digest"],
+                operation_id,
+                successor_attempt_no,
+                successor_attempt_id,
+            ),
+        )
+        if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+            raise StaleAttemptFence("prepared planner successor attempt changed")
+        return canonical_sha256(
+            {
+                "kind": "prepared_cell_recovery",
+                "operation_id": operation_id,
+                "cell_execution_id": str(row["cell_execution_id"]),
+                "successor_attempt_id": successor_attempt_id,
+                "successor_attempt_fence": successor_fence,
+            }
+        )
+
     def claim_next(
         self,
         runtime_generation: int,
@@ -2383,8 +3736,34 @@ class OperationRegistry:
                     continue
                 deadline = self._request_deadline(candidate["request_json"])
                 if now >= deadline:
-                    self._expire_queued_unlocked(candidate, now)
-                    continue
+                    expired_planner_successor = None
+                    if str(candidate["dispatch_kind"]) == "rlm.workbench.execute":
+                        expired_planner_successor = self._connection.execute(
+                            """
+                            SELECT 1
+                            FROM rlm_workbench_successor_outbox AS outbox
+                            JOIN rlm_workbench_suspensions AS suspension
+                              ON suspension.operation_id = outbox.operation_id
+                             AND suspension.suspension_revision = outbox.suspension_revision
+                            JOIN caller_work_tickets AS ticket
+                              ON ticket.ticket_id = suspension.ticket_id
+                             AND ticket.operation_id = outbox.operation_id
+                             AND ticket.suspension_revision = outbox.suspension_revision
+                            JOIN rlm_workbench_jobs AS job
+                              ON job.operation_id = outbox.operation_id
+                            WHERE outbox.operation_id = ? AND outbox.state = 'pending'
+                              AND ticket.state IN (
+                                'settled_success', 'settled_failure', 'cancelled_certain'
+                              )
+                              AND ticket.settled_receipt_digest = outbox.settlement_digest
+                              AND job.phase = 'accepted'
+                            LIMIT 1
+                            """,
+                            (operation_id,),
+                        ).fetchone()
+                    if expired_planner_successor is None:
+                        self._expire_queued_unlocked(candidate, now)
+                        continue
 
                 previous_attempt = self._connection.execute(
                     "SELECT COALESCE(MAX(attempt_no), 0) AS value FROM operation_attempts "
@@ -2443,38 +3822,70 @@ class OperationRegistry:
                 )
                 successor_token_digest: str | None = None
                 if str(candidate["dispatch_kind"]) == "rlm.workbench.execute" and attempt_no > 1:
-                    recovery_pending = self._connection.execute(
-                        """
-                        SELECT 1
-                        FROM rlm_workbench_rebind_transfers AS transfer
-                        JOIN rlm_workbench_cells AS cell
-                          ON cell.operation_id = transfer.operation_id
-                         AND cell.cell_execution_id = transfer.cell_execution_id
-                        WHERE transfer.operation_id = ?
-                          AND (
-                            (transfer.state = 'consumed'
-                             AND transfer.consumption_kind = 'recovery_fenced_loss')
-                            OR transfer.state = 'aborted'
-                          )
-                          AND cell.state = 'lost_before_commit'
-                          AND NOT EXISTS (
-                            SELECT 1 FROM rlm_workbench_cells AS later
-                            WHERE later.operation_id = cell.operation_id
-                              AND later.cell_index > cell.cell_index
-                          )
-                        """,
+                    workbench_spec = self._connection.execute(
+                        "SELECT spec_json FROM rlm_workbench_jobs WHERE operation_id = ?",
                         (operation_id,),
                     ).fetchone()
-                    if recovery_pending is None:
-                        successor_token_digest = self._prepare_workbench_successor_unlocked(
-                            operation_id=operation_id,
-                            successor_attempt_id=attempt_id,
-                            successor_attempt_no=attempt_no,
-                            dispatcher_generation=dispatcher_generation,
-                            lease_epoch=lease_epoch,
-                            owner_digest=str(owner_digest),
-                            now=now,
+                    execution_mode = None
+                    if workbench_spec is not None:
+                        execution_mode = str(
+                            json.loads(str(workbench_spec["spec_json"]))["model"]["execution_mode"]
                         )
+                    if execution_mode == "caller_delegated":
+                        successor_token_digest = (
+                            self._takeover_prepared_planner_cell_unlocked(
+                                operation_id=operation_id,
+                                successor_attempt_id=attempt_id,
+                                successor_attempt_no=attempt_no,
+                                dispatcher_generation=dispatcher_generation,
+                                lease_epoch=lease_epoch,
+                                owner_digest=str(owner_digest),
+                                now=now,
+                            )
+                        )
+                        if successor_token_digest is None:
+                            successor_token_digest = self._prepare_planner_successor_unlocked(
+                                operation_id=operation_id,
+                                successor_attempt_id=attempt_id,
+                                successor_attempt_no=attempt_no,
+                                dispatcher_generation=dispatcher_generation,
+                                lease_epoch=lease_epoch,
+                                owner_digest=str(owner_digest),
+                                now=now,
+                            )
+                    else:
+                        recovery_pending = self._connection.execute(
+                            """
+                            SELECT 1
+                            FROM rlm_workbench_rebind_transfers AS transfer
+                            JOIN rlm_workbench_cells AS cell
+                              ON cell.operation_id = transfer.operation_id
+                             AND cell.cell_execution_id = transfer.cell_execution_id
+                            WHERE transfer.operation_id = ?
+                              AND (
+                                (transfer.state = 'consumed'
+                                 AND transfer.consumption_kind = 'recovery_fenced_loss')
+                                OR transfer.state = 'aborted'
+                              )
+                              AND cell.state = 'lost_before_commit'
+                              AND NOT EXISTS (
+                                SELECT 1 FROM rlm_workbench_cells AS later
+                                WHERE later.operation_id = cell.operation_id
+                                  AND later.cell_index > cell.cell_index
+                              )
+                            """,
+                            (operation_id,),
+                        ).fetchone()
+                        if recovery_pending is None:
+                            successor_token_digest = self._prepare_workbench_successor_unlocked(
+                                operation_id=operation_id,
+                                successor_attempt_id=attempt_id,
+                                successor_attempt_no=attempt_no,
+                                dispatcher_generation=dispatcher_generation,
+                                lease_epoch=lease_epoch,
+                                owner_digest=str(owner_digest),
+                                now=now,
+                            )
                 revision = int(candidate["record_revision"]) + 1
                 self._connection.execute(
                     """
@@ -3154,6 +4565,222 @@ class OperationRegistry:
             state=OperationState.INDETERMINATE,
             note=note,
         )
+
+    def suspend_planner_attempt(
+        self,
+        attempt_ref: OperationAttemptRefV1,
+        dispatcher_generation: int,
+        lease_epoch: int,
+        owner_digest: str,
+        *,
+        ticket: CallerWorkTicket,
+        ticket_writer: CallerTicketWriter,
+    ) -> OperationRecord:
+        """Suspend one root-planner call without entering cell-only authority."""
+
+        with self._lock, self._connection:
+            operation, attempt_no, attempt_id = _attempt_identity(attempt_ref)
+            ticket_document = dict(ticket.root)
+            ticket_operation = OperationRef.model_validate(
+                ticket_document["operation"], strict=True
+            )
+            if ticket_operation != operation:
+                raise InvalidTransition("planner ticket operation does not match the attempt")
+            runtime_generation = self._current_runtime_generation_unlocked()
+            self._validate_fence_unlocked(
+                operation,
+                attempt_no,
+                attempt_id,
+                runtime_generation,
+                dispatcher_generation,
+                lease_epoch,
+                owner_digest,
+            )
+            outer = self._connection.execute(
+                "SELECT * FROM operations WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            job = self._connection.execute(
+                "SELECT * FROM rlm_workbench_jobs WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            control = self._connection.execute(
+                "SELECT * FROM operation_controls WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            dispatch = self._connection.execute(
+                "SELECT * FROM operation_dispatch WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            if outer is None or OperationState(outer["state"]) is not OperationState.RUNNING:
+                raise InvalidTransition("planner suspension requires a running operation")
+            if job is None or str(job["phase"]) != "running":
+                raise InvalidTransition("planner suspension requires running phase")
+            if control is None or bool(control["cancellation_requested"]):
+                raise InvalidTransition("planner suspension is fenced by cancellation")
+            if int(job["control_revision"]) != int(control["control_revision"]):
+                raise InvalidTransition("workbench and operation control revisions diverged")
+            now = self._now_ms()
+            if now >= int(job["cumulative_deadline_unix_ms"]):
+                raise InvalidTransition("planner suspension reached its cumulative deadline")
+            if (
+                dispatch is None
+                or str(dispatch["state"]) != _DISPATCH_RUNNING
+                or int(dispatch["current_attempt_no"]) != attempt_no
+            ):
+                raise StaleAttemptFence("planner suspension dispatch fence is stale")
+            owner = ticket_document["owner"]
+            try:
+                expected_owner = PlannerOwner(
+                    phase=owner["phase"],
+                    step_index=owner["step_index"],
+                    kind=owner["kind"],
+                ).as_wire()
+            except (KeyError, TypeError, ValueError) as error:
+                raise InvalidTransition("planner ticket owner is invalid") from error
+            if owner != expected_owner or set(owner) != {"kind", "phase", "step_index"}:
+                raise InvalidTransition("planner ticket owner has non-frozen fields")
+            request = dict(ticket_document["request"])
+            if request.get("method") != "model.request":
+                raise InvalidTransition("root planner ticket method must be model.request")
+            if ticket_document["request_digest"] != canonical_sha256(request):
+                raise IdempotencyConflict("planner ticket request digest is stale")
+            prior = self._connection.execute(
+                """
+                SELECT COALESCE(MAX(suspension_revision), 0) AS value
+                FROM rlm_workbench_suspensions WHERE operation_id = ?
+                """,
+                (operation.value,),
+            ).fetchone()
+            assert prior is not None
+            suspension_revision = int(prior["value"]) + 1
+            if int(ticket_document["suspension_revision"]) != suspension_revision:
+                raise InvalidTransition("planner ticket suspension revision is stale")
+            prior_control_revision = int(job["control_revision"])
+            next_control_revision = prior_control_revision + 1
+            owner_json = canonical_json_bytes(owner).decode()
+            self._connection.execute(
+                """
+                INSERT INTO rlm_workbench_suspensions(
+                    operation_id, suspension_revision, control_revision,
+                    cell_execution_id, logical_owner_json, logical_owner_digest,
+                    broker_method, contract_id, request_digest, ticket_id,
+                    checkpoint_digest, state, created_at_unix_ms, settled_at_unix_ms
+                ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, NULL, 'pending', ?, NULL)
+                """,
+                (
+                    operation.value,
+                    suspension_revision,
+                    next_control_revision,
+                    owner_json,
+                    canonical_sha256(owner),
+                    request["method"],
+                    request["contract_id"],
+                    ticket_document["request_digest"],
+                    ticket_document["ticket_id"],
+                    now,
+                ),
+            )
+            created = ticket_writer.create_ticket_in_transaction(self._connection, ticket)
+            if created != ticket:
+                raise IdempotencyConflict("planner ticket projection changed during suspension")
+            self._connection.execute(
+                """
+                UPDATE rlm_workbench_jobs
+                SET phase = 'waiting_external', control_revision = ?, updated_at_unix_ms = ?
+                WHERE operation_id = ? AND phase = 'running' AND control_revision = ?
+                """,
+                (next_control_revision, now, operation.value, prior_control_revision),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("workbench phase changed during planner suspension")
+            self._connection.execute(
+                """
+                UPDATE operation_controls
+                SET control_revision = ?
+                WHERE operation_id = ? AND control_revision = ?
+                  AND cancellation_requested = 0
+                """,
+                (next_control_revision, operation.value, prior_control_revision),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("operation control changed during planner suspension")
+            self._connection.execute(
+                """
+                UPDATE operation_attempts
+                SET state = 'suspended_external', certainty = ?,
+                    recovery_reason = 'planner_caller_work_wait', ended_at_unix_ms = ?
+                WHERE operation_id = ? AND attempt_no = ? AND attempt_id = ?
+                  AND state = ?
+                """,
+                (
+                    OutcomeCertainty.CERTAIN.value,
+                    now,
+                    operation.value,
+                    attempt_no,
+                    attempt_id,
+                    OperationState.RUNNING.value,
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("attempt changed during planner suspension")
+            self._connection.execute(
+                """
+                UPDATE operation_leases
+                SET released_at_unix_ms = ?
+                WHERE operation_id = ? AND attempt_no = ? AND lease_epoch = ?
+                  AND released_at_unix_ms IS NULL
+                """,
+                (now, operation.value, attempt_no, lease_epoch),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("attempt lease changed during planner suspension")
+            outer_revision = int(outer["record_revision"]) + 1
+            self._connection.execute(
+                """
+                UPDATE operations
+                SET state = ?, certainty = ?, record_revision = ?,
+                    reconciliation_required = 0, updated_at_unix_ms = ?
+                WHERE operation_id = ? AND state = ? AND record_revision = ?
+                """,
+                (
+                    OperationState.ACCEPTED.value,
+                    OutcomeCertainty.CERTAIN.value,
+                    outer_revision,
+                    now,
+                    operation.value,
+                    OperationState.RUNNING.value,
+                    int(outer["record_revision"]),
+                ),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("outer operation changed during planner suspension")
+            self._connection.execute(
+                """
+                UPDATE operation_dispatch
+                SET state = ?, finished_at_unix_ms = ?
+                WHERE operation_id = ? AND state = ? AND current_attempt_no = ?
+                """,
+                (_DISPATCH_PARKED, now, operation.value, _DISPATCH_RUNNING, attempt_no),
+            )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("dispatch changed during planner suspension")
+            self._insert_event(
+                operation.value,
+                OperationState.ACCEPTED,
+                OutcomeCertainty.CERTAIN,
+                outer_revision,
+                now,
+                "workbench_waiting_external",
+                attempt_no=attempt_no,
+                event_kind="workbench_waiting_external",
+                payload={
+                    "suspension_revision": suspension_revision,
+                    "ticket_id": ticket_document["ticket_id"],
+                    "cell_execution_id": None,
+                },
+            )
+            return self.get(operation)
 
     def suspend_workbench_attempt(
         self,

@@ -32,6 +32,7 @@ from aar.rlm_models import RlmJobSnapshot, RlmJobSpec
 from aar.rlm_workbench_models import (
     RlmWorkbenchCapability,
     RlmWorkbenchExecuteInput,
+    RlmWorkbenchSnapshot,
     build_workbench_capability,
 )
 from aar.runtime.brokers import (
@@ -74,6 +75,7 @@ from aar.runtime.programming import (
     WorkspaceCheckpointRejected,
     WorkspaceOperationConflict,
 )
+from aar.runtime.provider_ready_startup import ProviderReadyStartup
 from aar.runtime.registry import OperationRegistry, RegistryError, StaleRuntimeGeneration
 from aar.runtime.rlm import RlmEngine, RlmExecutionCancelled
 from aar.runtime.rlm_workbench import (
@@ -175,6 +177,7 @@ class ReferenceHost:
         model_execution_journal: ModelExecutionJournal | None = None,
         workbench_planner: RlmWorkbenchPlanner | None = None,
         workbench_backend_availability: Mapping[str, Mapping[str, Any]] | None = None,
+        provider_ready_startup: ProviderReadyStartup | None = None,
     ) -> None:
         if programmable_backend not in {"plain", "ipython"}:
             raise ValueError(f"unsupported programmable backend: {programmable_backend}")
@@ -186,8 +189,37 @@ class ReferenceHost:
         self._durable_dispatch_enabled = enable_durable_dispatch
         self._dispatcher_concurrency = dispatcher_concurrency
         self.dispatcher: DurableDispatcher | None = None
-        self.registry = OperationRegistry(database_path, now_ms)
-        self.runtime_generation = self.registry.start_runtime()
+        self.provider_ready_startup = provider_ready_startup
+        registry: OperationRegistry | None = None
+        try:
+            if provider_ready_startup is not None:
+                # This is intentionally before OperationRegistry construction: the
+                # startup verifier is read-only and must precede every registry
+                # schema/runtime write on the exclusive path.
+                provider_ready_startup.assert_database_path(database_path)
+                provider_ready_startup.validate_host_configuration(
+                    programmable_backend=programmable_backend,
+                    model_broker_registry=model_broker_registry,
+                    default_model_route_profile=default_model_route_profile,
+                )
+            registry = OperationRegistry(database_path, now_ms)
+            if provider_ready_startup is not None and registry.schema_versions() != (
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+            ):
+                raise ReferenceHostError(
+                    "provider-ready startup requires the exact registry v6 migration history"
+                )
+            self.registry = registry
+            self.runtime_generation = registry.start_runtime()
+        except BaseException:
+            if registry is not None:
+                registry.close()
+            raise
         self.worker_manager = WorkerManager(
             self.registry,
             runtime_generation=self.runtime_generation,
@@ -196,6 +228,11 @@ class ReferenceHost:
         self.worker_manager.recover_orphans()
         self.workspace = DeterministicWorkspace(database_path)
         self.artifacts = FakeArtifactBroker(database_path)
+        if (model_broker_registry is None) != (default_model_route_profile is None):
+            raise ValueError(
+                "model_broker_registry and default_model_route_profile must be provided together"
+            )
+        self.model_executions = model_execution_journal or ModelExecutionJournal(database_path)
         self.program_workspace: WorkspaceBackend
         self.caller_work: CallerWorkRepository | None = None
         self.rlm_workbench: RlmWorkbenchCoordinator | None = None
@@ -208,7 +245,11 @@ class ReferenceHost:
             )
             self.program_workspace = ipython_workspace
             if self.registry.supports_rlm_workbench():
-                self.caller_work = CallerWorkRepository(database_path, now_ms=now_ms)
+                self.caller_work = CallerWorkRepository(
+                    database_path,
+                    now_ms=now_ms,
+                    model_executions=self.model_executions,
+                )
                 self.rlm_workbench = RlmWorkbenchCoordinator(
                     database_path,
                     ipython_workspace,
@@ -236,25 +277,16 @@ class ReferenceHost:
                 "adapter_generation": self.runtime_generation,
                 "evidence_tier": "host_receipt_bound",
             }
-        if workbench_backend_availability is not None:
+        if provider_ready_startup is not None and workbench_backend_availability is not None:
+            raise ReferenceHostError("provider-ready startup owns workbench backend availability")
+        if provider_ready_startup is None and workbench_backend_availability is not None:
             availability.update(
                 {method: dict(row) for method, row in workbench_backend_availability.items()}
             )
-        self._workbench_backend_availability = availability
         self.models = FakeModelBroker()
-        if (model_broker_registry is None) != (default_model_route_profile is None):
-            raise ValueError(
-                "model_broker_registry and default_model_route_profile must be provided together"
-            )
-        if model_execution_journal is not None and model_broker_registry is None:
-            raise ValueError("model_execution_journal requires an injected model broker registry")
         self.model_broker_registry = model_broker_registry
         self.default_model_route_profile = default_model_route_profile
-        self.model_executions = (
-            None
-            if model_broker_registry is None
-            else model_execution_journal or ModelExecutionJournal(database_path)
-        )
+
         self.subagents = FakeSubagentBroker(database_path)
         self.effects = FakeEffectBroker()
         self.evidence = FakeEvidenceProvider(evidence_records)
@@ -269,6 +301,17 @@ class ReferenceHost:
             model_broker_registry=self.model_broker_registry,
             model_execution_journal=self.model_executions,
         )
+        if provider_ready_startup is not None:
+            provider_ready_startup.bind_host_factory_owner(self.brokers)
+            availability.update(
+                {
+                    method: dict(row)
+                    for method, row in provider_ready_startup.backend_availability(
+                        self.runtime_generation
+                    ).items()
+                }
+            )
+        self._workbench_backend_availability = availability
         self.rlm = RlmEngine(database_path, self.brokers, now_ms)
         self.adaptive_assets = AdaptiveAssetStore(database_path)
         self.capabilities = CapabilitySet.issue(
@@ -320,6 +363,12 @@ class ReferenceHost:
                 CapabilityDescriptor(name="workspace.program.restore", access=AccessMode.WRITE),
             )
         )
+        if provider_ready_startup is not None:
+            try:
+                provider_ready_startup.activate(self.runtime_generation)
+            except BaseException:
+                self.close()
+                raise
         if enable_durable_dispatch:
             self.start_durable_dispatch()
 
@@ -697,6 +746,22 @@ class ReferenceHost:
             if self.rlm_workbench is None:
                 raise ReferenceHostError("RLM workbench coordinator is unavailable")
             result = self.rlm_workbench.run_claimed(operation, attempt, fence)
+            if (
+                isinstance(result, RlmWorkbenchSnapshot)
+                and result.root["phase"] == "waiting_external"
+            ):
+                # The planner suspension transaction already closed the attempt and
+                # projected the outer operation back to accepted.  A waiting
+                # snapshot is evidence of suspension, never a terminal success.
+                return self.registry.get(operation)
+            if isinstance(result, RlmWorkbenchSnapshot) and result.root["phase"] in {
+                "failed",
+                "cancelled",
+                "timed_out",
+            }:
+                # Planner outcome consumption already projected the exact terminal
+                # operation, attempt, lease and dispatch state in one transaction.
+                return self.registry.get(operation)
             return self.registry.transition_claimed(
                 attempt,
                 self.runtime_generation,
@@ -1244,14 +1309,14 @@ class ReferenceHost:
         coordinator = self.rlm_workbench
         if coordinator is None:
             return 0
-        certain, uncertain = coordinator.sweep_expired_caller_work()
+        certain, uncertain, successor_owned = coordinator.sweep_expired_caller_work()
         for operation in certain:
             record = self.registry.get(operation)
             if record.state is OperationState.ACCEPTED:
                 self.registry.time_out(operation, self.runtime_generation)
         # Existing cancellation intent owns uncertain tickets.  Recovery must
         # not steal that authority or enqueue fresh work.
-        return len(certain) + len(uncertain)
+        return len(certain) + len(uncertain) + len(successor_owned)
 
     def _terminalize_waiting_workbench_deadline(self, operation: OperationRef) -> None:
         coordinator = self.rlm_workbench

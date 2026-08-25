@@ -11,6 +11,6 @@
   "skill_digest": "sha256:708ce77448844f2745944fd1b783fce4eabe16beaf92ed1332cd8ec6cee5baa7",
   "skill_name": "aar-operations",
   "skill_version": "0.10.0",
-  "tool_surface_digest": "sha256:6a483f15a7805f49128590a280724766216074aa07f29cbbfe8d5a74d49a8d01",
+  "tool_surface_digest": "sha256:b12e88d11cabdd577953da291259ba9902a960275c641ba9829a4e8d1fb3d043",
   "tool_surface_version": "aar.mcp-tools.v8"
 }

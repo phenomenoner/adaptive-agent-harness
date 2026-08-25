@@ -2,6 +2,29 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
+## [0.6.0a0](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a0) — 2026-08-26
+
+`v0.6.0a0` adds a clean-install-only provider-ready bootstrap and activation path without changing
+the frozen MCP v8 tool surface or its compatibility schemas.
+
+### Added
+
+- build a fresh canonical v6 runtime home with exact install evidence, profile/history/current
+  authority, package-owned broker factories, and no-replace atomic publication;
+- activate provider-ready capability and grant-set authority only after the real host broker façade
+  is bound, before Ready or durable dispatch;
+- enforce current, memory-only session grants at MCP admission, with grant denial taking precedence
+  over backend availability.
+
+### Verification boundary
+
+- exact frozen compatibility assets, generated contracts, host profiles, package metadata, the
+  clean-install lifecycle, and provider-ready startup/admission are release gates;
+- package installation or startup against an existing runtime home, symlink, or unknown residual
+  state fails closed; this release does not migrate or adopt an existing home;
+- GitHub publication does not establish package-index distribution, production deployment,
+  provider-backed execution, or official Plugin Directory publication.
+
 ## [0.5.0a0](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0) — 2026-08-20
 
 `v0.5.0a0` is a public GitHub alpha release. It does not claim package-index publication,

@@ -9,6 +9,13 @@ from typing import Any
 
 from mcp import Client
 
+from aar.broker_models import (
+    EffectiveModelRoute,
+    ModelResponse,
+    ModelRouteBinding,
+    ModelRouteReceipt,
+    ModelUsageRecord,
+)
 from aar.canonical import canonical_sha256
 from aar.mcp import workbench_surface
 from aar.mcp.server import build_server
@@ -171,6 +178,47 @@ def _caller_common(
         "expected_revision": ticket["revision"],
         "ticket_digest": ticket["ticket_digest"],
         "idempotency_key": f"idempotency-{suffix}",
+    }
+
+
+def _model_commit_payload(ticket: dict[str, Any], output_text: str) -> dict[str, Any]:
+    binding = ModelRouteBinding.model_validate(
+        ticket["request"]["route_binding"], strict=True
+    )
+    route_receipt = ModelRouteReceipt.issue(
+        requested=binding,
+        effective=EffectiveModelRoute(
+            provider_driver=binding.provider_driver,
+            provider=binding.provider,
+            model=binding.model,
+            reasoning_effort=binding.reasoning_effort,
+        ),
+        finish_reason="stop",
+        provider_response_id="provider-mcp-commit",
+        lookup_supported=True,
+    )
+    usage = ModelUsageRecord(
+        accounting_source="provider_reported",
+        input_tokens=7,
+        output_tokens=3,
+        total_tokens=10,
+    )
+    response = ModelResponse(
+        output_text=output_text,
+        route_receipt=route_receipt,
+        usage=usage,
+    )
+    return {
+        "observation": {
+            "kind": "model",
+            "outcome": "succeeded",
+            "output_text": output_text,
+            "output_digest": "sha256:" + hashlib.sha256(output_text.encode()).hexdigest(),
+            "route_receipt_digest": route_receipt.receipt_digest,
+            "usage_receipt_digest": canonical_sha256(usage),
+            "host_receipt_digest": canonical_sha256(response),
+        },
+        "model_response": response.model_dump(mode="json"),
     }
 
 
@@ -528,30 +576,55 @@ def test_broker_caller_work_tools_forward_into_the_g4_lifecycle(tmp_path: Path) 
                     )
                 )
                 assert started["state"] == "send_started"
+                commit_arguments = {
+                    **_caller_common(legacy, commit_authority, started, suffix="commit"),
+                    "claim_id": claimant["claim_id"],
+                    "claim_fence": claimant["claim_fence"],
+                    "physical_attempt_id": physical["physical_attempt_id"],
+                    "sent_request_digest": started["request_digest"],
+                    "sent_at_unix_ms": NOW_MS + 2,
+                    "provider_or_child_request_id": "provider-request-commit",
+                    **_model_commit_payload(started, "ok"),
+                }
                 committed = _structured(
-                    await client.call_tool(
-                        "aar_broker_work_commit",
-                        {
-                            **_caller_common(legacy, commit_authority, started, suffix="commit"),
-                            "claim_id": claimant["claim_id"],
-                            "claim_fence": claimant["claim_fence"],
-                            "physical_attempt_id": physical["physical_attempt_id"],
-                            "sent_request_digest": started["request_digest"],
-                            "sent_at_unix_ms": NOW_MS + 2,
-                            "provider_or_child_request_id": "provider-request-commit",
-                            "observation": {
-                                "kind": "model",
-                                "outcome": "succeeded",
-                                "output_text": "ok",
-                                "output_digest": "sha256:" + hashlib.sha256(b"ok").hexdigest(),
-                                "route_receipt_digest": "sha256:" + "b" * 64,
-                                "usage_receipt_digest": "sha256:" + "c" * 64,
-                                "host_receipt_digest": "sha256:" + "d" * 64,
-                            },
-                        },
-                    )
+                    await client.call_tool("aar_broker_work_commit", commit_arguments)
                 )
                 assert committed.get("state") == "settled_success", committed
+                replayed = _structured(
+                    await client.call_tool("aar_broker_work_commit", commit_arguments)
+                )
+                assert replayed == committed
+                changed_arguments = {
+                    **commit_arguments,
+                    **_model_commit_payload(started, "changed"),
+                }
+                collision_payload = _structured(
+                    await client.call_tool("aar_broker_work_commit", changed_arguments)
+                )
+                collision = RlmWorkbenchFailure.model_validate(
+                    collision_payload, strict=True
+                )
+                assert collision.root["code"] == "CALLER_WORK_CONFLICT"
+                with sqlite3.connect(database) as connection:
+                    connection.row_factory = sqlite3.Row
+                    durable = connection.execute(
+                        """
+                        SELECT ticket.state,
+                               (SELECT COUNT(*) FROM caller_work_candidate_receipts
+                                WHERE ticket_id = ticket.ticket_id) AS candidate_count,
+                               (SELECT COUNT(*) FROM model_executions
+                                WHERE operation_id = ticket.operation_id
+                                  AND idempotency_key = ticket.external_idempotency_key
+                                  AND state = 'result_committed') AS journal_count,
+                               (SELECT COUNT(*) FROM caller_work_command_receipts
+                                WHERE operation_id = ticket.operation_id
+                                  AND command_kind = 'commit') AS command_count
+                        FROM caller_work_tickets AS ticket WHERE ticket.ticket_id = ?
+                        """,
+                        (started["ticket_id"],),
+                    ).fetchone()
+                assert durable is not None
+                assert tuple(durable) == ("settled_success", 1, 1, 1)
 
                 reconcile_snapshot = await admit_operation("caller-reconcile")
                 reserved_reconcile, reconcile_authority = await create_and_claim(

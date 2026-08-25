@@ -1,0 +1,58 @@
+{
+  "acceptance_row_count": 214,
+  "active_semantic_scan_excludes": [
+    "BASELINE.md",
+    "decisions/ADR-001-activate-existing-authorities.md",
+    "decisions/ADR-002-ticket-root-planner.md",
+    "decisions/ADR-003-preserve-v8-method-scoped-admission.md",
+    "decisions/ADR-004-freeze-activation-contract-domains.md"
+  ],
+  "artifact_file_count": 20,
+  "covered_requirement_count": 60,
+  "failures": [],
+  "files": {
+    "ACCEPTANCE.md": "sha256:78b55c649a1a890c07942534f52c3037ee89415ce08f7de72a37f9ff92113254",
+    "ARCHITECTURE.md": "sha256:ed8a6f63c7fb8d25105fde888ff9353c28d99080a50216bb10aae594724e11e1",
+    "BASELINE.md": "sha256:9e8e3cc2e6af2cf9791794e2a5ab62771970f650c667028681a162800019d9ff",
+    "CONTRACTS.md": "sha256:4c9b867bea661a9466a67cbc8f1a30b73b829285516cf680923f283bec148942",
+    "EVALUATION.md": "sha256:ec43251c08a5593dbac3e6589b6761e596bd76753de289b3781b4d082f7c05d5",
+    "HANDOFF.md": "sha256:f3e4bb61da3c50f639f9e89d706ff7043a855fbad4653296466989ff88b1a17b",
+    "IMPLEMENTATION-PLAN.md": "sha256:b01f083a49029734cd7cdc74a849978118416da71ca214c8f6d96adcf696bffc",
+    "LIFECYCLE.md": "sha256:f7e281569d1700f379a8d611189327c7def2ec1d957826a81b6adac780035098",
+    "MIGRATION.md": "sha256:a8332a8e5a01368d4051b1f6e58b788524d5f1ea91276c6b42099487d9ae2fb0",
+    "README.md": "sha256:290174e75aa4f0f9d243188bcce0c8f4b92c9191a8bc2859a504cb5820e13ca4",
+    "TEST-STRATEGY-AND-GAP-ANALYSIS.md": "sha256:797b3a1ab8780c28ccd627e1889bb9727eca2463777240d8461b9540f86d2c72",
+    "decisions/ADR-001-activate-existing-authorities.md": "sha256:c9c4a8f56926f9cd9679c5eb497fbba3555481c03ebf423c6337527d67362260",
+    "decisions/ADR-002-ticket-root-planner.md": "sha256:0315106f7d45542895d06d2ac4ce34db4167d21583f16f5251b0fe62aa01180d",
+    "decisions/ADR-003-preserve-v8-method-scoped-admission.md": "sha256:9424c849320baf37111d9045fee7df499a882ba8a960e016ba17d0ed9bbc01f4",
+    "decisions/ADR-004-freeze-activation-contract-domains.md": "sha256:776232a4bc676d697510aefc6c3689e6c821df88adb72ccca45927bc112d1fd5",
+    "decisions/ADR-005-clean-install-only.md": "sha256:54dc3677da12175ecdebc53a052cfc0363b69ad7f19633f4b1e5e07addb5fae5",
+    "verification/README.md": "sha256:97ca7d80a6deb3b239600e33239430d7c031365ab03c61d729d8932356ee6f61",
+    "verification/acceptance-matrix.json": "sha256:2cc379392dfff22d59a4b86c4b165e924d1b9e3b8c880f559b1314f337b0cb11",
+    "verification/requirements.json": "sha256:7d8b91b2cd127adff7c91b93631f5a867747e9d886e830153035dc7302623ea4",
+    "verification/validate_spec.py": "sha256:c4ef69d73e42bd7dcfc8fe8a05a935aea33f2e821af7974d9365cfba30fa34e7"
+  },
+  "frozen_baseline_files": {
+    "docs/sdd/aar-rlm-native-workbench-v2/migration-v6.sql": "sha256:8e7080b319aadb4eb98b5e3b9e12efe8c189c0bd12a82dc8ba1eea7c7bfe29b7",
+    "schemas/aar-broker-catalog-v2.json": "sha256:88099616e61f41c7d72d5e1c81fba8ebfe29995467fd583acc9da0bb15aeadbc",
+    "schemas/aar-caller-work-v1.schema.json": "sha256:76deb95fb89081c7ec90734821689e14a893040696af6727725b059676c2b7e3",
+    "schemas/aar-rlm-workbench-v1.schema.json": "sha256:0d52527f9019cae724459e3eb36a0165b91822771ae64f815f1c2fd18d3054ef"
+  },
+  "frozen_compatibility_digest": "sha256:456541435a17eb0277861761f0749794c81405d19f14dbf35491010e4fbb3b48",
+  "generation": "clean-install-only-rev2",
+  "markdown_file_count": 21,
+  "non_claim": "This receipt proves specification structure only; it proves no implementation or runtime behavior.",
+  "requirement_count": 61,
+  "schema_version": "aar.prw-spec-validation.v2-clean-install-rev2",
+  "status": "pass",
+  "summary_requirement_count": 1,
+  "tier_counts": {
+    "T0": 22,
+    "T1": 91,
+    "T2": 73,
+    "T3": 15,
+    "T4": 13,
+    "T5": 0
+  },
+  "tree_digest": "sha256:11c42b864ee2e8c12dc7715cd1c1cd0e830bc51bdf2da2ad626dd217816d9867"
+}

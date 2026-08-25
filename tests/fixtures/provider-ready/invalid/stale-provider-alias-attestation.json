@@ -1,0 +1,15 @@
+{
+  "alias_digest": "sha256:26e4fb8aeda0511e8c8440a8c389fed1db2d34a9c7a2296bef7918471041352c",
+  "canonical_provider_identity": "openai-codex",
+  "created_at_unix_ms": 100,
+  "credential_resolver_executable_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "launcher_alias": "hermes-codex",
+  "model": "gpt-5.6-luna",
+  "model_registry_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "prime_config_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "prime_executable_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "provider_entry_digest": "sha256:1c94a943d94322cdef8d14d0bf0c887b2134dc765e2bf74546a80397d69057bb",
+  "requested_reasoning": "max",
+  "schema_version": "aar.provider-alias-attestation.v1",
+  "wire_api": "openai-codex-responses"
+}

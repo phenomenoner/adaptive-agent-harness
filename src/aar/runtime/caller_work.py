@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from aar.broker_models import ModelResponse, ModelRouteBinding
+from aar.canonical import canonical_sha256
 from aar.rlm_workbench_models import (
     CallerWorkCancelBeforeSendInput,
     CallerWorkClaimInput,
@@ -24,7 +26,9 @@ from aar.rlm_workbench_models import (
     CallerWorkTicket,
     CandidateReceipt,
 )
+from aar.runtime.model_broker import ModelBrokerError, ModelExecutionJournal
 from aar.runtime.sqlite_repository import SQLiteConnectionFactory
+from aar.schemas import OperationRef
 
 
 class CallerWorkError(RuntimeError):
@@ -121,9 +125,16 @@ def _identifier(prefix: str) -> str:
 class CallerWorkRepository:
     """SQLite authority for one registry's caller-work tickets and receipts."""
 
-    def __init__(self, database_path: Path, *, now_ms: Callable[[], int]) -> None:
+    def __init__(
+        self,
+        database_path: Path,
+        *,
+        now_ms: Callable[[], int],
+        model_executions: ModelExecutionJournal | None = None,
+    ) -> None:
         self._factory = SQLiteConnectionFactory(database_path)
         self._now_ms = now_ms
+        self._model_executions = model_executions
         self._settlement_handler: Callable[[CallerWorkTicket], None] | None = None
 
     @property
@@ -147,6 +158,83 @@ class CallerWorkRepository:
         handler = self._settlement_handler
         if handler is not None:
             handler(ticket)
+
+    def _record_model_response(
+        self,
+        connection: Any,
+        row: Any,
+        observation: Mapping[str, Any],
+        model_response_value: Mapping[str, Any],
+    ) -> None:
+        if self._model_executions is None:
+            raise CallerWorkConflict("model execution journal is unavailable")
+        response = ModelResponse.model_validate_json(
+            json.dumps(dict(model_response_value), sort_keys=True, separators=(",", ":")),
+            strict=True,
+        )
+        request_document = json.loads(str(row["request_json"]))
+        binding = ModelRouteBinding.model_validate(
+            request_document["route_binding"], strict=True
+        )
+        self._require_response_matches_observation(response, observation)
+        try:
+            self._model_executions.record_caller_result_in_transaction(
+                connection,
+                operation=OperationRef(value=str(row["operation_id"])),
+                ticket_id=str(row["ticket_id"]),
+                physical_attempt_id=str(row["physical_attempt_id"]),
+                idempotency_key=str(row["external_idempotency_key"]),
+                request_digest=str(row["request_digest"]),
+                request_document=request_document,
+                binding=binding,
+                response=response,
+            )
+        except ModelBrokerError as error:
+            raise CallerWorkConflict(str(error)) from error
+
+    @staticmethod
+    def _require_response_matches_observation(
+        response: ModelResponse,
+        observation: Mapping[str, Any],
+    ) -> None:
+        if (
+            response.output_text != observation["output_text"]
+            or "sha256:"
+            + hashlib.sha256(response.output_text.encode("utf-8")).hexdigest()
+            != observation["output_digest"]
+            or response.route_receipt.receipt_digest
+            != observation["route_receipt_digest"]
+            or canonical_sha256(response.usage) != observation["usage_receipt_digest"]
+            or canonical_sha256(response) != observation["host_receipt_digest"]
+        ):
+            raise CallerWorkConflict("model response evidence does not match observation")
+
+    def _require_model_settlement_authority(
+        self,
+        connection: Any,
+        row: Any,
+        observation: Mapping[str, Any],
+    ) -> None:
+        if self._model_executions is None:
+            raise CallerWorkConflict("model execution journal is unavailable")
+        request_document = json.loads(str(row["request_json"]))
+        binding = ModelRouteBinding.model_validate(
+            request_document["route_binding"], strict=True
+        )
+        try:
+            response = self._model_executions.require_caller_result_in_transaction(
+                connection,
+                operation=OperationRef(value=str(row["operation_id"])),
+                ticket_id=str(row["ticket_id"]),
+                physical_attempt_id=str(row["physical_attempt_id"]),
+                idempotency_key=str(row["external_idempotency_key"]),
+                request_digest=str(row["request_digest"]),
+                request_document=request_document,
+                binding=binding,
+            )
+        except ModelBrokerError as error:
+            raise CallerWorkConflict(str(error)) from error
+        self._require_response_matches_observation(response, observation)
 
     def create_ticket(self, ticket: CallerWorkTicket) -> CallerWorkTicket:
         with self._factory.transaction(write=True) as connection:
@@ -479,6 +567,15 @@ class CallerWorkRepository:
         command = dict(CallerWorkCommitInput.model_validate(dict(value), strict=True).root)
         with self._factory.transaction(write=True) as connection:
             row = self._row(connection, str(command["ticket_id"]))
+            observation = command["observation"]
+            model_response_value = command["model_response"]
+            if observation["kind"] == "model" and observation["outcome"] == "succeeded":
+                self._record_model_response(
+                    connection,
+                    row,
+                    observation,
+                    model_response_value,
+                )
             replay = self._replay_command(connection, row, command_kind="commit", command=command)
             if replay is not None:
                 result = replay
@@ -639,6 +736,42 @@ class CallerWorkRepository:
                 raise CallerWorkConflict("candidate receipt has no durable send-start mark")
             if receipt.sent_request_digest != row["request_digest"]:
                 raise CallerWorkConflict("candidate request digest mismatch")
+            inserted = self._insert_candidate(connection, receipt, source_kind=source_kind)
+            return CandidateAppendResult(receipt=receipt, replayed=not inserted)
+
+    def append_model_candidate_receipt(
+        self,
+        value: Mapping[str, Any],
+        model_response: Mapping[str, Any],
+        *,
+        source_kind: str = "claimant_callback",
+    ) -> CandidateAppendResult:
+        """Seal typed model evidence and its candidate receipt in one transaction."""
+
+        receipt = CandidateReceipt.model_validate(dict(value), strict=True)
+        payload = dict(receipt.root)
+        digest = payload.pop("receipt_digest")
+        if digest != _canonical_sha256(payload):
+            raise CallerWorkConflict("candidate receipt digest mismatch")
+        observation = receipt.root["observation"]
+        if observation["kind"] != "model" or observation["outcome"] != "succeeded":
+            raise CallerWorkConflict("sealed model callback requires succeeded model evidence")
+        with self._factory.transaction(write=True) as connection:
+            row = self._row(connection, str(receipt.ticket_id))
+            if receipt.ticket_digest != row["ticket_digest"]:
+                raise CallerWorkConflict("candidate ticket digest mismatch")
+            if receipt.physical_attempt_id != row["physical_attempt_id"]:
+                raise CallerWorkConflict("candidate physical attempt mismatch")
+            if row["send_started_at_unix_ms"] is None:
+                raise CallerWorkConflict("candidate receipt has no durable send-start mark")
+            if receipt.sent_request_digest != row["request_digest"]:
+                raise CallerWorkConflict("candidate request digest mismatch")
+            self._record_model_response(
+                connection,
+                row,
+                observation,
+                model_response,
+            )
             inserted = self._insert_candidate(connection, receipt, source_kind=source_kind)
             return CandidateAppendResult(receipt=receipt, replayed=not inserted)
 
@@ -817,6 +950,12 @@ class CallerWorkRepository:
             return self._get(connection, str(row["ticket_id"]))
 
         outcome = str(selected.observation["outcome"])
+        if selected.observation["kind"] == "model" and outcome == "succeeded":
+            self._require_model_settlement_authority(
+                connection,
+                row,
+                selected.observation,
+            )
         if outcome == "succeeded":
             state = "settled_success"
         elif outcome in {"cancelled", "canceled"}:
@@ -913,58 +1052,13 @@ class CallerWorkRepository:
         ).fetchone()
         if job is None or control is None:
             raise CallerWorkConflict("caller settlement lost workbench control authority")
-        if projected_at_unix_ms >= int(job["cumulative_deadline_unix_ms"]):
-            if str(job["phase"]) == "timed_out":
-                return
-            if (
-                str(job["phase"]) != "waiting_external"
-                or bool(job["cancellation_requested"])
-                or bool(control["cancellation_requested"])
-                or int(job["control_revision"]) != int(control["control_revision"])
-            ):
-                raise CallerWorkConflict("deadline settlement lost workbench control authority")
-            prior_control_revision = int(job["control_revision"])
-            next_control_revision = prior_control_revision + 1
-            failure = {
-                "schema_version": "aar.envelope.v1",
-                "category": "deadline",
-                "code": "DEADLINE_EXCEEDED",
-                "message": "workbench cumulative deadline expired",
-                "retryable": False,
-                "certainty": "certain",
-                "operation": {"type": "operation", "value": row["operation_id"]},
-                "details": [],
-            }
-            connection.execute(
-                """
-                UPDATE rlm_workbench_jobs
-                SET phase = 'timed_out', control_revision = ?, certainty = 'certain',
-                    failure_json = ?, updated_at_unix_ms = ?
-                WHERE operation_id = ? AND phase = 'waiting_external'
-                  AND control_revision = ? AND cancellation_requested = 0
-                  AND cumulative_deadline_unix_ms <= ?
-                """,
-                (
-                    next_control_revision,
-                    _canonical_json(failure),
-                    projected_at_unix_ms,
-                    row["operation_id"],
-                    prior_control_revision,
-                    projected_at_unix_ms,
-                ),
-            )
-            if connection.execute("SELECT changes()").fetchone()[0] != 1:
-                raise CallerWorkConflict("deadline settlement lost workbench phase authority")
-            connection.execute(
-                """
-                UPDATE operation_controls SET control_revision = ?
-                WHERE operation_id = ? AND control_revision = ?
-                  AND cancellation_requested = 0
-                """,
-                (next_control_revision, row["operation_id"], prior_control_revision),
-            )
-            if connection.execute("SELECT changes()").fetchone()[0] != 1:
-                raise CallerWorkConflict("deadline settlement lost operation control authority")
+        if (
+            str(row["state"]) == "outcome_unknown"
+            and projected_at_unix_ms >= int(job["cumulative_deadline_unix_ms"])
+        ):
+            # Startup already classified the physical send as reconcile-only.
+            # Late certain evidence is retained, but it cannot revive a
+            # continuation after the cumulative deadline.
             return
         outbox_payload = {
             "operation_id": row["operation_id"],
@@ -1309,6 +1403,16 @@ class CallerWorkDispatcher:
                 ),
             )
             current = self._repository.get(ticket_id)
+            if (
+                receipt.observation["kind"] == "model"
+                and receipt.observation["outcome"] == "succeeded"
+            ):
+                if current.state == "send_started":
+                    return self._repository.mark_outcome_unknown(
+                        ticket_id=ticket_id,
+                        expected_revision=current.revision,
+                    )
+                return current
             return self._repository.settle_candidate(
                 ticket_id=ticket_id,
                 expected_revision=current.revision,

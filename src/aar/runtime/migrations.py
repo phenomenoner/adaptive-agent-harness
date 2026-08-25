@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import stat
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +14,7 @@ from typing import Any
 
 from aar.canonical import canonical_sha256
 from aar.rlm_workbench_models import validate_contract_document
+from aar.runtime.registry import sqlite_connection_path
 
 
 class MigrationError(RuntimeError):
@@ -29,6 +31,44 @@ class MigrationIntegrityError(MigrationError):
 
 class SimulatedMigrationCrash(MigrationError):
     """Deterministic fault injection raised inside the migration transaction."""
+
+
+V6_STATEMENT_NAMES = (
+    "migration_v6_attestations",
+    "rlm_workbench_jobs",
+    "rlm_workbench_cells",
+    "rlm_workbench_suspensions",
+    "caller_work_tickets",
+    "caller_work_candidate_receipts",
+    "caller_work_command_receipts",
+    "caller_work_command_receipts_no_update",
+    "caller_work_command_receipts_no_delete",
+    "rlm_workbench_successor_outbox",
+    "rlm_workbench_attempt_authority",
+    "rlm_workbench_rebind_transfers",
+    "rlm_workbench_artifact_stages",
+    "rlm_workbench_cell_manifests",
+    "rlm_workbench_finalization_manifests",
+    "broker_contract_catalog_v2",
+    "broker_backend_availability_v2",
+    "idx_workbench_phase_deadline",
+    "idx_workbench_cells_state",
+    "idx_caller_work_state_deadline",
+    "idx_caller_work_claim_expiry",
+    "idx_candidate_receipts_ticket",
+    "idx_caller_command_receipts_ticket",
+    "idx_artifact_stages_state",
+    "idx_successor_outbox_state",
+)
+
+_V6_PRECOMMIT_BOUNDARIES = frozenset(
+    {
+        "before-first-statement",
+        "before-attestation-insert",
+        "before-schema-migration-insert",
+        "before-commit",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,50 +91,136 @@ def create_sqlite_backup(
     database_path: Path,
     snapshot_path: Path,
 ) -> SQLiteBackupSnapshot:
-    """Create and verify an atomic SQLite backup, including committed WAL pages."""
+    """Create an exact backup and publish it no-replace under one retained parent."""
 
-    source_path = database_path.resolve()
-    destination = snapshot_path.resolve()
+    source_path = Path(sqlite_connection_path(database_path))
+    destination = Path(sqlite_connection_path(snapshot_path))
     if source_path == destination:
         raise ValueError("snapshot path must differ from the source database")
     if not source_path.is_file():
         raise FileNotFoundError(source_path)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f".{destination.name}.tmp-{uuid.uuid4().hex}")
 
-    source = sqlite3.connect(source_path)
-    target = sqlite3.connect(temporary)
+    parent_parts = destination.parent.parts
     try:
-        source.execute("PRAGMA busy_timeout=5000")
-        target.execute("PRAGMA synchronous=FULL")
-        source.backup(target)
-        target.commit()
-        integrity_result = str(target.execute("PRAGMA integrity_check").fetchone()[0])
-        foreign_key_violation_count = len(target.execute("PRAGMA foreign_key_check").fetchall())
-        if integrity_result != "ok" or foreign_key_violation_count != 0:
-            raise MigrationIntegrityError(
-                "snapshot failed SQLite integrity or foreign-key verification"
+        if (
+            len(parent_parts) == 5
+            and parent_parts[:4] == ("/", "proc", "self", "fd")
+            and parent_parts[4].isdigit()
+        ):
+            parent_fd = os.dup(int(parent_parts[4]))
+            if not stat.S_ISDIR(os.fstat(parent_fd).st_mode):
+                raise NotADirectoryError(destination.parent)
+        else:
+            parent_fd = os.open(
+                destination.parent,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
             )
-    except BaseException:
-        target.close()
-        source.close()
-        temporary.unlink(missing_ok=True)
-        raise
-    else:
-        target.close()
-        source.close()
+    except OSError as error:
+        raise MigrationError("snapshot parent is not a retained directory") from error
+    temporary_name = f".{destination.name}.tmp-{uuid.uuid4().hex}"
+    temporary_fd = -1
+    published_identity: tuple[int, int] | None = None
+    temporary_identity: tuple[int, int] | None = None
+    try:
+        if os.path.lexists(destination):
+            raise FileExistsError(destination)
+        source = sqlite3.connect(
+            f"file:{source_path}?mode=ro",
+            uri=True,
+            isolation_level=None,
+        )
+        target = sqlite3.connect(":memory:", isolation_level=None)
+        try:
+            source.execute("PRAGMA busy_timeout=5000")
+            source.backup(target)
+            integrity_result = str(target.execute("PRAGMA integrity_check").fetchone()[0])
+            foreign_key_violation_count = len(
+                target.execute("PRAGMA foreign_key_check").fetchall()
+            )
+            if integrity_result != "ok" or foreign_key_violation_count != 0:
+                raise MigrationIntegrityError(
+                    "snapshot failed SQLite integrity or foreign-key verification"
+                )
+            content = target.serialize()
+        finally:
+            target.close()
+            source.close()
 
-    _fsync_file(temporary)
-    os.replace(temporary, destination)
-    _fsync_directory(destination.parent)
-    content = destination.read_bytes()
-    return SQLiteBackupSnapshot(
-        path=destination,
-        sha256=_digest_bytes(content),
-        size_bytes=len(content),
-        integrity_result=integrity_result,
-        foreign_key_violation_count=foreign_key_violation_count,
-    )
+        temporary_fd = os.open(
+            temporary_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=parent_fd,
+        )
+        view = memoryview(content)
+        while view:
+            written = os.write(temporary_fd, view)
+            view = view[written:]
+        os.fchmod(temporary_fd, 0o600)
+        os.fsync(temporary_fd)
+        temporary_stat = os.fstat(temporary_fd)
+        temporary_identity = (int(temporary_stat.st_dev), int(temporary_stat.st_ino))
+        named_temporary = os.stat(
+            temporary_name, dir_fd=parent_fd, follow_symlinks=False
+        )
+        if temporary_identity != (
+            int(named_temporary.st_dev),
+            int(named_temporary.st_ino),
+        ):
+            raise MigrationError("snapshot temporary identity changed before publication")
+
+        os.link(
+            temporary_name,
+            destination.name,
+            src_dir_fd=parent_fd,
+            dst_dir_fd=parent_fd,
+            follow_symlinks=False,
+        )
+        published = os.stat(destination.name, dir_fd=parent_fd, follow_symlinks=False)
+        published_identity = (int(published.st_dev), int(published.st_ino))
+        if published_identity != temporary_identity:
+            raise MigrationError("snapshot destination does not name the retained temporary file")
+        named_temporary = os.stat(
+            temporary_name, dir_fd=parent_fd, follow_symlinks=False
+        )
+        if temporary_identity != (
+            int(named_temporary.st_dev),
+            int(named_temporary.st_ino),
+        ):
+            raise MigrationError("snapshot temporary identity changed during publication")
+        os.unlink(temporary_name, dir_fd=parent_fd)
+        os.fsync(parent_fd)
+        return SQLiteBackupSnapshot(
+            path=destination,
+            sha256=_digest_bytes(content),
+            size_bytes=len(content),
+            integrity_result=integrity_result,
+            foreign_key_violation_count=foreign_key_violation_count,
+        )
+    except BaseException:
+        if published_identity is not None and published_identity == temporary_identity:
+            try:
+                observed = os.stat(
+                    destination.name, dir_fd=parent_fd, follow_symlinks=False
+                )
+                if published_identity == (int(observed.st_dev), int(observed.st_ino)):
+                    os.unlink(destination.name, dir_fd=parent_fd)
+            except OSError:
+                pass
+        if temporary_identity is not None:
+            try:
+                observed = os.stat(
+                    temporary_name, dir_fd=parent_fd, follow_symlinks=False
+                )
+                if temporary_identity == (int(observed.st_dev), int(observed.st_ino)):
+                    os.unlink(temporary_name, dir_fd=parent_fd)
+            except OSError:
+                pass
+        raise
+    finally:
+        if temporary_fd >= 0:
+            os.close(temporary_fd)
+        os.close(parent_fd)
 
 
 def apply_registry_v6(
@@ -102,12 +228,11 @@ def apply_registry_v6(
     *,
     migration_sql_bytes: bytes,
     attestation: dict[str, Any],
-    fail_after_statement: int | None = None,
+    fail_after_statement: int | str | None = None,
 ) -> RegistryV6MigrationResult:
     """Apply reviewed v6 DDL and identity rows in one rollback-safe transaction."""
 
-    if fail_after_statement is not None and fail_after_statement < 0:
-        raise ValueError("fail_after_statement must be non-negative")
+    boundary = _normalize_v6_boundary(fail_after_statement)
     sql_digest = _digest_bytes(migration_sql_bytes)
     document = json.loads(json.dumps(attestation))
     validate_contract_document(
@@ -130,7 +255,7 @@ def apply_registry_v6(
         raise MigrationIdentityMismatch("migration SQL must be UTF-8") from error
 
     connection = sqlite3.connect(
-        database_path.resolve(),
+        sqlite_connection_path(database_path),
         isolation_level=None,
         timeout=5,
     )
@@ -153,12 +278,15 @@ def apply_registry_v6(
 
         connection.execute("BEGIN IMMEDIATE")
         try:
-            if fail_after_statement == 0:
+            if boundary == 0 or boundary == "before-first-statement":
                 raise SimulatedMigrationCrash("simulated crash before first v6 DDL")
             for index, statement in enumerate(statements, start=1):
                 connection.execute(statement)
-                if fail_after_statement == index:
+                if boundary == index:
                     raise SimulatedMigrationCrash(f"simulated crash after v6 DDL statement {index}")
+
+            if boundary == "before-attestation-insert":
+                raise SimulatedMigrationCrash("simulated crash before v6 attestation insert")
 
             integrity_result = str(connection.execute("PRAGMA integrity_check").fetchone()[0])
             foreign_key_violation_count = len(
@@ -211,6 +339,8 @@ def apply_registry_v6(
                     payload["integrity_result"],
                 ),
             )
+            if boundary == "before-schema-migration-insert":
+                raise SimulatedMigrationCrash("simulated crash before schema migration insert")
             connection.execute(
                 """
                 INSERT INTO schema_migrations(version, applied_at_unix_ms, migration_digest)
@@ -218,7 +348,12 @@ def apply_registry_v6(
                 """,
                 (payload["completed_at_unix_ms"], sql_digest),
             )
+            if boundary == "before-commit":
+                raise SimulatedMigrationCrash("simulated crash before v6 commit")
             connection.commit()
+            if boundary == "after-commit-readback":
+                _existing_v6_identity(connection)
+                raise SimulatedMigrationCrash("simulated crash after v6 commit readback")
         except BaseException:
             connection.rollback()
             raise
@@ -286,6 +421,22 @@ def _migration_statements(sql: str) -> tuple[str, ...]:
     if not statements:
         raise MigrationIdentityMismatch("migration SQL contains no v6 DDL")
     return tuple(statements)
+
+
+def _normalize_v6_boundary(value: int | str | None) -> int | str | None:
+    if value is None:
+        return None
+    if isinstance(value, int) and not isinstance(value, bool):
+        if 0 <= value <= len(V6_STATEMENT_NAMES):
+            return value
+        raise ValueError("fail_after_statement is outside the v6 DDL boundary range")
+    if isinstance(value, str):
+        if value in _V6_PRECOMMIT_BOUNDARIES or value == "after-commit-readback":
+            return value
+        for index, name in enumerate(V6_STATEMENT_NAMES, start=1):
+            if value == f"fail_after_statement_{index:02d}_{name}":
+                return index
+    raise ValueError(f"unknown v6 failpoint: {value!r}")
 
 
 def _digest_bytes(content: bytes) -> str:
