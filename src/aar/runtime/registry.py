@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sqlite3
 import threading
 from collections.abc import Callable, Mapping
@@ -258,11 +259,25 @@ def _attempt_identity(attempt_ref: Any) -> tuple[OperationRef, int, str]:
     return operation, attempt_no, attempt_id
 
 
+def sqlite_connection_path(database_path: Path | str) -> str:
+    """Preserve a retained /proc descriptor path; resolve ordinary caller paths."""
+
+    value = os.fspath(database_path)
+    parts = Path(value).parts
+    if parts[:4] == ("/", "proc", "self", "fd"):
+        if len(parts) < 6 or not parts[4].isdigit() or any(
+            part in {".", ".."} for part in parts[5:]
+        ):
+            raise ValueError("invalid descriptor-bound SQLite path")
+        return value
+    return str(Path(value).resolve())
+
+
 class OperationRegistry:
     """Persist accepted intent before acknowledgement and never infer uncertain success."""
 
     def __init__(self, database_path: Path, now_ms: Callable[[], int]) -> None:
-        self.database_path = database_path.resolve()
+        self.database_path = sqlite_connection_path(database_path)
         self._now_ms = now_ms
         self._lock = threading.RLock()
         self._connection = sqlite3.connect(

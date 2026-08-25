@@ -69,6 +69,7 @@ packages = ["src/aar"]
 "schemas" = "aar/bundled/schemas"
 "tests/fixtures" = "aar/bundled/fixtures"
 "benchmarks" = "aar/bundled/benchmarks"
+"src/aar/runtime/assets/migration-v6.sql" = "aar/runtime/assets/migration-v6.sql"
 "docs/CODEX-INSTALL.md" = "aar/bundled/docs/CODEX-INSTALL.md"
 "integration" = "aar/bundled/integration"
 

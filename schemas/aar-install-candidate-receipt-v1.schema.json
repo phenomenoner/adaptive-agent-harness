@@ -1,0 +1,134 @@
+{
+  "$defs": {
+    "InstallCandidateFactoryEntry": {
+      "additionalProperties": false,
+      "description": "One package-owned factory member declared by an install receipt.",
+      "properties": {
+        "factory_id": {
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+          "title": "Factory Id",
+          "type": "string"
+        },
+        "implementation_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Implementation Digest",
+          "type": "string"
+        },
+        "wheel_member": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Wheel Member",
+          "type": "string"
+        }
+      },
+      "required": [
+        "factory_id",
+        "wheel_member",
+        "implementation_digest"
+      ],
+      "title": "InstallCandidateFactoryEntry",
+      "type": "object"
+    },
+    "ProviderReadyCandidate": {
+      "additionalProperties": false,
+      "properties": {
+        "contract_manifest_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Contract Manifest Digest",
+          "type": "string"
+        },
+        "package_version": {
+          "maxLength": 64,
+          "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?:(?:a|b|rc)(?:0|[1-9][0-9]*))?(?:\\.post(?:0|[1-9][0-9]*))?(?:\\.dev(?:0|[1-9][0-9]*))?$",
+          "title": "Package Version",
+          "type": "string"
+        },
+        "skill_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Skill Digest",
+          "type": "string"
+        },
+        "source_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Source Commit",
+          "type": "string"
+        },
+        "wheel_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Wheel Digest",
+          "type": "string"
+        }
+      },
+      "required": [
+        "package_version",
+        "source_commit",
+        "wheel_digest",
+        "contract_manifest_digest",
+        "skill_digest"
+      ],
+      "title": "ProviderReadyCandidate",
+      "type": "object"
+    }
+  },
+  "$id": "aar.install-candidate-receipt.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The exact self-digested candidate/wheel receipt accepted by C1.",
+  "properties": {
+    "candidate": {
+      "$ref": "#/$defs/ProviderReadyCandidate"
+    },
+    "contract_manifest_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Contract Manifest Digest",
+      "type": "string"
+    },
+    "factory_entries": {
+      "items": {
+        "$ref": "#/$defs/InstallCandidateFactoryEntry"
+      },
+      "maxItems": 6,
+      "minItems": 1,
+      "title": "Factory Entries",
+      "type": "array"
+    },
+    "receipt_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Receipt Digest",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "aar.install-candidate-receipt.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "skill_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Skill Digest",
+      "type": "string"
+    },
+    "wheel_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Wheel Digest",
+      "type": "string"
+    },
+    "wheel_size_bytes": {
+      "exclusiveMinimum": 0,
+      "maximum": 9223372036854775807,
+      "title": "Wheel Size Bytes",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "candidate",
+    "wheel_size_bytes",
+    "wheel_digest",
+    "contract_manifest_digest",
+    "skill_digest",
+    "factory_entries",
+    "receipt_digest"
+  ],
+  "title": "InstallCandidateReceipt",
+  "type": "object"
+}
