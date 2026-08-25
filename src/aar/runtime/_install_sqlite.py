@@ -101,6 +101,25 @@ _V6_OBJECTS = frozenset(
     }
 )
 
+_POSTPUBLICATION_RUNTIME_OBJECTS = frozenset(
+    {
+        ("index", "one_outcome_event_per_episode"),
+        ("table", "asset_bodies"),
+        ("table", "asset_events"),
+        ("table", "asset_manifests"),
+        ("table", "broker_artifacts"),
+        ("table", "broker_calls"),
+        ("table", "broker_children"),
+        ("table", "model_executions"),
+        ("table", "model_route_bindings"),
+        ("table", "model_schema_migrations"),
+        ("table", "rlm_jobs"),
+        ("table", "rlm_steps"),
+        ("table", "workspace_receipts"),
+        ("table", "workspaces"),
+    }
+)
+
 _V5_NON_DOMAIN_TABLES = frozenset({"runtime_meta", "schema_migrations"})
 
 
@@ -125,7 +144,15 @@ def verify_v6_readback(
             "AND name NOT LIKE 'sqlite_%' ORDER BY type, name"
         )
     )
-    if objects != _V5_OBJECTS | _V6_OBJECTS:
+    installed_objects = _V5_OBJECTS | _V6_OBJECTS
+    allowed_inventories = {installed_objects}
+    if not require_empty_domain:
+        # Normal host construction creates this complete canonical inventory
+        # after C2's first immutable preflight. Accept only the all-or-none
+        # known set on restart: a partial or unknown schema still fails closed
+        # rather than becoming implicit initialization or repair authority.
+        allowed_inventories.add(installed_objects | _POSTPUBLICATION_RUNTIME_OBJECTS)
+    if objects not in allowed_inventories:
         raise InstallerError("FRESH_INSTALL_V6_INVALID", "v6 object inventory differs")
     versions = tuple(
         int(row[0])

@@ -75,7 +75,7 @@ from aar.schemas import (
     SessionRef,
     WorkspaceRef,
 )
-from aar.versions import PACKAGE_VERSION, SCHEMA_VERSIONS
+from aar.versions import FROZEN_COMPATIBILITY_PACKAGE_VERSION, SCHEMA_VERSIONS
 
 FORBIDDEN_IMPORT_ROOTS = frozenset({"ahc", "codex", "hermes"})
 CONTRACT_MODELS = {
@@ -93,7 +93,7 @@ def schema_bundle() -> dict[str, Any]:
         for name, model in sorted(CONTRACT_MODELS.items())
     }
     core = {
-        "package_version": PACKAGE_VERSION,
+        "package_version": FROZEN_COMPATIBILITY_PACKAGE_VERSION,
         "schema_versions": SCHEMA_VERSIONS,
         "schemas": schemas,
     }
@@ -527,9 +527,7 @@ def fixture_documents() -> dict[str, tuple[str, bool, dict[str, Any]]]:
     invalid["invalid/rlm-unknown-strategy.json"] = ("rlm_job_spec", case)
 
     case = copy.deepcopy(asset_bundle)
-    case["documents"][0]["body"]["runtime_digest"] = canonical_sha256(
-        {"runtime": "tampered"}
-    )
+    case["documents"][0]["body"]["runtime_digest"] = canonical_sha256({"runtime": "tampered"})
     invalid["invalid/asset-body-digest-mismatch.json"] = (
         "adaptive_asset_bundle",
         case,
@@ -542,9 +540,7 @@ def fixture_documents() -> dict[str, tuple[str, bool, dict[str, Any]]]:
         case,
     )
 
-    case = copy.deepcopy(
-        valid["valid/operation-recovery-policy-binding.json"][1]
-    )
+    case = copy.deepcopy(valid["valid/operation-recovery-policy-binding.json"][1])
     case["policy_digest"] = f"sha256:{'0' * 64}"
     invalid["invalid/operation-recovery-policy-binding-digest-mismatch.json"] = (
         "operation_recovery_policy_binding",
@@ -644,14 +640,10 @@ def fixture_documents() -> dict[str, tuple[str, bool, dict[str, Any]]]:
     )
 
     documents = {
-        path: (model_name, True, document)
-        for path, (model_name, document) in valid.items()
+        path: (model_name, True, document) for path, (model_name, document) in valid.items()
     }
     documents.update(
-        {
-            path: (model_name, False, document)
-            for path, (model_name, document) in invalid.items()
-        }
+        {path: (model_name, False, document) for path, (model_name, document) in invalid.items()}
     )
     return dict(sorted(documents.items()))
 

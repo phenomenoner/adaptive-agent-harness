@@ -1,6 +1,6 @@
 <div align="center">
 
-> **`0.5.0a0`** public alpha · [`phenomenoner/adaptive-agent-harness@v0.5.0a0`](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0)
+> **`0.6.0a0`** public alpha · [`phenomenoner/adaptive-agent-harness@v0.6.0a0`](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a0)
 
 # Adaptive Agent Harness
 
@@ -10,7 +10,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.5.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.5.0a0)
+[![Release](https://img.shields.io/badge/release-v0.6.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#stav-projektu)
 
@@ -192,7 +192,7 @@ Podrobnější odůvodnění návrhu a poznámky ke zdrojům najdete v části [
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.5.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a0"
 ```
 
 ### Nastavení Codex App
@@ -259,15 +259,15 @@ Frontend MCP je záměrně vyměnitelný. Nevlastní databázi kontinuity ani ž
 
 ## Stav projektu
 
-Aktuální veřejná alfa: **`0.5.0a0`**.
+Aktuální veřejná alfa: **`0.6.0a0`**.
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.5.0a0` receipt-backed model routing, current verification, and exact release
-> boundaries, read the canonical English [release notes](../RELEASE-v0.5.0a0.md) and
+> context. For `v0.6.0a0` receipt-backed model routing, current verification, and exact release
+> boundaries, read the canonical English [release notes](../RELEASE-v0.6.0a0.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
 
-Current `v0.5.0a0` public release evidence:
+Current `v0.6.0a0` public release evidence:
 
 - pokrytí Pythonu 3.11 až 3.14;
 - 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);

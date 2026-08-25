@@ -12,9 +12,10 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from aar.canonical import canonical_sha256
+from aar.versions import FROZEN_COMPATIBILITY_PACKAGE_VERSION
 
 BASELINE_TOOL_MANIFEST_SHA256 = "6ebf848eee74795771af23dfaaeb70fd5030cb88878327f76ffc10d1c4639ab8"
-TARGET_PACKAGE_VERSION = "0.5.0a0"
+TARGET_PACKAGE_VERSION = FROZEN_COMPATIBILITY_PACKAGE_VERSION
 _CONTRACT_FILES = (
     "aar-acceptance-evidence-v1.schema.json",
     "aar-artifact-publication-v1.schema.json",

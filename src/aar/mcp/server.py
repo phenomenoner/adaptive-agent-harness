@@ -49,7 +49,6 @@ from aar.mcp.models import (
     ProgramWorkspaceInspectToolResult,
     ProgramWorkspaceInterruptToolResult,
     ProgramWorkspaceReconcileToolResult,
-    ProviderReadyCapabilityProjection,
     ReferenceContextKey,
     ReferenceContextToolResult,
     ReferenceGrantDescriptor,
@@ -150,10 +149,11 @@ from aar.schemas import (
     SessionRef,
     WorkspaceRef,
 )
-from aar.versions import PACKAGE_VERSION, SCHEMA_VERSIONS
+from aar.versions import FROZEN_COMPATIBILITY_PACKAGE_VERSION, PACKAGE_VERSION, SCHEMA_VERSIONS
 
 SERVER_NAME = "aar-mcp"
 MCP_TOOL_SURFACE_VERSION = SUCCESSOR_SURFACE_VERSION
+MCP_TOOL_SURFACE_PACKAGE_VERSION = FROZEN_COMPATIBILITY_PACKAGE_VERSION
 MCP_PROTOCOL_VERSIONS = (
     *reversed(MODERN_PROTOCOL_VERSIONS),
     *reversed(HANDSHAKE_PROTOCOL_VERSIONS),
@@ -759,7 +759,11 @@ async def tool_surface_manifest(server: MCPServer) -> dict[str, Any]:
     tools = await server.list_tools()
     core = {
         "server_name": SERVER_NAME,
-        "server_version": PACKAGE_VERSION,
+        # The v8 descriptor is one of the provider-ready release's exact
+        # compatibility bytes. Runtime handshake/capabilities still report the
+        # current PACKAGE_VERSION; only this frozen descriptor retains its
+        # original package projection.
+        "server_version": MCP_TOOL_SURFACE_PACKAGE_VERSION,
         "sdk": {"name": "mcp", "version": importlib.metadata.version("mcp")},
         "protocol_versions": list(MCP_PROTOCOL_VERSIONS),
         "instructions": SERVER_INSTRUCTIONS,
@@ -896,19 +900,6 @@ def build_server(
                 ),
             )
         )
-        provider_ready = None
-        if host.provider_ready_startup is not None:
-            grant_set = host.provider_ready_startup.grant_set
-            provider_ready = ProviderReadyCapabilityProjection(
-                runtime_generation=grant_set.runtime_generation,
-                activation_generation=grant_set.activation_generation,
-                profile_id=grant_set.profile_id,
-                profile_digest=grant_set.profile_digest,
-                activation_authority_digest=grant_set.activation_authority_digest,
-                capability_digest=grant_set.capability_digest,
-                route_catalog_digest=grant_set.route_catalog_digest,
-                grant_set_digest=grant_set.grant_set_digest,
-            )
         return CapabilitiesToolResult(
             server_name=SERVER_NAME,
             server_now_unix_ms=host.now_ms(),
@@ -925,7 +916,6 @@ def build_server(
             schema_bundle_digest=SCHEMA_BUNDLE_DIGEST,
             fixture_set_digest=FIXTURE_SET_DIGEST,
             model_routes=model_routes,
-            provider_ready=provider_ready,
             model_broker=model_broker,
             ready=host.ready(),
             supervisor=supervisor_projection,

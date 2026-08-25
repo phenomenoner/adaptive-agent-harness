@@ -18,6 +18,7 @@ from aar.contract import (
     verify_contract,
 )
 from aar.schemas import CapabilitySet, RequestEnvelope
+from aar.versions import FROZEN_COMPATIBILITY_PACKAGE_VERSION, PACKAGE_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -89,13 +90,13 @@ def test_canonical_json_rejects_float_and_sorts_keys() -> None:
 def test_schema_bundle_digest_is_self_consistent() -> None:
     bundle = schema_bundle()
     digest = bundle.pop("bundle_digest")
+    assert PACKAGE_VERSION == "0.6.0a0"
+    assert bundle["package_version"] == FROZEN_COMPATIBILITY_PACKAGE_VERSION == "0.5.0a0"
     assert digest == canonical_sha256(bundle)
 
 
 def test_ahc_fixture_reuses_transport_neutral_contracts() -> None:
-    document = json.loads(
-        (ROOT / "integration" / "ahc" / "rlm-contract-v1.json").read_text()
-    )
+    document = json.loads((ROOT / "integration" / "ahc" / "rlm-contract-v1.json").read_text())
     assert document == ahc_integration_fixture()
     request = RequestEnvelope.model_validate_json(
         canonical_json_bytes(document["request_envelope"]), strict=True
@@ -127,9 +128,7 @@ def test_ahc_continuity_fixture_is_optional_and_preserves_authority() -> None:
 def test_non_ahc_asset_fixture_has_no_ahc_only_required_fields() -> None:
     path = ROOT / "tests" / "fixtures" / "valid" / "adaptive-asset-bundle.json"
     document = json.loads(path.read_text(encoding="utf-8"))
-    bundle = AdaptiveAssetBundle.model_validate_json(
-        canonical_json_bytes(document), strict=True
-    )
+    bundle = AdaptiveAssetBundle.model_validate_json(canonical_json_bytes(document), strict=True)
     assert len(bundle.documents) == 2
     assert "ahc" not in canonical_json_bytes(document).decode().lower()
 

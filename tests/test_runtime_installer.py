@@ -53,6 +53,7 @@ from aar.runtime.installer import (
 )
 from aar.runtime.migrations import V6_STATEMENT_NAMES
 from aar.runtime.provider_ready_activation import ProviderReadyActivationStore
+from aar.runtime.reference_host import ReferenceHost
 from aar.runtime.registry import OperationRegistry
 
 DIGEST = canonical_sha256({"fixture": "clean-install"})
@@ -367,6 +368,8 @@ def test_startup_readback_accepts_only_valid_postpublication_runtime_state(
         activation_authority_digest=initial.authority.authority_digest,
         route_catalog_digest=initial.profile.intent.routes.catalog_digest,
     )
+    host = ReferenceHost(target / DATABASE_NAME, programmable_backend="plain")
+    host.close()
 
     with pytest.raises(InstallerError, match="FRESH_INSTALL_READBACK_FAILED"):
         verify_published_install(target)
@@ -375,6 +378,21 @@ def test_startup_readback_accepts_only_valid_postpublication_runtime_state(
     assert startup.profile == initial.profile
     assert startup.authority == initial.authority
     assert startup.database_versions == (1, 2, 3, 4, 5, 6)
+
+
+def test_startup_readback_rejects_unknown_postpublication_schema_object(tmp_path: Path) -> None:
+    target = _installed_runtime(tmp_path)
+    host = ReferenceHost(target / DATABASE_NAME, programmable_backend="plain")
+    host.close()
+    connection = sqlite3.connect(target / DATABASE_NAME)
+    try:
+        connection.execute("CREATE TABLE unknown_runtime_object (value INTEGER)")
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(InstallerError, match="v6 object inventory differs"):
+        verify_published_install(target, allow_runtime_state=True)
 
 
 @pytest.mark.parametrize("variant", ("supervisor-mode", "generation-symlink", "wal-mode"))

@@ -815,9 +815,9 @@ def test_mcp_uses_only_current_memory_session_grants_in_provider_mode(
     assert all(payload["operation"] is None for payload in denied_payloads)
     assert "phase" in accepted, accepted
     assert accepted["phase"] == "preparing_workspace"
-    projection = capabilities["provider_ready"]
-    assert projection["runtime_generation"] == capabilities["ready"]["runtime_generation"]
-    assert projection["grant_set_digest"] == startup.grant_set.grant_set_digest
+    assert capabilities["package_version"] == "0.6.0a0"
+    assert "provider_ready" not in capabilities
+    assert startup.grant_set.runtime_generation == capabilities["ready"]["runtime_generation"]
     with sqlite3.connect(database) as connection:
         assert connection.execute("SELECT COUNT(*) FROM rlm_workbench_jobs").fetchone()[0] == 1
 
