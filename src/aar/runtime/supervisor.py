@@ -34,6 +34,7 @@ from aar.runtime.process_identity import (
     current_process_identity,
     observe_process_identity,
 )
+from aar.runtime.provider_ready_startup import ProviderReadyStartup
 from aar.runtime.supervisor_protocol import (
     MAX_PRIVATE_PAYLOAD_BYTES,
     SUPERVISOR_PROTOCOL_DIGEST,
@@ -130,6 +131,7 @@ class SupervisorService:
         dispatcher_concurrency: int = 2,
         model_broker_registry: ModelBrokerRegistry | None = None,
         default_model_route_profile: str | None = None,
+        provider_ready_startup: ProviderReadyStartup | None = None,
     ) -> None:
         self.runtime_home = runtime_home.resolve()
         self.database_path = (
@@ -155,6 +157,7 @@ class SupervisorService:
         self.dispatcher_concurrency = dispatcher_concurrency
         self.model_broker_registry = model_broker_registry
         self.default_model_route_profile = default_model_route_profile
+        self.provider_ready_startup = provider_ready_startup
         self.application: AarMcpApplication | None = None
         self.discovery: SupervisorDiscoveryRecord | None = None
         self.process_identity: ProcessStartIdentity | None = None
@@ -191,6 +194,15 @@ class SupervisorService:
             await self._shutdown()
 
     async def _start(self) -> None:
+        if self.provider_ready_startup is not None:
+            # Immutable install evidence must be verified before the private
+            # supervisor directory, listener, ownership lock, or registry writes.
+            self.provider_ready_startup.assert_database_path(self.database_path)
+            self.provider_ready_startup.validate_host_configuration(
+                programmable_backend=self.programmable_backend,
+                model_broker_registry=self.model_broker_registry,
+                default_model_route_profile=self.default_model_route_profile,
+            )
         self._prepare_private_dir()
         self.process_identity = current_process_identity()
         self._cleanup_stale_discovery()
@@ -206,6 +218,7 @@ class SupervisorService:
             supervisor_process_identity_digest=canonical_sha256(self.process_identity),
             model_broker_registry=self.model_broker_registry,
             default_model_route_profile=self.default_model_route_profile,
+            provider_ready_startup=self.provider_ready_startup,
         )
         host = self.application.host
         self._append_lifecycle("starting", reason="ownership_acquired")
@@ -298,9 +311,7 @@ class SupervisorService:
             path = self.socket_path
             if len(os.fsencode(path)) >= 104:
                 digest = self._runtime_home_digest.removeprefix("sha256:")[:24]
-                path = Path("/tmp") / (
-                    f"aar-{digest}-{identity_suffix}-{self.publication_id}.sock"
-                )
+                path = Path("/tmp") / (f"aar-{digest}-{identity_suffix}-{self.publication_id}.sock")
             if _is_reparse_or_symlink(path):
                 raise SupervisorError("supervisor endpoint is a reparse link")
             self.socket_path = path
@@ -395,9 +406,7 @@ class SupervisorService:
         )
         return payload.authority_digest
 
-    async def _run_mcp_session(
-        self, lines: _SocketLines, connection_authority: str
-    ) -> None:
+    async def _run_mcp_session(self, lines: _SocketLines, connection_authority: str) -> None:
         assert self.application is not None
         to_server_send, to_server_receive = anyio.create_memory_object_stream[
             SessionMessage | Exception
@@ -669,9 +678,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime-home", type=Path, default=_default_runtime_home())
     parser.add_argument("--database", type=Path)
-    parser.add_argument(
-        "--programmable-backend", choices=("plain", "ipython"), default="ipython"
-    )
+    parser.add_argument("--programmable-backend", choices=("plain", "ipython"), default="ipython")
     parser.add_argument("--transport", choices=("unix", "tcp"))
     parser.add_argument("--dispatcher-concurrency", type=int, default=2)
     args = parser.parse_args(argv)

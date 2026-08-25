@@ -144,7 +144,7 @@ class ProviderReadyActivationStore:
         *,
         principal_id: str,
         session_id: str,
-        capability: str,
+        capability: str | None,
         runtime_generation: int,
         now_unix_ms: int,
         activation_generation: int | None = None,
@@ -168,9 +168,7 @@ class ProviderReadyActivationStore:
     validate_session_grant = accept_session_grant
     accept_grant = accept_session_grant
 
-    def revoke_session_grant(
-        self, grant: IssuedWorkbenchGrant | str
-    ) -> IssuedWorkbenchGrant:
+    def revoke_session_grant(self, grant: IssuedWorkbenchGrant | str) -> IssuedWorkbenchGrant:
         return self._sessions.revoke_session_grant(grant)
 
     revoke_grant = revoke_session_grant
@@ -262,14 +260,10 @@ class ProviderReadyActivationCoordinator:
     def issue_session_grant(self, **kwargs: object) -> IssuedWorkbenchGrant:
         return self._store.issue_session_grant(**kwargs)  # type: ignore[arg-type]
 
-    def accept_session_grant(
-        self, *args: object, **kwargs: object
-    ) -> IssuedWorkbenchGrant:
+    def accept_session_grant(self, *args: object, **kwargs: object) -> IssuedWorkbenchGrant:
         return self._store.accept_session_grant(*args, **kwargs)  # type: ignore[arg-type]
 
-    def revoke_session_grant(
-        self, *args: object, **kwargs: object
-    ) -> IssuedWorkbenchGrant:
+    def revoke_session_grant(self, *args: object, **kwargs: object) -> IssuedWorkbenchGrant:
         return self._store.revoke_session_grant(*args, **kwargs)  # type: ignore[arg-type]
 
 

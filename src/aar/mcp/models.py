@@ -340,6 +340,19 @@ class OperationEventsToolResult(StrictModel):
     failure: FailureEnvelope | None = None
 
 
+class ProviderReadyCapabilityProjection(StrictModel):
+    """Optional, credential-free C2 activation evidence on the capabilities tool."""
+
+    runtime_generation: PositiveCounter
+    activation_generation: PositiveCounter
+    profile_id: str
+    profile_digest: Digest
+    activation_authority_digest: Digest
+    capability_digest: Digest
+    route_catalog_digest: Digest
+    grant_set_digest: Digest
+
+
 class SupervisorCapabilityProjection(StrictModel):
     mode: Literal["embedded-reference-host", "attached-supervisor"]
     frontend_ephemeral: bool
@@ -397,6 +410,7 @@ class CapabilitiesToolResult(StrictModel):
     schema_bundle_digest: Digest
     fixture_set_digest: Digest
     model_routes: ModelRouteCatalog | None = None
+    provider_ready: ProviderReadyCapabilityProjection | None = None
     model_broker: ModelBrokerCapabilityProjection
     ready: RuntimeReady
     supervisor: SupervisorCapabilityProjection

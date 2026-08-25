@@ -102,6 +102,36 @@ def _open_owned_directory(parent_fd: int, name: str, *, label: str) -> tuple[int
         raise
 
 
+def _open_owned_runtime_file(parent_fd: int, name: str, *, label: str) -> tuple[int, FileIdentity]:
+    try:
+        descriptor = os.open(
+            name,
+            os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+            dir_fd=parent_fd,
+        )
+    except OSError as error:
+        raise InstallerError(
+            "FRESH_INSTALL_READBACK_FAILED", f"{label} cannot be opened safely"
+        ) from error
+    try:
+        observed = os.fstat(descriptor)
+        identity = FileIdentity.from_stat(observed)
+        if (
+            not stat.S_ISREG(observed.st_mode)
+            or stat.S_IMODE(observed.st_mode) != 0o600
+            or observed.st_uid != os.getuid()
+            or observed.st_gid != os.getgid()
+        ):
+            raise InstallerError(
+                "FRESH_INSTALL_READBACK_FAILED",
+                f"{label} is not an invocation-owned mode-0600 file",
+            )
+        return descriptor, identity
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
 def _read_owned_authority_file(
     parent_fd: int,
     name: str,
@@ -212,9 +242,7 @@ def _verify_named_identity(
             "FRESH_INSTALL_READBACK_FAILED", f"{label} disappeared during readback"
         ) from error
     if not identity.exact(observed):
-        raise InstallerError(
-            "FRESH_INSTALL_READBACK_FAILED", f"{label} changed during readback"
-        )
+        raise InstallerError("FRESH_INSTALL_READBACK_FAILED", f"{label} changed during readback")
 
 
 def project_authority_store_id(intent_authority_store_id: str) -> str:
@@ -225,6 +253,8 @@ def project_authority_store_id(intent_authority_store_id: str) -> str:
         "intent_authority_store_id": intent_authority_store_id,
     }
     return "authority-" + canonical_sha256(material).removeprefix("sha256:")
+
+
 def project_snapshot_id(
     empty_v5_backup_digest: str,
     empty_v5_backup_size_bytes: int,
@@ -239,6 +269,8 @@ def project_snapshot_id(
         "install_epoch": install_epoch,
     }
     return "empty-v5-" + canonical_sha256(material).removeprefix("sha256:")
+
+
 def build_clean_install_preparation(
     *,
     install_epoch: str,
@@ -268,6 +300,8 @@ def build_clean_install_preparation(
             intent.cutover_authority_store_id
         ),
     )
+
+
 def build_migration_attestation(
     *,
     preparation: CleanInstallPreparation,
@@ -301,6 +335,8 @@ def build_migration_attestation(
         integrity_result="ok",
     )
     return MigrationAttestationDocument.issue(payload)
+
+
 def _write_install_evidence(
     stage_fd: int,
     *,
@@ -337,6 +373,8 @@ def _write_install_evidence(
         if history_fd >= 0:
             os.close(history_fd)
         os.close(authority_fd)
+
+
 def _verify_staged_evidence(
     stage: StageHandle,
     *,
@@ -431,8 +469,19 @@ def _verify_staged_evidence(
         if history_fd >= 0:
             os.close(history_fd)
         os.close(authority_fd)
-def verify_published_install(runtime_home: os.PathLike[str] | str) -> PublishedInstallReadback:
-    """Read back immutable install evidence without initializing or repairing it."""
+
+
+def verify_published_install(
+    runtime_home: os.PathLike[str] | str,
+    *,
+    allow_runtime_state: bool = False,
+) -> PublishedInstallReadback:
+    """Read back immutable install evidence without initializing or repairing it.
+
+    ``allow_runtime_state`` is the narrow C2 startup view: immutable install
+    evidence remains exact while the already-published runtime may contain its
+    generation-owned authority subtree and populated v6 domain rows.
+    """
 
     target_text = _path_text(runtime_home, label="runtime_home")
     requested_target = Path(target_text)
@@ -447,6 +496,10 @@ def verify_published_install(runtime_home: os.PathLike[str] | str) -> PublishedI
     root_fd = -1
     authority_fd = -1
     history_fd = -1
+    runtime_directory_fds: dict[str, int] = {}
+    runtime_directory_identities: dict[str, FileIdentity] = {}
+    runtime_file_fds: dict[str, int] = {}
+    runtime_file_identities: dict[str, FileIdentity] = {}
     try:
         canonical_parent = requested_target.parent.resolve(strict=True)
         chain.verify()
@@ -458,26 +511,65 @@ def verify_published_install(runtime_home: os.PathLike[str] | str) -> PublishedI
             requested_target.name,
             label="published target",
         )
-        if set(os.listdir(root_fd)) != {DATABASE_NAME, "authority"}:
+        root_names = set(os.listdir(root_fd))
+        required_root_names = {DATABASE_NAME, "authority"}
+        allowed_root_names = set(required_root_names)
+        if allow_runtime_state:
+            allowed_root_names.update(
+                {f"{DATABASE_NAME}-wal", f"{DATABASE_NAME}-shm", "supervisor"}
+            )
+        if not required_root_names.issubset(root_names) or not root_names.issubset(
+            allowed_root_names
+        ):
             raise InstallerError(
                 "FRESH_INSTALL_READBACK_FAILED", "published root inventory is not exact"
             )
+        if allow_runtime_state and "supervisor" in root_names:
+            descriptor, identity = _open_owned_directory(
+                root_fd, "supervisor", label="published supervisor state"
+            )
+            runtime_directory_fds["supervisor"] = descriptor
+            runtime_directory_identities["supervisor"] = identity
+        if allow_runtime_state:
+            for name in (f"{DATABASE_NAME}-wal", f"{DATABASE_NAME}-shm"):
+                if name not in root_names:
+                    continue
+                descriptor, identity = _open_owned_runtime_file(
+                    root_fd, name, label=f"published runtime file {name}"
+                )
+                runtime_file_fds[name] = descriptor
+                runtime_file_identities[name] = identity
         authority_fd, authority_identity = _open_owned_directory(
             root_fd,
             "authority",
             label="published authority",
         )
-        if set(os.listdir(authority_fd)) != {
+        required_authority_names = {
             "install-candidate-receipt.json",
             "install-preparation.json",
             "migration-attestation.json",
             "profile.json",
             "current.json",
             "history",
-        }:
+        }
+        allowed_authority_names = set(required_authority_names)
+        if allow_runtime_state:
+            allowed_authority_names.add("runtime-generations")
+        authority_names = set(os.listdir(authority_fd))
+        if not required_authority_names.issubset(authority_names) or not authority_names.issubset(
+            allowed_authority_names
+        ):
             raise InstallerError(
                 "FRESH_INSTALL_READBACK_FAILED", "published authority inventory is not exact"
             )
+        if allow_runtime_state and "runtime-generations" in authority_names:
+            descriptor, identity = _open_owned_directory(
+                authority_fd,
+                "runtime-generations",
+                label="published runtime generations",
+            )
+            runtime_directory_fds["authority/runtime-generations"] = descriptor
+            runtime_directory_identities["authority/runtime-generations"] = identity
         history_fd, history_identity = _open_owned_directory(
             authority_fd,
             "history",
@@ -496,8 +588,7 @@ def verify_published_install(runtime_home: os.PathLike[str] | str) -> PublishedI
             "current.json",
         )
         authority_files = {
-            name: _read_owned_authority_file(authority_fd, name)
-            for name in authority_file_names
+            name: _read_owned_authority_file(authority_fd, name) for name in authority_file_names
         }
         history_bytes, history_file_identity = _read_owned_authority_file(
             history_fd, HISTORY_AUTHORITY_NAME
@@ -554,7 +645,11 @@ def verify_published_install(runtime_home: os.PathLike[str] | str) -> PublishedI
             )
             try:
                 connection.execute("PRAGMA query_only=ON")
-                versions = verify_v6_readback(connection, attestation)
+                versions = verify_v6_readback(
+                    connection,
+                    attestation,
+                    require_empty_domain=not allow_runtime_state,
+                )
             finally:
                 connection.close()
         finally:
@@ -569,13 +664,25 @@ def verify_published_install(runtime_home: os.PathLike[str] | str) -> PublishedI
             history_file_identity,
             label=f"authority/history/{HISTORY_AUTHORITY_NAME}",
         )
-        _verify_named_identity(
-            authority_fd, "history", history_identity, label="authority/history"
-        )
+        _verify_named_identity(authority_fd, "history", history_identity, label="authority/history")
+        for name, identity in runtime_file_identities.items():
+            _verify_named_identity(root_fd, name, identity, label=name)
+        if "supervisor" in runtime_directory_identities:
+            _verify_named_identity(
+                root_fd,
+                "supervisor",
+                runtime_directory_identities["supervisor"],
+                label="supervisor",
+            )
+        if "authority/runtime-generations" in runtime_directory_identities:
+            _verify_named_identity(
+                authority_fd,
+                "runtime-generations",
+                runtime_directory_identities["authority/runtime-generations"],
+                label="authority/runtime-generations",
+            )
         _verify_named_identity(root_fd, "authority", authority_identity, label="authority")
-        _verify_named_identity(
-            root_fd, DATABASE_NAME, database_file_identity, label=DATABASE_NAME
-        )
+        _verify_named_identity(root_fd, DATABASE_NAME, database_file_identity, label=DATABASE_NAME)
         _verify_named_identity(
             chain.parent.descriptor,
             requested_target.name,
@@ -599,6 +706,10 @@ def verify_published_install(runtime_home: os.PathLike[str] | str) -> PublishedI
             "FRESH_INSTALL_READBACK_FAILED", "published evidence is invalid"
         ) from error
     finally:
+        for descriptor in runtime_file_fds.values():
+            os.close(descriptor)
+        for descriptor in runtime_directory_fds.values():
+            os.close(descriptor)
         if history_fd >= 0:
             os.close(history_fd)
         if authority_fd >= 0:

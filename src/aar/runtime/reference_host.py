@@ -75,6 +75,7 @@ from aar.runtime.programming import (
     WorkspaceCheckpointRejected,
     WorkspaceOperationConflict,
 )
+from aar.runtime.provider_ready_startup import ProviderReadyStartup
 from aar.runtime.registry import OperationRegistry, RegistryError, StaleRuntimeGeneration
 from aar.runtime.rlm import RlmEngine, RlmExecutionCancelled
 from aar.runtime.rlm_workbench import (
@@ -176,6 +177,7 @@ class ReferenceHost:
         model_execution_journal: ModelExecutionJournal | None = None,
         workbench_planner: RlmWorkbenchPlanner | None = None,
         workbench_backend_availability: Mapping[str, Mapping[str, Any]] | None = None,
+        provider_ready_startup: ProviderReadyStartup | None = None,
     ) -> None:
         if programmable_backend not in {"plain", "ipython"}:
             raise ValueError(f"unsupported programmable backend: {programmable_backend}")
@@ -187,8 +189,37 @@ class ReferenceHost:
         self._durable_dispatch_enabled = enable_durable_dispatch
         self._dispatcher_concurrency = dispatcher_concurrency
         self.dispatcher: DurableDispatcher | None = None
-        self.registry = OperationRegistry(database_path, now_ms)
-        self.runtime_generation = self.registry.start_runtime()
+        self.provider_ready_startup = provider_ready_startup
+        registry: OperationRegistry | None = None
+        try:
+            if provider_ready_startup is not None:
+                # This is intentionally before OperationRegistry construction: the
+                # startup verifier is read-only and must precede every registry
+                # schema/runtime write on the exclusive path.
+                provider_ready_startup.assert_database_path(database_path)
+                provider_ready_startup.validate_host_configuration(
+                    programmable_backend=programmable_backend,
+                    model_broker_registry=model_broker_registry,
+                    default_model_route_profile=default_model_route_profile,
+                )
+            registry = OperationRegistry(database_path, now_ms)
+            if provider_ready_startup is not None and registry.schema_versions() != (
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+            ):
+                raise ReferenceHostError(
+                    "provider-ready startup requires the exact registry v6 migration history"
+                )
+            self.registry = registry
+            self.runtime_generation = registry.start_runtime()
+        except BaseException:
+            if registry is not None:
+                registry.close()
+            raise
         self.worker_manager = WorkerManager(
             self.registry,
             runtime_generation=self.runtime_generation,
@@ -201,9 +232,7 @@ class ReferenceHost:
             raise ValueError(
                 "model_broker_registry and default_model_route_profile must be provided together"
             )
-        self.model_executions = model_execution_journal or ModelExecutionJournal(
-            database_path
-        )
+        self.model_executions = model_execution_journal or ModelExecutionJournal(database_path)
         self.program_workspace: WorkspaceBackend
         self.caller_work: CallerWorkRepository | None = None
         self.rlm_workbench: RlmWorkbenchCoordinator | None = None
@@ -248,11 +277,12 @@ class ReferenceHost:
                 "adapter_generation": self.runtime_generation,
                 "evidence_tier": "host_receipt_bound",
             }
-        if workbench_backend_availability is not None:
+        if provider_ready_startup is not None and workbench_backend_availability is not None:
+            raise ReferenceHostError("provider-ready startup owns workbench backend availability")
+        if provider_ready_startup is None and workbench_backend_availability is not None:
             availability.update(
                 {method: dict(row) for method, row in workbench_backend_availability.items()}
             )
-        self._workbench_backend_availability = availability
         self.models = FakeModelBroker()
         self.model_broker_registry = model_broker_registry
         self.default_model_route_profile = default_model_route_profile
@@ -271,6 +301,17 @@ class ReferenceHost:
             model_broker_registry=self.model_broker_registry,
             model_execution_journal=self.model_executions,
         )
+        if provider_ready_startup is not None:
+            provider_ready_startup.bind_host_factory_owner(self.brokers)
+            availability.update(
+                {
+                    method: dict(row)
+                    for method, row in provider_ready_startup.backend_availability(
+                        self.runtime_generation
+                    ).items()
+                }
+            )
+        self._workbench_backend_availability = availability
         self.rlm = RlmEngine(database_path, self.brokers, now_ms)
         self.adaptive_assets = AdaptiveAssetStore(database_path)
         self.capabilities = CapabilitySet.issue(
@@ -322,6 +363,12 @@ class ReferenceHost:
                 CapabilityDescriptor(name="workspace.program.restore", access=AccessMode.WRITE),
             )
         )
+        if provider_ready_startup is not None:
+            try:
+                provider_ready_startup.activate(self.runtime_generation)
+            except BaseException:
+                self.close()
+                raise
         if enable_durable_dispatch:
             self.start_durable_dispatch()
 

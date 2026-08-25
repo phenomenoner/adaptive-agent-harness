@@ -348,8 +348,19 @@ def validate_frozen_compatibility(
         for path in (project_root / "schemas").glob("*.json")
     )
     expected_schema_paths = [item.get("path") for item in schemas if isinstance(item, dict)]
-    if expected_schema_paths != observed_schema_paths or len(set(expected_schema_paths)) != 14:
-        failures.append("frozen compatibility schema paths are not the exact sorted 14-file set")
+    planned_receipt_schema_path = "schemas/aar-install-candidate-receipt-v1.schema.json"
+    expected_repository_schema_paths = sorted(
+        [*expected_schema_paths, planned_receipt_schema_path]
+    )
+    if (
+        expected_schema_paths != sorted(expected_schema_paths)
+        or len(set(expected_schema_paths)) != 14
+        or planned_receipt_schema_path in expected_schema_paths
+        or observed_schema_paths != expected_repository_schema_paths
+    ):
+        failures.append(
+            "schema paths are not the exact 14 preserved plus one planned receipt set"
+        )
 
     fixture_manifest_path = "tests/fixtures/provider-ready/manifest.json"
     if fixture_manifest.get("path") != fixture_manifest_path:

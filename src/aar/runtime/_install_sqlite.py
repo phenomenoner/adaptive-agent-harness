@@ -107,8 +107,15 @@ _V5_NON_DOMAIN_TABLES = frozenset({"runtime_meta", "schema_migrations"})
 def verify_v6_readback(
     connection: sqlite3.Connection,
     attestation: MigrationAttestationDocument,
+    *,
+    require_empty_domain: bool = True,
 ) -> tuple[int, ...]:
-    """Read-only exact-v6 verifier for a caller-owned query-only connection."""
+    """Read-only exact-v6 verifier for a caller-owned query-only connection.
+
+    Fresh C1 publication requires an empty domain. C2 startup reuses the same
+    immutable schema/attestation verifier while allowing normal durable runtime
+    rows created only after publication.
+    """
 
     objects = frozenset(
         (str(row[0]), str(row[1]))
@@ -122,9 +129,7 @@ def verify_v6_readback(
         raise InstallerError("FRESH_INSTALL_V6_INVALID", "v6 object inventory differs")
     versions = tuple(
         int(row[0])
-        for row in connection.execute(
-            "SELECT version FROM schema_migrations ORDER BY version"
-        )
+        for row in connection.execute("SELECT version FROM schema_migrations ORDER BY version")
     )
     if versions != (1, 2, 3, 4, 5, 6):
         raise InstallerError("FRESH_INSTALL_V6_INVALID", f"unexpected v6 versions: {versions}")
@@ -149,8 +154,7 @@ def verify_v6_readback(
         "integrity_result",
     )
     row = connection.execute(
-        "SELECT " + ", ".join(fields) + " FROM migration_v6_attestations "
-        "WHERE migration_version=6"
+        "SELECT " + ", ".join(fields) + " FROM migration_v6_attestations WHERE migration_version=6"
     ).fetchone()
     if row is None:
         raise InstallerError("FRESH_INSTALL_V6_INVALID", "v6 attestation row is missing")
@@ -167,16 +171,15 @@ def verify_v6_readback(
     foreign_keys = connection.execute("PRAGMA foreign_key_check").fetchall()
     if integrity != "ok" or foreign_keys:
         raise InstallerError("FRESH_INSTALL_V6_INVALID", "v6 integrity evidence failed")
-    for _kind, table in objects:
-        if _kind != "table" or table in _V5_NON_DOMAIN_TABLES | {
-            "migration_v6_attestations"
-        }:
-            continue
-        escaped = table.replace('"', '""')
-        if int(connection.execute(f'SELECT COUNT(*) FROM "{escaped}"').fetchone()[0]) != 0:
-            raise InstallerError(
-                "FRESH_INSTALL_V6_INVALID", f"v6 domain table is populated: {table}"
-            )
+    if require_empty_domain:
+        for _kind, table in objects:
+            if _kind != "table" or table in _V5_NON_DOMAIN_TABLES | {"migration_v6_attestations"}:
+                continue
+            escaped = table.replace('"', '""')
+            if int(connection.execute(f'SELECT COUNT(*) FROM "{escaped}"').fetchone()[0]) != 0:
+                raise InstallerError(
+                    "FRESH_INSTALL_V6_INVALID", f"v6 domain table is populated: {table}"
+                )
     return versions
 
 
@@ -563,9 +566,7 @@ class SQLiteStageAdapter:
                 for version in (1, 2, 3, 4, 5)
             )
             if migrations != expected_migrations:
-                raise InstallerError(
-                    "FRESH_INSTALL_V5_INVALID", "empty v5 migration rows differ"
-                )
+                raise InstallerError("FRESH_INSTALL_V5_INVALID", "empty v5 migration rows differ")
             runtime_rows = tuple(
                 (int(row[0]), int(row[1]))
                 for row in connection.execute(
@@ -653,18 +654,13 @@ class SQLiteStageAdapter:
         retained_size, retained_digest = self._retained_file_digest(BACKUP_NAME)
         if retained_size <= 0:
             raise InstallerError("FRESH_INSTALL_BACKUP_INVALID", "backup size must be positive")
-        if (
-            snapshot.size_bytes != retained_size
-            or snapshot.sha256 != retained_digest
-        ):
+        if snapshot.size_bytes != retained_size or snapshot.sha256 != retained_digest:
             raise InstallerError(
                 "FRESH_INSTALL_BACKUP_INVALID", "backup snapshot does not match retained bytes"
             )
         return snapshot
 
-    def prepare_v6_sidecars(
-        self, expected_identities: Mapping[str, FileIdentity]
-    ) -> None:
+    def prepare_v6_sidecars(self, expected_identities: Mapping[str, FileIdentity]) -> None:
         """Pre-own the exact WAL/SHM names before SQLite may mutate them."""
 
         self._fence()
@@ -690,11 +686,7 @@ class SQLiteStageAdapter:
                     )
                 descriptor = os.open(
                     name,
-                    os.O_RDWR
-                    | os.O_CREAT
-                    | os.O_EXCL
-                    | os.O_CLOEXEC
-                    | os.O_NOFOLLOW,
+                    os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW,
                     0o600,
                     dir_fd=self.stage_fd,
                 )
@@ -792,6 +784,8 @@ class SQLiteStageAdapter:
             phase_directories=frozenset({"authority"}),
         )
         _assert_identity_unchanged(before, after, DATABASE_NAME, "authority")
+
+
 def _normalize_v6_failpoint(value: int | str | None) -> int | str | None:
     if value is None:
         return None
@@ -812,6 +806,8 @@ def _normalize_v6_failpoint(value: int | str | None) -> int | str | None:
             if value == f"fail_after_statement_{number:02d}_{name}":
                 return value
     raise InstallerError("FRESH_INSTALL_V6_FAILED", f"unknown v6 failpoint: {value!r}")
+
+
 def _require_linux_sqlite_support() -> None:
     if os.name != "posix" or not sys_platform_linux():
         raise InstallerError(
@@ -821,5 +817,7 @@ def _require_linux_sqlite_support() -> None:
         raise InstallerError(
             "FRESH_INSTALL_PUBLICATION_UNSUPPORTED", "/proc/self/fd is unavailable"
         )
+
+
 def _migration_sql_bytes() -> bytes:
     return frozen_migration_v6_bytes()

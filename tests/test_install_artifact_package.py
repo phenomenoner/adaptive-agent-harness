@@ -10,8 +10,12 @@ from pathlib import Path
 import pytest
 
 from aar.canonical import canonical_sha256
-from aar.provider_ready_install_models import FactoryEntry, InstallCandidateReceipt
+from aar.provider_ready_install_models import InstallCandidateReceipt
 from aar.provider_ready_models import ProviderReadyCandidate
+from aar.provider_ready_package_factory import (
+    PACKAGE_FACTORY_WHEEL_MEMBER,
+    factory_entries_from_member_digests,
+)
 from aar.runtime._install_artifacts import (
     FROZEN_MIGRATION_V6_ASSET,
     FROZEN_MIGRATION_V6_SHA256,
@@ -26,14 +30,6 @@ SCHEMA_MEMBER = "aar/bundled/schemas/aar-provider-ready-schemas-v1.json"
 MANIFEST_MEMBER = "aar/bundled/fixtures/provider-ready/manifest.json"
 SKILL_MEMBER = "aar/bundled/aar-operations/SKILL.md"
 FIXTURE_PREFIX = "aar/bundled/fixtures/provider-ready/"
-FACTORY_METHODS = (
-    "model-request",
-    "subagent-submit",
-    "subagent-result",
-    "evidence-query",
-    "artifact-put",
-    "effect-propose",
-)
 
 
 def _sha256(data: bytes) -> str:
@@ -54,8 +50,7 @@ def _wheel_files() -> dict[str, bytes]:
     }
     for fixture in manifest_value["fixtures"]:
         files[FIXTURE_PREFIX + fixture["path"]] = (FIXTURE_ROOT / fixture["path"]).read_bytes()
-    for method in FACTORY_METHODS:
-        files[f"aar/factories/{method}.py"] = f"factory:{method}\n".encode()
+    files[PACKAGE_FACTORY_WHEEL_MEMBER] = (ROOT / "src" / PACKAGE_FACTORY_WHEEL_MEMBER).read_bytes()
     return files
 
 
@@ -83,13 +78,8 @@ def _receipt(wheel: bytes, files: dict[str, bytes]) -> InstallCandidateReceipt:
         contract_manifest_digest=contract_digest,
         skill_digest=_prefixed_sha256(files[SKILL_MEMBER]),
     )
-    entries = tuple(
-        FactoryEntry(
-            factory_id=f"aar-factory-{method}",
-            wheel_member=f"aar/factories/{method}.py",
-            implementation_digest=_prefixed_sha256(files[f"aar/factories/{method}.py"]),
-        )
-        for method in FACTORY_METHODS
+    entries = factory_entries_from_member_digests(
+        {name: _prefixed_sha256(content) for name, content in files.items()}
     )
     return InstallCandidateReceipt.issue(
         candidate=candidate,

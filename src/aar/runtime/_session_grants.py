@@ -57,10 +57,7 @@ class SessionGrantOwner:
         """Reset live grants only when a new durable activation is published."""
 
         with self._lock:
-            if (
-                not replayed
-                and self._observed_runtime_generation != grant_set.runtime_generation
-            ):
+            if not replayed and self._observed_runtime_generation != grant_set.runtime_generation:
                 self._session_grants.clear()
             self._observed_runtime_generation = grant_set.runtime_generation
 
@@ -138,14 +135,13 @@ class SessionGrantOwner:
             self._session_grants[grant.grant_id] = grant
             return grant
 
-
     def accept_session_grant(
         self,
         grant: IssuedWorkbenchGrant | str,
         *,
         principal_id: str,
         session_id: str,
-        capability: str,
+        capability: str | None,
         runtime_generation: int,
         now_unix_ms: int,
         activation_generation: int | None = None,
@@ -183,7 +179,9 @@ class SessionGrantOwner:
                 raise GrantDenied("session grant principal binding does not match")
             if stored.session_id != session_id:
                 raise GrantDenied("session grant session binding does not match")
-            if stored.capability != capability or capability not in current_set.capabilities:
+            if stored.capability not in current_set.capabilities:
+                raise GrantDenied("session grant capability is not current")
+            if capability is not None and stored.capability != capability:
                 raise GrantDenied("session grant capability binding does not match")
             if (
                 activation_generation is not None
@@ -200,7 +198,6 @@ class SessionGrantOwner:
                 raise GrantDenied("session grant is expired or not yet valid")
             return stored
 
-
     def revoke_session_grant(self, grant: IssuedWorkbenchGrant | str) -> IssuedWorkbenchGrant:
         """Revoke one known in-memory grant without touching the filesystem."""
 
@@ -212,7 +209,6 @@ class SessionGrantOwner:
 
     revoke_grant = revoke_session_grant
 
-
     def _require_current_grant_set(self) -> WorkbenchGrantSet:
         current_set = self._current_grant_set_provider()
         if current_set is None:
@@ -221,7 +217,6 @@ class SessionGrantOwner:
             self._session_grants.clear()
             self._observed_runtime_generation = current_set.runtime_generation
         return current_set
-
 
     def _verify_current_persisted(self, current_set: WorkbenchGrantSet) -> None:
         try:
@@ -249,7 +244,6 @@ class SessionGrantOwner:
         if isinstance(grant, IssuedWorkbenchGrant) and stored != grant:
             raise GrantDenied("session grant bytes are not the owned immutable grant")
         return stored
-
 
     validate_session_grant = accept_session_grant
     accept_grant = accept_session_grant

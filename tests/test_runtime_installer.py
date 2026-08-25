@@ -27,8 +27,18 @@ from aar.provider_ready_models import (
     MethodAdapterManifest,
     ProviderReadyCandidate,
 )
+from aar.provider_ready_package_factory import (
+    PACKAGE_FACTORY_DECLARATIONS,
+    PACKAGE_FACTORY_WHEEL_MEMBER,
+    factory_entries_from_member_digests,
+)
+from aar.provider_ready_runtime_models import (
+    WORKBENCH_GRANT_SET_SCHEMA_VERSION,
+    WorkbenchGrantSet,
+)
 from aar.runtime import _install_evidence as evidence_module
 from aar.runtime import installer as installer_module
+from aar.runtime._install_artifacts import inspect_wheel_bytes, validate_receipt_against_intent
 from aar.runtime.installer import (
     BACKUP_NAME,
     DATABASE_NAME,
@@ -42,6 +52,8 @@ from aar.runtime.installer import (
     verify_published_install,
 )
 from aar.runtime.migrations import V6_STATEMENT_NAMES
+from aar.runtime.provider_ready_activation import ProviderReadyActivationStore
+from aar.runtime.registry import OperationRegistry
 
 DIGEST = canonical_sha256({"fixture": "clean-install"})
 ZERO_COMMIT = "0" * 40
@@ -77,15 +89,7 @@ def _wheel_bytes(repo: Path) -> tuple[bytes, dict[str, bytes]]:
         path = "aar/bundled/fixtures/provider-ready/" + fixture["path"]
         fixture_path = repo / "tests" / "fixtures" / "provider-ready" / fixture["path"]
         files[path] = fixture_path.read_bytes()
-    for method in (
-        "model-request",
-        "subagent-submit",
-        "subagent-result",
-        "evidence-query",
-        "artifact-put",
-        "effect-propose",
-    ):
-        files[f"aar/factories/{method}.py"] = f"factory:{method}\n".encode()
+    files[PACKAGE_FACTORY_WHEEL_MEMBER] = (repo / "src" / PACKAGE_FACTORY_WHEEL_MEMBER).read_bytes()
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
         for name in sorted(files):
@@ -104,9 +108,9 @@ def _candidate_and_factory_data(
             "fixture_set_digest": manifest["fixture_set_digest"],
         }
     )
-    skill_digest = "sha256:" + hashlib.sha256(
-        files["aar/bundled/aar-operations/SKILL.md"]
-    ).hexdigest()
+    skill_digest = (
+        "sha256:" + hashlib.sha256(files["aar/bundled/aar-operations/SKILL.md"]).hexdigest()
+    )
     candidate = ProviderReadyCandidate(
         package_version="0.6.0a0",
         source_commit=ZERO_COMMIT,
@@ -114,28 +118,15 @@ def _candidate_and_factory_data(
         contract_manifest_digest=contract_digest,
         skill_digest=skill_digest,
     )
-    entries = []
-    factory_digests: dict[str, str] = {}
-    for method in (
-        "model-request",
-        "subagent-submit",
-        "subagent-result",
-        "evidence-query",
-        "artifact-put",
-        "effect-propose",
-    ):
-        factory_id = "aar-factory-" + method
-        member = f"aar/factories/{method}.py"
-        digest = "sha256:" + hashlib.sha256(files[member]).hexdigest()
-        factory_digests[factory_id] = digest
-        entries.append(
-            FactoryEntry(
-                factory_id=factory_id,
-                wheel_member=member,
-                implementation_digest=digest,
-            )
-        )
-    return candidate, tuple(entries), factory_digests
+    member_digests = {
+        name: "sha256:" + hashlib.sha256(content).hexdigest() for name, content in files.items()
+    }
+    entries = factory_entries_from_member_digests(member_digests)
+    factory_digests = {
+        declaration.factory_id: member_digests[declaration.wheel_member]
+        for declaration in PACKAGE_FACTORY_DECLARATIONS
+    }
+    return candidate, entries, factory_digests
 
 
 def _intent(
@@ -143,27 +134,19 @@ def _intent(
     candidate: ProviderReadyCandidate,
     factory_digests: dict[str, str],
 ) -> HostActivationIntent:
-    methods = (
-        "model.request",
-        "subagent.submit",
-        "subagent.result",
-        "evidence.query",
-        "artifact.put",
-        "effect.propose",
-    )
     adapters = []
-    for method in methods:
-        short = method.replace(".", "-")
+    for declaration in PACKAGE_FACTORY_DECLARATIONS:
+        short = declaration.method.replace(".", "-")
         adapters.append(
             MethodAdapterManifest.issue(
                 schema_version="aar.method-adapter-manifest.v1",
-                method=method,  # type: ignore[arg-type]
-                contract_id=f"aar.broker-contract.{short}.v2",
-                request_schema_digest=DIGEST,
-                response_schema_digest=DIGEST,
+                method=declaration.method,
+                contract_id=declaration.contract_id,
+                request_schema_digest=declaration.request_schema_digest,
+                response_schema_digest=declaration.response_schema_digest,
                 backend_kind="native",
-                factory_id=f"aar-factory-{short}",
-                factory_digest=factory_digests[f"aar-factory-{short}"],
+                factory_id=declaration.factory_id,
+                factory_digest=factory_digests[declaration.factory_id],
                 adapter_id=f"adapter-{short}-v1",
                 adapter_generation_policy="runtime_generation",
                 reference_only=False,
@@ -252,6 +235,59 @@ def _inputs(tmp_path: Path, repo: Path) -> tuple[Path, Path, Path, Path]:
     return _inputs_for_wheel(tmp_path, wheel, files)
 
 
+def test_duplicate_intent_factory_id_cannot_collapse_receipt_inventory(tmp_path: Path) -> None:
+    repo = Path(__file__).parents[1]
+    wheel_bytes, files = _wheel_bytes(repo)
+    candidate, entries, factory_digests = _candidate_and_factory_data(wheel_bytes, files)
+    intent = _intent(tmp_path / "runtime", candidate, factory_digests)
+    first, second, *remaining = intent.adapters
+    duplicate = MethodAdapterManifest.issue(
+        schema_version=second.schema_version,
+        method=second.method,
+        contract_id=second.contract_id,
+        request_schema_digest=second.request_schema_digest,
+        response_schema_digest=second.response_schema_digest,
+        backend_kind=second.backend_kind,
+        factory_id=first.factory_id,
+        factory_digest=first.factory_digest,
+        adapter_id=second.adapter_id,
+        adapter_generation_policy=second.adapter_generation_policy,
+        reference_only=second.reference_only,
+        evidence_tier=second.evidence_tier,
+        lookup_supported=second.lookup_supported,
+        cancel_supported=second.cancel_supported,
+    )
+    duplicate_intent = HostActivationIntent.issue(
+        schema_version=intent.schema_version,
+        profile_id=intent.profile_id,
+        activation_generation=intent.activation_generation,
+        previous_activation_authority_digest=intent.previous_activation_authority_digest,
+        candidate=intent.candidate,
+        runtime=intent.runtime,
+        planner=intent.planner,
+        adapters=(first, duplicate, *remaining),
+        routes=intent.routes,
+        grant_policy=intent.grant_policy,
+        cutover_authority_store_id=intent.cutover_authority_store_id,
+        recovery_compatibility_digest=intent.recovery_compatibility_digest,
+    )
+    collapsed_entries = tuple(entry for entry in entries if entry.factory_id != second.factory_id)
+    receipt = InstallCandidateReceipt.issue(
+        candidate=candidate,
+        wheel_size_bytes=len(wheel_bytes),
+        wheel_digest=candidate.wheel_digest,
+        contract_manifest_digest=candidate.contract_manifest_digest,
+        skill_digest=candidate.skill_digest,
+        factory_entries=collapsed_entries,
+    )
+    wheel = inspect_wheel_bytes(wheel_bytes, receipt)
+
+    with pytest.raises(InstallerError, match="unique package factory") as raised:
+        validate_receipt_against_intent(receipt, duplicate_intent, wheel)
+
+    assert raised.value.code == "FRESH_INSTALL_FACTORY_MISMATCH"
+
+
 def test_clean_install_round_trip_and_exact_initial_authority(tmp_path: Path) -> None:
     repo = Path(__file__).parents[1]
     target, intent_path, receipt_path, wheel_path = _inputs(tmp_path, repo)
@@ -272,10 +308,9 @@ def test_clean_install_round_trip_and_exact_initial_authority(tmp_path: Path) ->
     assert readback.database_versions == (1, 2, 3, 4, 5, 6)
     assert readback.authority == result.authority
     assert readback.profile == result.profile
-    assert (
-        (target / "authority" / "current.json").read_bytes()
-        == (target / "authority" / "history" / HISTORY_AUTHORITY_NAME).read_bytes()
-    )
+    assert (target / "authority" / "current.json").read_bytes() == (
+        target / "authority" / "history" / HISTORY_AUTHORITY_NAME
+    ).read_bytes()
 
 
 def _installed_runtime(tmp_path: Path) -> Path:
@@ -290,6 +325,76 @@ def _installed_runtime(tmp_path: Path) -> Path:
         epoch_factory=lambda: EPOCH,
     )
     return target
+
+
+def test_startup_readback_accepts_only_valid_postpublication_runtime_state(
+    tmp_path: Path,
+) -> None:
+    target = _installed_runtime(tmp_path)
+    initial = verify_published_install(target)
+    registry = OperationRegistry(target / DATABASE_NAME, lambda: 1235)
+    try:
+        runtime_generation = registry.start_runtime()
+    finally:
+        registry.close()
+    grant_policy = initial.profile.intent.grant_policy
+    grant_set = WorkbenchGrantSet.issue(
+        schema_version=WORKBENCH_GRANT_SET_SCHEMA_VERSION,
+        runtime_generation=runtime_generation,
+        activation_generation=initial.profile.intent.activation_generation,
+        profile_id=initial.profile.intent.profile_id,
+        profile_digest=initial.profile.profile_digest,
+        activation_authority_digest=initial.authority.authority_digest,
+        capability_digest=DIGEST,
+        route_catalog_digest=initial.profile.intent.routes.catalog_digest,
+        principal_ids=grant_policy.principal_patterns,
+        session_binding_policy="bind_exact_request_session",
+        capabilities=grant_policy.capabilities,
+        budget_ceiling=grant_policy.budget_ceiling,
+        max_ttl_ms=grant_policy.max_deadline_ms,
+    )
+    store = ProviderReadyActivationStore(
+        target / "authority",
+        current_runtime_generation=runtime_generation,
+    )
+    store.activate(
+        runtime_generation=runtime_generation,
+        grant_set=grant_set,
+        activation_generation=initial.profile.intent.activation_generation,
+        profile_id=initial.profile.intent.profile_id,
+        profile_digest=initial.profile.profile_digest,
+        capability_digest=DIGEST,
+        activation_authority_digest=initial.authority.authority_digest,
+        route_catalog_digest=initial.profile.intent.routes.catalog_digest,
+    )
+
+    with pytest.raises(InstallerError, match="FRESH_INSTALL_READBACK_FAILED"):
+        verify_published_install(target)
+
+    startup = verify_published_install(target, allow_runtime_state=True)
+    assert startup.profile == initial.profile
+    assert startup.authority == initial.authority
+    assert startup.database_versions == (1, 2, 3, 4, 5, 6)
+
+
+@pytest.mark.parametrize("variant", ("supervisor-mode", "generation-symlink", "wal-mode"))
+def test_startup_readback_rejects_unsafe_runtime_owned_state(tmp_path: Path, variant: str) -> None:
+    target = _installed_runtime(tmp_path)
+    if variant == "supervisor-mode":
+        path = target / "supervisor"
+        path.mkdir(mode=0o700)
+        path.chmod(0o755)
+    elif variant == "generation-symlink":
+        foreign = tmp_path / "foreign-generations"
+        foreign.mkdir(mode=0o700)
+        (target / "authority" / "runtime-generations").symlink_to(foreign, target_is_directory=True)
+    else:
+        path = target / f"{DATABASE_NAME}-wal"
+        path.write_bytes(b"foreign wal bytes")
+        path.chmod(0o644)
+
+    with pytest.raises(InstallerError, match="FRESH_INSTALL_READBACK_FAILED"):
+        verify_published_install(target, allow_runtime_state=True)
 
 
 def test_published_readback_rejects_runtime_tree_moved_to_another_path(tmp_path: Path) -> None:
@@ -414,8 +519,7 @@ def test_duplicate_receipt_keys_are_rejected_at_raw_parser_before_stage(
         raw = raw.replace(
             b'"candidate":{"contract_manifest_digest":',
             (
-                f'"candidate":{{"contract_manifest_digest":"{DIGEST}",'
-                '"contract_manifest_digest":'
+                f'"candidate":{{"contract_manifest_digest":"{DIGEST}","contract_manifest_digest":'
             ).encode(),
             1,
         )

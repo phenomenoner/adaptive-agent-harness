@@ -19,6 +19,10 @@ from pydantic import ValidationError
 from aar.canonical import canonical_sha256
 from aar.provider_ready_install_models import InstallCandidateReceipt
 from aar.provider_ready_models import HostActivationIntent
+from aar.provider_ready_package_factory import (
+    PackageFactoryBindingError,
+    validate_package_factory_bindings,
+)
 from aar.runtime._install_fs import FileIdentity, InstallerError, _require_absolute_file_path
 
 _FIXED_SCHEMA_MEMBER = "aar/bundled/schemas/aar-provider-ready-schemas-v1.json"
@@ -344,22 +348,7 @@ def validate_receipt_against_intent(
         raise InstallerError(
             "FRESH_INSTALL_RECEIPT_WHEEL_MISMATCH", "receipt does not bind exact wheel bytes"
         )
-    manifests = {adapter.factory_id: adapter for adapter in intent.adapters}
-    entries = {entry.factory_id: entry for entry in receipt.factory_entries}
-    if set(entries) != set(manifests):
-        raise InstallerError(
-            "FRESH_INSTALL_FACTORY_MISMATCH", "receipt factory inventory differs from intent"
-        )
-    for factory_id, entry in entries.items():
-        if entry.implementation_digest != manifests[factory_id].factory_digest:
-            raise InstallerError(
-                "FRESH_INSTALL_FACTORY_MISMATCH", f"factory digest mismatch: {factory_id}"
-            )
-        if entry.wheel_member not in wheel.members:
-            raise InstallerError(
-                "FRESH_INSTALL_FACTORY_MISMATCH", f"factory wheel member is absent: {factory_id}"
-            )
-        if wheel.member_digests[entry.wheel_member] != entry.implementation_digest:
-            raise InstallerError(
-                "FRESH_INSTALL_FACTORY_MISMATCH", f"factory member bytes mismatch: {factory_id}"
-            )
+    try:
+        validate_package_factory_bindings(intent, receipt, wheel.member_digests)
+    except PackageFactoryBindingError as error:
+        raise InstallerError("FRESH_INSTALL_FACTORY_MISMATCH", str(error)) from error
