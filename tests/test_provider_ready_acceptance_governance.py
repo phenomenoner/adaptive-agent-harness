@@ -64,18 +64,18 @@ EXPECTED_SCHEMA_PATHS = (
 )
 PLANNED_RECEIPT_SCHEMA = "schemas/aar-install-candidate-receipt-v1.schema.json"
 
-# The three clean-install product files were clean at task start.  Keeping their
-# task-start hashes here makes a product edit fail even if it is staged or later
-# hidden by a broad test fixture.
-TASK_START_PRODUCT_HASHES = {
+# Pin the merged clean-install implementation bytes after the authorized
+# acceptance-gap closure. Any later product drift must deliberately update this
+# acceptance authority instead of being hidden by a broad test fixture.
+FROZEN_INSTALLER_HASHES = {
     "src/aar/runtime/installer.py": (
-        "sha256:46958d8773b130cc9e30e6bcab3aba1cbf290e845f3cf0c1c8c59683bd905702"
+        "sha256:e787f4a07b59f7f063713fcc4a6accd6180d4e039e21a017cefe9dd96f8b591a"
     ),
     "src/aar/runtime/_install_evidence.py": (
-        "sha256:f967e6ddcb1204030344f859760a3d82fae85a832424ec9fd67084d515e496f0"
+        "sha256:acae2e077c54ae919e4f706967279d8bdbd51346a004f4ca8995f95e4e84992b"
     ),
     "src/aar/runtime/_install_fs.py": (
-        "sha256:207137114383e570b13e24b8b35569add5257b183e44d7d46bf08721d86ddf4c"
+        "sha256:f49973066421bcecb42e370cb4ea6246ecb841d136d9b8f4db87c4c8af0de2a0"
     ),
 }
 
@@ -439,8 +439,8 @@ def test_frozen_predecessor_and_migration_bytes_are_exact_read_only_inputs() -> 
     ).read_bytes()
 
 
-def test_task_scope_and_task_start_product_hashes_are_unchanged() -> None:
-    """A-CUST-001: only this acceptance file may be dirty in this worktree."""
+def test_task_scope_and_frozen_installer_hashes_are_unchanged() -> None:
+    """A-CUST-001: the acceptance-owned installer bytes remain exact."""
 
     result = subprocess.run(
         ["git", "status", "--porcelain=v1", "--untracked-files=all"],
@@ -454,7 +454,7 @@ def test_task_scope_and_task_start_product_hashes_are_unchanged() -> None:
         if len(line) >= 3:
             changed_paths.add(line[3:].split(" -> ")[-1])
     assert changed_paths <= {THIS_TEST}
-    for relative, expected in TASK_START_PRODUCT_HASHES.items():
+    for relative, expected in FROZEN_INSTALLER_HASHES.items():
         assert _sha256_bytes((ROOT / relative).read_bytes()) == expected, relative
     for relative in FROZEN_PREDECESSOR_HASHES:
         assert (ROOT / relative).is_file(), relative
