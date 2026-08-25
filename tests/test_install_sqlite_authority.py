@@ -12,6 +12,7 @@ from aar.provider_ready_install_models import (
     MigrationAttestationDocument,
     MigrationAttestationPayload,
 )
+from aar.runtime import _install_sqlite as sqlite_module
 from aar.runtime import migrations as migrations_module
 from aar.runtime import registry as registry_module
 from aar.runtime._install_fs import BACKUP_NAME, DATABASE_NAME, FileIdentity, InstallerError
@@ -95,6 +96,43 @@ def _prepared_adapter(
 
 def _database_path(descriptor: int) -> Path:
     return Path(f"/proc/self/fd/{descriptor}/{DATABASE_NAME}")
+
+
+def test_post_helper_stage_identity_drift_is_fenced_before_acceptance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter, descriptor, stage = _open_adapter(tmp_path)
+    original_close = OperationRegistry.close
+    original_fstat = sqlite_module.os.fstat
+    helper_returned = False
+
+    def close_then_drift(registry: OperationRegistry) -> None:
+        nonlocal helper_returned
+        original_close(registry)
+        helper_returned = True
+
+    def projected_fstat(fd: int) -> os.stat_result:
+        observed = original_fstat(fd)
+        if fd == descriptor and helper_returned:
+            values = list(observed)
+            values[1] = observed.st_ino + 1
+            return os.stat_result(values)
+        return observed
+
+    monkeypatch.setattr(OperationRegistry, "close", close_then_drift)
+    monkeypatch.setattr(sqlite_module.os, "fstat", projected_fstat)
+    try:
+        with pytest.raises(InstallerError) as raised:
+            adapter.construct_empty_v5()
+        assert raised.value.code == "FRESH_INSTALL_PUBLICATION_UNSUPPORTED"
+        assert "retained stage fd is not stable" in str(raised.value)
+        assert (stage / DATABASE_NAME).is_file()
+        assert not (stage / BACKUP_NAME).exists()
+        assert not (stage / f"{DATABASE_NAME}-wal").exists()
+        assert not (stage / f"{DATABASE_NAME}-shm").exists()
+    finally:
+        os.close(descriptor)
 
 
 def test_descriptor_bound_paths_do_not_follow_stage_rename(

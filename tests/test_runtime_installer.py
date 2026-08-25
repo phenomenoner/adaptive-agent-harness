@@ -512,6 +512,38 @@ def test_startup_readback_is_read_only_and_tree_identical(
     assert _path_snapshot(target) == before
 
 
+def test_startup_distribution_member_drift_fails_before_runtime_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = _installed_runtime(tmp_path)
+    before = _path_snapshot(target)
+
+    def reject_installed_members(_receipt: object) -> None:
+        raise InstallerError(
+            "FRESH_INSTALL_READBACK_FAILED",
+            "installed distribution member differs from receipt",
+        )
+
+    monkeypatch.setattr(
+        evidence_module,
+        "verify_installed_distribution_members",
+        reject_installed_members,
+    )
+
+    with pytest.raises(InstallerError) as raised:
+        verify_published_install(
+            target,
+            allow_runtime_state=True,
+            verify_distribution_members=True,
+        )
+
+    assert raised.value.code == "FRESH_INSTALL_READBACK_FAILED"
+    assert _path_snapshot(target) == before
+    assert not (target / "authority" / "runtime-generations").exists()
+    assert not (target / "supervisor").exists()
+
+
 def test_successful_install_rerun_rejects_target_without_replacement(tmp_path: Path) -> None:
     repo = Path(__file__).parents[1]
     target, intent_path, receipt_path, wheel_path = _inputs(tmp_path, repo)
@@ -570,7 +602,9 @@ def test_clean_install_does_not_adopt_or_mutate_an_old_root(
     )
     assert not (base / "legacy-runtime.archive").exists()
     assert not (base / "old-root.archive").exists()
-    if before_old_root is not None:
+    if before_old_root is None:
+        assert not old_root.exists()
+    else:
         assert _path_snapshot(old_root) == before_old_root
 
 

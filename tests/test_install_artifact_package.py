@@ -21,6 +21,7 @@ from aar.runtime._install_artifacts import (
     FROZEN_MIGRATION_V6_SHA256,
     frozen_migration_v6_bytes,
     inspect_wheel_bytes,
+    verify_installed_distribution_members,
 )
 from aar.runtime._install_fs import InstallerError
 
@@ -136,6 +137,29 @@ def test_positive_wheel_uses_exact_declared_fixture_bytes_and_documents() -> Non
         assert inspection.member_digests[member] == _prefixed_sha256(expected)
         if fixture["document_digest"] is not None:
             assert canonical_sha256(json.loads(expected)) == fixture["document_digest"]
+
+
+def test_startup_revalidates_receipt_bound_installed_members() -> None:
+    files = _wheel_files()
+    receipt = _receipt(_wheel_bytes(files), files)
+
+    verify_installed_distribution_members(receipt, member_reader=files.__getitem__)
+
+    tampered = dict(files)
+    tampered[PACKAGE_FACTORY_WHEEL_MEMBER] += b"# mixed installed candidate\n"
+    with pytest.raises(InstallerError) as raised:
+        verify_installed_distribution_members(receipt, member_reader=tampered.__getitem__)
+
+    assert raised.value.code == "FRESH_INSTALL_READBACK_FAILED"
+    assert "installed factory member digest differs" in str(raised.value)
+
+
+def test_startup_does_not_reconstruct_overall_wheel_digest() -> None:
+    files = _wheel_files()
+    arbitrary_prior_wheel = b"prior exact wheel bytes are no longer installed"
+    receipt = _receipt(arbitrary_prior_wheel, files)
+
+    verify_installed_distribution_members(receipt, member_reader=files.__getitem__)
 
 
 def test_fixture_member_tamper_is_rejected_without_manifest_or_receipt_change() -> None:

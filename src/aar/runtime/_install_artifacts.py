@@ -8,7 +8,7 @@ import json
 import os
 import stat
 import zipfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
@@ -331,6 +331,116 @@ def inspect_wheel_bytes(raw: bytes, receipt: InstallCandidateReceipt) -> WheelIn
     if member_digests[_FIXED_SKILL_MEMBER] != receipt.skill_digest:
         raise InstallerError("FRESH_INSTALL_RECEIPT_WHEEL_MISMATCH", "skill asset digest mismatch")
     return WheelInspection(digest, len(raw), members, member_digests)
+
+
+def _source_checkout_member_path(package_root: Path, wheel_member: str) -> Path | None:
+    """Resolve a force-included wheel member only for this exact source checkout."""
+
+    project_root = package_root.parent.parent
+    if (
+        package_root != project_root / "src" / "aar"
+        or not (project_root / "pyproject.toml").is_file()
+    ):
+        return None
+    relative = wheel_member.removeprefix("aar/")
+    mappings = (
+        ("bundled/aar-operations/", project_root / "skills" / "aar-operations"),
+        ("bundled/schemas/", project_root / "schemas"),
+        ("bundled/fixtures/", project_root / "tests" / "fixtures"),
+    )
+    for prefix, target_root in mappings:
+        if relative.startswith(prefix):
+            return target_root / relative.removeprefix(prefix)
+    return package_root / relative
+
+
+def _installed_member_reader(wheel_member: str) -> bytes:
+    package_root = resources.files("aar")
+    relative_parts = wheel_member.split("/")[1:]
+    try:
+        return package_root.joinpath(*relative_parts).read_bytes()
+    except (FileNotFoundError, IsADirectoryError, ModuleNotFoundError, OSError) as error:
+        if isinstance(package_root, Path):
+            source_path = _source_checkout_member_path(package_root, wheel_member)
+            if source_path is not None:
+                try:
+                    return source_path.read_bytes()
+                except (FileNotFoundError, IsADirectoryError, OSError):
+                    pass
+        raise InstallerError(
+            "FRESH_INSTALL_READBACK_FAILED",
+            f"installed distribution member is unavailable: {wheel_member}",
+        ) from error
+
+
+def verify_installed_distribution_members(
+    receipt: InstallCandidateReceipt,
+    *,
+    member_reader: Callable[[str], bytes] | None = None,
+) -> None:
+    """Revalidate receipt-bound installed members without reconstructing the wheel."""
+
+    read_member = member_reader or _installed_member_reader
+    members: dict[str, bytes] = {}
+
+    def read(name: str) -> bytes:
+        try:
+            data = read_member(name)
+        except InstallerError:
+            raise
+        except (FileNotFoundError, IsADirectoryError, KeyError, OSError) as error:
+            raise InstallerError(
+                "FRESH_INSTALL_READBACK_FAILED",
+                f"installed distribution member is unavailable: {name}",
+            ) from error
+        if type(data) is not bytes:
+            raise InstallerError(
+                "FRESH_INSTALL_READBACK_FAILED",
+                f"installed distribution member is not exact bytes: {name}",
+            )
+        members[name] = data
+        return data
+
+    try:
+        bundle = _verify_schema_bundle(read(_FIXED_SCHEMA_MEMBER))
+        manifest = _verify_fixture_manifest(read(_FIXED_MANIFEST_MEMBER), bundle["bundle_digest"])
+        read(_FIXED_SKILL_MEMBER)
+        for item in manifest["fixtures"]:
+            read(_PROVIDER_READY_PREFIX + str(item["path"]))
+        for entry in receipt.factory_entries:
+            if entry.wheel_member not in members:
+                read(entry.wheel_member)
+
+        _verify_fixture_members(members, manifest)
+        expected_contract_digest = canonical_sha256(
+            {
+                "schema_bundle_digest": bundle["bundle_digest"],
+                "fixture_set_digest": manifest["fixture_set_digest"],
+            }
+        )
+        if expected_contract_digest != receipt.contract_manifest_digest:
+            raise InstallerError(
+                "FRESH_INSTALL_READBACK_FAILED",
+                "installed contract asset digest differs from receipt",
+            )
+        if _digest_bytes(members[_FIXED_SKILL_MEMBER]) != receipt.skill_digest:
+            raise InstallerError(
+                "FRESH_INSTALL_READBACK_FAILED",
+                "installed skill digest differs from receipt",
+            )
+        for entry in receipt.factory_entries:
+            if _digest_bytes(members[entry.wheel_member]) != entry.implementation_digest:
+                raise InstallerError(
+                    "FRESH_INSTALL_READBACK_FAILED",
+                    f"installed factory member digest differs from receipt: {entry.factory_id}",
+                )
+    except InstallerError as error:
+        if error.code == "FRESH_INSTALL_READBACK_FAILED":
+            raise
+        raise InstallerError(
+            "FRESH_INSTALL_READBACK_FAILED",
+            f"installed distribution members are invalid: {error}",
+        ) from error
 
 
 def validate_receipt_against_intent(

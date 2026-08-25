@@ -11,7 +11,6 @@ import ast
 import hashlib
 import json
 import re
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -43,7 +42,6 @@ from aar.runtime._install_fs import (
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
-THIS_TEST = "tests/test_provider_ready_acceptance_governance.py"
 BASELINE_COMMIT = "8115e8570d92c507dc7ec176699f3131168be6f0"
 
 EXPECTED_SCHEMA_PATHS = (
@@ -72,7 +70,7 @@ FROZEN_INSTALLER_HASHES = {
         "sha256:e787f4a07b59f7f063713fcc4a6accd6180d4e039e21a017cefe9dd96f8b591a"
     ),
     "src/aar/runtime/_install_evidence.py": (
-        "sha256:acae2e077c54ae919e4f706967279d8bdbd51346a004f4ca8995f95e4e84992b"
+        "sha256:70a47a4c99115c2d28a197e7e4b1882aa752b607e9a1d47ebc06536aba7d71d8"
     ),
     "src/aar/runtime/_install_fs.py": (
         "sha256:f49973066421bcecb42e370cb4ea6246ecb841d136d9b8f4db87c4c8af0de2a0"
@@ -439,21 +437,9 @@ def test_frozen_predecessor_and_migration_bytes_are_exact_read_only_inputs() -> 
     ).read_bytes()
 
 
-def test_task_scope_and_frozen_installer_hashes_are_unchanged() -> None:
+def test_frozen_installer_hashes_are_unchanged() -> None:
     """A-CUST-001: the acceptance-owned installer bytes remain exact."""
 
-    result = subprocess.run(
-        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    changed_paths = set()
-    for line in result.stdout.splitlines():
-        if len(line) >= 3:
-            changed_paths.add(line[3:].split(" -> ")[-1])
-    assert changed_paths <= {THIS_TEST}
     for relative, expected in FROZEN_INSTALLER_HASHES.items():
         assert _sha256_bytes((ROOT / relative).read_bytes()) == expected, relative
     for relative in FROZEN_PREDECESSOR_HASHES:

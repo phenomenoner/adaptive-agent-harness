@@ -303,6 +303,7 @@ class ProviderReadyStartup:
                 readback = verify_published_install(
                     self.runtime_home,
                     allow_runtime_state=True,
+                    verify_distribution_members=True,
                 )
                 loaded = load_package_factory_bindings()
                 _verify_package_factory_bindings(readback, loaded)

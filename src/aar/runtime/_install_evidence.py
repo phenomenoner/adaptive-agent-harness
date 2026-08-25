@@ -27,6 +27,7 @@ from aar.provider_ready_models import (
 from aar.provider_ready_operator_models import (
     ActivationGenerationAuthority,
 )
+from aar.runtime._install_artifacts import verify_installed_distribution_members
 from aar.runtime._install_fs import (
     DATABASE_NAME,
     HISTORY_AUTHORITY_NAME,
@@ -488,12 +489,15 @@ def verify_published_install(
     runtime_home: os.PathLike[str] | str,
     *,
     allow_runtime_state: bool = False,
+    verify_distribution_members: bool = False,
 ) -> PublishedInstallReadback:
     """Read back immutable install evidence without initializing or repairing it.
 
     ``allow_runtime_state`` is the narrow C2 startup view: immutable install
     evidence remains exact while the already-published runtime may contain its
     generation-owned authority subtree and populated v6 domain rows.
+    ``verify_distribution_members`` rehashes receipt-bound installed members;
+    it deliberately does not reconstruct or claim the deleted overall wheel.
     """
 
     target_text = _path_text(runtime_home, label="runtime_home")
@@ -632,6 +636,8 @@ def verify_published_install(
             profile=profile,
             authority=authority,
         )
+        if verify_distribution_members:
+            verify_installed_distribution_members(receipt)
 
         database_fd = os.open(
             DATABASE_NAME,
