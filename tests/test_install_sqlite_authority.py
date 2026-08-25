@@ -279,6 +279,82 @@ def test_v5_inventory_and_backup_snapshot_are_independently_verified(tmp_path: P
         os.close(descriptor)
 
 
+def test_v5_transaction_fault_rolls_back_schema_and_domain_rows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    adapter, descriptor, stage = _open_adapter(tmp_path)
+    original_apply_v3 = registry_module.OperationRegistry._apply_v3_schema
+
+    def fail_inside_transaction(registry: registry_module.OperationRegistry) -> None:
+        original_apply_v3(registry)
+        raise RuntimeError("injected v5 transaction fault")
+
+    monkeypatch.setattr(
+        registry_module.OperationRegistry,
+        "_apply_v3_schema",
+        fail_inside_transaction,
+    )
+    try:
+        with pytest.raises(InstallerError) as raised:
+            adapter.construct_empty_v5()
+        assert raised.value.code == "FRESH_INSTALL_V5_INVALID"
+        connection = sqlite3.connect(_database_path(descriptor))
+        try:
+            tables = tuple(
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+                )
+            )
+            assert tables == ()
+        finally:
+            connection.close()
+        assert not (stage / f"{DATABASE_NAME}-wal").exists()
+        assert not (stage / f"{DATABASE_NAME}-shm").exists()
+    finally:
+        os.close(descriptor)
+
+
+@pytest.mark.parametrize(
+    ("variant", "entry_name", "expected_error"),
+    [
+        ("database", DATABASE_NAME, None),
+        ("backup", BACKUP_NAME, None),
+        ("database-wal", f"{DATABASE_NAME}-wal", None),
+        ("database-shm", f"{DATABASE_NAME}-shm", None),
+        ("backup-wal", f"{BACKUP_NAME}-wal", None),
+        ("backup-shm", f"{BACKUP_NAME}-shm", None),
+        ("symlink", f"{DATABASE_NAME}-wal", "FRESH_INSTALL_SQLITE_RESIDUE"),
+        ("wrong-type", f"{DATABASE_NAME}-shm", "FRESH_INSTALL_SQLITE_RESIDUE"),
+        ("unknown-entry", "unknown.sqlite3", "FRESH_INSTALL_SQLITE_RESIDUE"),
+    ],
+)
+def test_sqlite_stage_inventory_enforces_complete_nofollow_allowlist(
+    tmp_path: Path,
+    variant: str,
+    entry_name: str,
+    expected_error: str | None,
+) -> None:
+    adapter, descriptor, stage = _open_adapter(tmp_path)
+    try:
+        if variant == "symlink":
+            foreign = tmp_path / "foreign.sqlite3"
+            foreign.write_bytes(b"foreign")
+            (stage / entry_name).symlink_to(foreign)
+        elif variant == "wrong-type":
+            (stage / entry_name).mkdir()
+        else:
+            (stage / entry_name).write_bytes(b"entry")
+        if expected_error is None:
+            assert set(adapter._check_entries(backup=True)) == {entry_name}
+        else:
+            with pytest.raises(InstallerError) as raised:
+                adapter._check_entries(backup=True)
+            assert raised.value.code == expected_error
+    finally:
+        os.close(descriptor)
+
+
 def test_v6_inventory_and_all_attestation_fields_are_exact(tmp_path: Path) -> None:
     assert len(_V5_OBJECTS) == 28
     assert len(_V6_OBJECTS) == 25

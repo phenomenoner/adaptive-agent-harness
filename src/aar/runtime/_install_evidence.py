@@ -68,6 +68,19 @@ def _test_hook(boundary: str) -> None:
         hook(boundary)
 
 
+def verify_install_epoch_binding(
+    preparation: CleanInstallPreparation,
+    attestation: MigrationAttestationDocument,
+) -> None:
+    """Reject an attestation that does not belong to this install invocation."""
+
+    if attestation.attestation.cutover_epoch != preparation.install_epoch:
+        raise InstallerError(
+            "FRESH_INSTALL_EPOCH_INVALID",
+            "attestation cutover_epoch differs from preparation install_epoch",
+        )
+
+
 def _require_owned_directory(descriptor: int, *, label: str) -> FileIdentity:
     observed = os.fstat(descriptor)
     identity = FileIdentity.from_stat(observed)

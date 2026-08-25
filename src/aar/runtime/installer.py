@@ -43,6 +43,7 @@ from aar.runtime._install_evidence import (
     build_migration_attestation,
     project_authority_store_id,
     project_snapshot_id,
+    verify_install_epoch_binding,
     verify_published_install,
 )
 from aar.runtime._install_fs import (
@@ -189,7 +190,19 @@ def install_clean_runtime(
             migration_sql_bytes=_migration_sql_bytes(),
         )
         validate_stage_ownership(stage)
-        row_digest = adapter.construct_empty_v5()
+        try:
+            row_digest = adapter.construct_empty_v5()
+        except InstallerError:
+            # The stage was empty before v5 construction.  Reconcile only the
+            # adapter's known SQLite names so a contained v5 rollback can
+            # remove its own partial database without adopting unknown residue.
+            try:
+                adapter._check_entries(backup=False)
+            except InstallerError:
+                pass
+            else:
+                record_stage_ownership(stage)
+            raise
         record_stage_ownership(stage)
         validate_stage_ownership(stage)
         backup = adapter.create_backup()
@@ -215,6 +228,7 @@ def install_clean_runtime(
             started_at_unix_ms=started,
             completed_at_unix_ms=max(started, clock()),
         )
+        verify_install_epoch_binding(preparation, attestation)
         validate_stage_ownership(stage)
         adapter.prepare_v6_sidecars(
             {

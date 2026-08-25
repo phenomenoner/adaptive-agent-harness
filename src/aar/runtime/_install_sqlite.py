@@ -838,11 +838,11 @@ def _normalize_v6_failpoint(value: int | str | None) -> int | str | None:
 def _require_linux_sqlite_support() -> None:
     if os.name != "posix" or not sys_platform_linux():
         raise InstallerError(
-            "FRESH_INSTALL_PUBLICATION_UNSUPPORTED", "clean install requires Linux/WSL"
+            "FRESH_INSTALL_SQLITE_UNSUPPORTED", "clean install requires Linux/WSL"
         )
     if not os.path.isdir("/proc/self/fd"):
         raise InstallerError(
-            "FRESH_INSTALL_PUBLICATION_UNSUPPORTED", "/proc/self/fd is unavailable"
+            "FRESH_INSTALL_SQLITE_UNSUPPORTED", "/proc/self/fd is unavailable"
         )
 
 

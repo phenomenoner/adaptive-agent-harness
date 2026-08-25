@@ -778,10 +778,13 @@ def _publish(
     target: TargetIdentity,
     state: PublicationState,
 ) -> None:
+    _test_hook("before_publish_fence")
     chain.verify()
     stage.verify()
+    _test_hook("before_publish")
     _rename_noreplace(stage.parent.descriptor, stage.name, target.final_name)
     state.renamed = True
+    _test_hook("after_publish")
 def _verify_publication(
     stage: StageHandle,
     chain: RetainedDirectoryChain,
@@ -800,7 +803,9 @@ def _verify_publication(
             "FRESH_INSTALL_PUBLICATION_IDENTITY_MISMATCH", "target inode differs from staged inode"
         )
     try:
+        _test_hook("before_parent_fsync")
         _fsync_fd(stage.parent.descriptor)
+        _test_hook("after_parent_fsync")
     except InstallerError as error:
         raise PublicationIndeterminate(
             "FRESH_INSTALL_PUBLICATION_FAILED",

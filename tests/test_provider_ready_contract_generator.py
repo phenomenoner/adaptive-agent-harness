@@ -41,6 +41,12 @@ LEGACY_HASHES = {
     "schemas/aar-schemas-v1.json": "02b894c6a1396c2a3f3d3238e44a3f26a5f1e3126bc3e3e4bac5946cd13c33ca",
     "tests/fixtures/manifest.json": "69214e21f14be8800e386c7a8f4800311c3fabcc12015a843031b8b3cd3324b0",
 }
+FROZEN_INSTALLER_HASHES = {
+    "schemas/aar-broker-catalog-v2.json": "88099616e61f41c7d72d5e1c81fba8ebfe29995467fd583acc9da0bb15aeadbc",
+    "schemas/aar-rlm-workbench-v1.schema.json": "0d52527f9019cae724459e3eb36a0165b91822771ae64f815f1c2fd18d3054ef",
+    "schemas/aar-caller-work-v1.schema.json": "76deb95fb89081c7ec90734821689e14a893040696af6727725b059676c2b7e3",
+    "docs/sdd/aar-rlm-native-workbench-v2/migration-v6.sql": "8e7080b319aadb4eb98b5e3b9e12efe8c189c0bd12a82dc8ba1eea7c7bfe29b7",
+}
 
 
 def _spec() -> dict[str, Any]:
@@ -420,3 +426,12 @@ def test_static_imports_are_pure_and_legacy_hashes_remain_unchanged() -> None:
         assert forbidden not in source
     for relative, expected in LEGACY_HASHES.items():
         assert hashlib.sha256((REPO_ROOT / relative).read_bytes()).hexdigest() == expected
+
+
+def test_frozen_v5_v6_d1_d2_bytes_use_one_atomic_owner_manifest() -> None:
+    manifest = {**LEGACY_HASHES, **FROZEN_INSTALLER_HASHES}
+    assert len(manifest) == len(LEGACY_HASHES) + len(FROZEN_INSTALLER_HASHES)
+    for relative, expected in manifest.items():
+        path = REPO_ROOT / relative
+        assert path.is_file(), relative
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == expected, relative

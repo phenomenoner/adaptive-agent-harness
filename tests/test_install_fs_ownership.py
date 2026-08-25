@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import contextlib
 import os
+import stat
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -90,6 +92,128 @@ def test_stage_open_refuses_replacement_without_touching_replacement(
         assert (parent / "created-by-invocation").is_dir()
     finally:
         chain.close()
+
+
+@pytest.mark.parametrize("variant", ["mode-0700", "same-filesystem", "stale-sibling"])
+def test_stage_creation_asserts_positive_metadata_and_never_adopts_stale_siblings(
+    tmp_path: Path, variant: str
+) -> None:
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    chain = fs.RetainedDirectoryChain(parent)
+    stage_name = f".runtime.install-{EPOCH.removeprefix('install-')}"
+    if variant == "stale-sibling":
+        stale = parent / stage_name
+        stale.mkdir(mode=0o700)
+        (stale / "stale").write_bytes(b"must-remain")
+    try:
+        if variant == "stale-sibling":
+            with pytest.raises(fs.InstallerError, match="FRESH_INSTALL_STAGE_EXISTS"):
+                fs._create_stage(chain, "runtime", EPOCH)
+            assert (parent / stage_name / "stale").read_bytes() == b"must-remain"
+            return
+        stage = fs._create_stage(chain, "runtime", EPOCH)
+        try:
+            observed = os.fstat(stage.descriptor)
+            assert stat.S_IMODE(observed.st_mode) == 0o700
+            if variant == "same-filesystem":
+                assert observed.st_dev == os.fstat(chain.parent.descriptor).st_dev
+        finally:
+            os.close(stage.descriptor)
+            (parent / stage_name).rmdir()
+    finally:
+        chain.close()
+
+
+def test_stage_create_uses_retained_parent_fd_and_exclusive_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    chain = fs.RetainedDirectoryChain(parent)
+    parent_fd = chain.parent.descriptor
+    calls: list[tuple[str, int, int | None]] = []
+    open_calls: list[int | None] = []
+    original_mkdir = fs.os.mkdir
+    original_open = fs.os.open
+
+    def mkdir(name: str, mode: int = 0o777, *, dir_fd: int | None = None) -> None:
+        calls.append((name, mode, dir_fd))
+        original_mkdir(name, mode, dir_fd=dir_fd)
+
+    def open_file(
+        name: str,
+        flags: int,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        if name == ".runtime.install-" + "1" * 64:
+            open_calls.append(dir_fd)
+        return original_open(name, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(fs.os, "mkdir", mkdir)
+    monkeypatch.setattr(fs.os, "open", open_file)
+    try:
+        stage = fs._create_stage(chain, "runtime", EPOCH)
+        os.close(stage.descriptor)
+        (parent / stage.name).rmdir()
+    finally:
+        chain.close()
+    assert calls == [(".runtime.install-" + "1" * 64, 0o700, parent_fd)]
+    assert open_calls == [parent_fd]
+
+
+@pytest.mark.parametrize("field", ["device", "inode", "mode", "owner_uid", "owner_gid"])
+def test_stage_fstat_identity_drift_is_rejected_for_each_identity_axis(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, field: str
+) -> None:
+    chain, stage = _new_stage(tmp_path)
+    original_fstat = fs.os.fstat
+    try:
+        baseline = original_fstat(stage.descriptor)
+        values = {
+            "st_dev": baseline.st_dev,
+            "st_ino": baseline.st_ino,
+            "st_mode": baseline.st_mode,
+            "st_uid": baseline.st_uid,
+            "st_gid": baseline.st_gid,
+        }
+        if field == "device":
+            values["st_dev"] += 1
+        elif field == "inode":
+            values["st_ino"] += 1
+        elif field == "mode":
+            values["st_mode"] = (values["st_mode"] & ~0o777) | 0o701
+        elif field == "owner_uid":
+            values["st_uid"] += 1
+        else:
+            values["st_gid"] += 1
+
+        def fstat(descriptor: int) -> os.stat_result | SimpleNamespace:
+            if descriptor == stage.descriptor:
+                return SimpleNamespace(**values)
+            return original_fstat(descriptor)
+
+        monkeypatch.setattr(fs.os, "fstat", fstat)
+        with pytest.raises(fs.InstallerError, match="FRESH_INSTALL_PARENT_REPLACED"):
+            stage.verify()
+    finally:
+        os.close(stage.descriptor)
+        chain.close()
+
+
+@pytest.mark.parametrize("platform", ["native-windows", "non-linux"])
+def test_unsupported_platform_fails_closed_before_publication(
+    platform: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    if platform == "native-windows":
+        monkeypatch.setattr(fs.os, "name", "nt")
+    else:
+        monkeypatch.setattr(fs, "sys_platform_linux", lambda: False)
+    with pytest.raises(fs.InstallerError) as raised:
+        fs._require_publication_support()
+    assert raised.value.code == "FRESH_INSTALL_PUBLICATION_UNSUPPORTED"
 
 
 @pytest.mark.parametrize(
