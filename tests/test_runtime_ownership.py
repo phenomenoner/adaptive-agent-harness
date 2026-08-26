@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -10,6 +11,22 @@ import pytest
 
 from aar.mcp.server import build_server
 from aar.runtime.ownership import RuntimeOwnershipConflict, RuntimeOwnershipLock
+
+
+def test_runtime_ownership_lock_is_mode_0600_under_permissive_umask(tmp_path: Path) -> None:
+    database = tmp_path / "mode.sqlite3"
+    explicit_lock = tmp_path / "private" / "runtime-owner.lock"
+    previous = os.umask(0)
+    try:
+        ownership = RuntimeOwnershipLock(database, lock_path=explicit_lock)
+    finally:
+        os.umask(previous)
+    try:
+        assert stat.S_IMODE(ownership.path.stat().st_mode) == 0o600
+        assert ownership.path == explicit_lock
+        assert not Path(f"{database}.runtime.lock").exists()
+    finally:
+        ownership.close()
 
 
 def current_generation(database: Path) -> int:

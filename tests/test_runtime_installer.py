@@ -61,6 +61,7 @@ from aar.runtime.installer import (
     verify_published_install,
 )
 from aar.runtime.migrations import V6_STATEMENT_NAMES
+from aar.runtime.ownership import RuntimeOwnershipLock
 from aar.runtime.provider_ready_activation import ProviderReadyActivationStore
 from aar.runtime.reference_host import ReferenceHost
 from aar.runtime.registry import OperationRegistry
@@ -851,6 +852,13 @@ def test_startup_readback_accepts_only_valid_postpublication_runtime_state(
     )
     host = ReferenceHost(target / DATABASE_NAME, programmable_backend="plain")
     host.close()
+    supervisor = target / "supervisor"
+    supervisor.mkdir(mode=0o700)
+    with RuntimeOwnershipLock(
+        target / DATABASE_NAME,
+        lock_path=supervisor / "runtime-owner.lock",
+    ) as ownership:
+        assert stat.S_IMODE(ownership.path.stat().st_mode) == 0o600
 
     with pytest.raises(InstallerError, match="FRESH_INSTALL_READBACK_FAILED"):
         verify_published_install(target)

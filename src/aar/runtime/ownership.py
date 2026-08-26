@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
+import stat
 from pathlib import Path
-from typing import BinaryIO
 
 
 class RuntimeOwnershipConflict(RuntimeError):
@@ -14,11 +14,25 @@ class RuntimeOwnershipLock:
 
     _WINDOWS_LOCK_OFFSET = 4_096
 
-    def __init__(self, database_path: Path) -> None:
+    def __init__(self, database_path: Path, *, lock_path: Path | None = None) -> None:
         database_path = database_path.resolve()
-        self.path = Path(f"{database_path}.runtime.lock")
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._stream: BinaryIO | None = self.path.open("a+b")
+        requested_lock = Path(f"{database_path}.runtime.lock") if lock_path is None else lock_path
+        requested_lock.parent.mkdir(parents=True, exist_ok=True)
+        self.path = requested_lock.parent.resolve() / requested_lock.name
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0)
+        if os.name != "nt":
+            flags |= getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(self.path, flags, 0o600)
+        try:
+            observed = os.fstat(descriptor)
+            if not stat.S_ISREG(observed.st_mode):
+                raise RuntimeOwnershipConflict(
+                    f"reference-host runtime lock is not a regular file: {self.path}"
+                )
+            self._stream = os.fdopen(descriptor, "r+b")
+        except BaseException:
+            os.close(descriptor)
+            raise
         try:
             self._lock()
             self._write_owner_marker()
