@@ -5,16 +5,20 @@ from pathlib import Path
 
 import pytest
 
-from aar.compat.assets import CODEX_PROFILE_VERSION, host_documents
+from aar.compat.assets import (
+    CODEX_PROFILE_VERSION,
+    RELEASE_RECEIPT_ASSET,
+    host_documents,
+)
+from aar.mcp.server import MCP_TOOL_SURFACE_VERSION, OPERATION_SKILL_VERSION
+from aar.versions import PACKAGE_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
-SUCCESSOR = "0.4.0a6"
-TAG = "v0.4.0a6"
-MATRIX_ROWS = 63
-CANDIDATE_CODEX_PROFILE_VERSION = "0.5.0-a0+codex.20260820194429"
-EXPECTED_CODEX_PROFILE_VERSION = "0.4.0+codex.20260816122000"
+SUCCESSOR = PACKAGE_VERSION
+TAG = f"v{SUCCESSOR}"
+MATRIX_ROWS = 20
+TOOL_MANIFEST_PATH = ROOT / "schemas" / "aar-mcp-tools-v8-combined.json"
 STATUS_PATH = ROOT / "profiles" / "release-status-v1.json"
-RELEASE_RECEIPT_ASSET = "adaptive-agent-runtime-v0.4.0a6-release-receipt.json"
 HERMES_PROFILE_README = "profiles/hermes/adaptive-agent-runtime/README.md"
 
 PUBLIC_STATUS_CONSUMERS = (
@@ -22,7 +26,7 @@ PUBLIC_STATUS_CONSUMERS = (
     "CHANGELOG.md",
     "TECHNICAL-STATUS.md",
     "HOST-COMPATIBILITY.md",
-    "docs/RELEASE-v0.4.0a6.md",
+    f"docs/RELEASE-v{SUCCESSOR}.md",
     "profiles/codex/plugins/adaptive-agent-runtime/README.md",
     HERMES_PROFILE_README,
     "docs/CODEX-INSTALL.md",
@@ -36,7 +40,7 @@ CURRENT_PUBLIC_SURFACES = (
     "CHANGELOG.md",
     "TECHNICAL-STATUS.md",
     "HOST-COMPATIBILITY.md",
-    "docs/RELEASE-v0.4.0a6.md",
+    f"docs/RELEASE-v{SUCCESSOR}.md",
     "profiles/codex/plugins/adaptive-agent-runtime/README.md",
     HERMES_PROFILE_README,
     "docs/CODEX-INSTALL.md",
@@ -84,14 +88,20 @@ REQUIRED_EXTERNAL_RECEIPT_FIELDS = (
     "artifacts.wheel.length",
     "artifacts.wheel_sidecar.name",
     "artifacts.wheel_sidecar.sha256",
+    "artifacts.sdist.name",
+    "artifacts.sdist.sha256",
+    "artifacts.install_candidate_receipt.name",
+    "artifacts.install_candidate_receipt.sha256",
     "ci.head_sha",
     "ci.run_id",
     "ci.conclusion",
-    "local_install.receipt_sha256",
-    "native_capability.receipt_sha256",
-    "caller_delegated_rlm.receipt_sha256",
-    "independent_review.primary_sha256",
-    "independent_review.narrow_sha256",
+    "qualification.clean_install_receipt_sha256",
+    "qualification.activation_intent_sha256",
+    "qualification.native_capability_receipt_sha256",
+    "qualification.caller_provider_receipt_sha256",
+    "qualification.private_grant_lifecycle_receipt_sha256",
+    "independent_review.formal_sha256",
+    "independent_review.claude_cli_sha256",
     "independent_review.verdict",
     "release.tag",
     "release.tag_target",
@@ -101,13 +111,18 @@ REQUIRED_EXTERNAL_RECEIPT_FIELDS = (
 
 def _surface(path: str) -> str:
     target = ROOT / path
-    assert target.is_file(), f"required 0.4.0a6 public release surface is missing: {path}"
+    assert target.is_file(), f"required {SUCCESSOR} public release surface is missing: {path}"
     return target.read_text(encoding="utf-8")
 
 
 def _status() -> dict:
     assert STATUS_PATH.is_file(), "central release-status snapshot is missing"
     return json.loads(STATUS_PATH.read_text(encoding="utf-8"))
+
+
+def _tool_manifest() -> dict:
+    assert TOOL_MANIFEST_PATH.is_file(), "combined MCP v8 tool manifest is missing"
+    return json.loads(TOOL_MANIFEST_PATH.read_text(encoding="utf-8"))
 
 
 def _assert_restart_handoff(text: str, *, surface: str) -> None:
@@ -140,14 +155,19 @@ def _markdown_section(text: str, heading: str) -> str:
 
 def test_release_status_is_timeless_snapshot_contract() -> None:
     status = _status()
+    tools = _tool_manifest()["tools"]
     assert status["schema_id"] == "aar.release-status.v1"
     assert status["snapshot"] == {
         "scope": "immutable_release_snapshot",
         "version": SUCCESSOR,
         "tag": TAG,
-        "operation_skill_version": "0.9.6",
-        "codex_profile_version": EXPECTED_CODEX_PROFILE_VERSION,
+        "operation_skill_version": OPERATION_SKILL_VERSION,
+        "codex_profile_version": CODEX_PROFILE_VERSION,
+        "mcp_surface": MCP_TOOL_SURFACE_VERSION,
+        "mcp_tool_count": len(tools),
     }
+    assert MCP_TOOL_SURFACE_VERSION == "aar.mcp-tools.v8"
+    assert len(tools) == 38
     serialized = json.dumps(status, sort_keys=True)
     assert "candidate_unreleased" not in serialized
     assert "PENDING" not in serialized
@@ -166,11 +186,17 @@ def test_release_status_uses_non_self_referential_external_receipt() -> None:
     }
 
 
-def test_release_status_separates_completed_and_post_freeze_evidence() -> None:
+def test_release_status_separates_frozen_and_post_freeze_evidence() -> None:
     verification = _status()["verification"]
-    assert verification["completed_before_freeze"] == {
-        "lifecycle_repair_matrix": {"required_rows": MATRIX_ROWS, "status": "completed"},
-        "windows_behavioral_suite": {"status": "completed"},
+    assert verification["frozen_before_release"] == {
+        "provider_ready_host_acceptance": {
+            "required_rows": MATRIX_ROWS,
+            "status": "frozen",
+        },
+        "public_mcp_v8_surface": {
+            "required_tools": len(_tool_manifest()["tools"]),
+            "status": "frozen",
+        },
     }
     assert verification["post_freeze"] == {
         "authority": RELEASE_RECEIPT_ASSET,
@@ -182,22 +208,17 @@ def test_release_status_consumer_inventory_is_explicit() -> None:
     assert _status()["public_consumers"] == list(PUBLIC_STATUS_CONSUMERS)
 
 
-@pytest.mark.parametrize("path", CURRENT_PUBLIC_SURFACES)
-def test_current_public_surfaces_use_timeless_release_snapshot_wording(path: str) -> None:
-    text = _surface(path)
+def _assert_no_stale_current_authority(text: str, *, surface: str) -> None:
     lowered = text.casefold()
-    assert SUCCESSOR in text
-    assert "release snapshot" in lowered
-    assert "profiles/release-status-v1.json" in text
-    assert RELEASE_RECEIPT_ASSET in text
     for stale in (
+        "this page is the host-facing part of the **`v0.4.0a6` release snapshot**",
+        "this page is the codex installation entrypoint for the **`0.4.0a6` release snapshot**",
+        "repository status:** the `0.4.0a6` release snapshot",
+        "adaptive_agent_runtime-0.4.0a6-py3-none-any.whl",
+        ".git@v0.4.0a6",
         "candidate_unreleased",
         "candidate, unreleased",
-        "candidate-v0.4.0a6",
         "current source candidate",
-        "`0.4.0a6` is unreleased",
-        "unreleased `0.4.0a6`",
-        "unreleased `v0.4.0a6`",
         "when its tag is published",
         "install the candidate tag after publication",
         "pending receipts",
@@ -206,7 +227,18 @@ def test_current_public_surfaces_use_timeless_release_snapshot_wording(path: str
         "will resolve only after",
         "does not exist until",
     ):
-        assert stale not in lowered, f"{path} contains time-sensitive release wording: {stale}"
+        assert stale not in lowered, f"{surface} contains stale current authority: {stale}"
+
+
+@pytest.mark.parametrize("path", CURRENT_PUBLIC_SURFACES)
+def test_current_public_surfaces_use_timeless_release_snapshot_wording(path: str) -> None:
+    text = _surface(path)
+    lowered = text.casefold()
+    assert SUCCESSOR in text
+    assert "release snapshot" in lowered
+    assert "profiles/release-status-v1.json" in text
+    assert RELEASE_RECEIPT_ASSET in text
+    _assert_no_stale_current_authority(text, surface=path)
     assert "plugin directory" in lowered
     assert any(
         phrase in lowered
@@ -217,6 +249,19 @@ def test_current_public_surfaces_use_timeless_release_snapshot_wording(path: str
             "not official",
         )
     ), f"{path} omits the separate Plugin Directory authority boundary"
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    (
+        "This page is the host-facing part of the **`v0.4.0a6` release snapshot**.",
+        "This page is the Codex installation entrypoint for the **`0.4.0a6` release snapshot**.",
+        "**Repository status:** the `0.4.0a6` release snapshot is current.",
+    ),
+)
+def test_stale_current_version_negative_fixtures_are_rejected(fixture: str) -> None:
+    with pytest.raises(AssertionError, match="stale current authority"):
+        _assert_no_stale_current_authority(fixture, surface="synthetic fixture")
 
 
 @pytest.mark.parametrize("path", CURRENT_INSTALL_GUIDES)
@@ -235,12 +280,17 @@ def test_bundled_operation_skills_preserve_manual_restart_handoff(path: str) -> 
 
 
 @pytest.mark.parametrize("path", TRANSLATED_QUICK_STARTS)
-def test_translated_quick_starts_preserve_manual_restart_handoff(path: str) -> None:
-    _assert_restart_handoff(_surface(path), surface=path)
+def test_translated_quick_starts_preserve_current_release_boundary(path: str) -> None:
+    text = _surface(path)
+    _assert_restart_handoff(text, surface=path)
+    assert SUCCESSOR in text
+    assert "0.6.0a0" not in text
+    current_tool_lines = [line for line in text.splitlines()[:200] if "38" in line and "v8" in line]
+    assert len(current_tool_lines) == 1, f"{path} omits the current 38-tool v8 surface"
 
 
 def test_generated_codex_profile_matches_source() -> None:
-    assert CODEX_PROFILE_VERSION == CANDIDATE_CODEX_PROFILE_VERSION
+    assert _status()["snapshot"]["codex_profile_version"] == CODEX_PROFILE_VERSION
     generated = host_documents(ROOT)
     for relative in (
         Path("profiles/codex/plugins/adaptive-agent-runtime/README.md"),
@@ -262,11 +312,22 @@ def test_generated_hermes_release_readme_matches_source() -> None:
 
 def test_release_status_preserves_behavior_and_external_boundaries() -> None:
     status = _status()
-    assert status["behavior"]["codex_subprocess_provider_authority"] == "NO_ATOMIC_AUTHORITY"
-    assert status["behavior"]["database_runtime_process_lock"] is True
-    assert status["behavior"]["automatic_install_or_rollback"] is False
+    behavior = status["behavior"]
+    assert behavior["public_mcp_surface"] == MCP_TOOL_SURFACE_VERSION
+    assert behavior["public_mcp_tool_count"] == len(_tool_manifest()["tools"])
+    assert behavior["frozen_v7_compatibility_tool_count"] == 30
+    assert behavior["codex_subprocess_provider_authority"] == "NO_ATOMIC_AUTHORITY"
+    assert behavior["database_runtime_process_lock"] is True
+    assert behavior["automatic_install_or_rollback"] is False
+    assert behavior["provider_credentials_owner"] == "host"
+    assert behavior["provider_physical_call_owner"] == "host"
+    assert behavior["provider_ready_session_grants"] == "explicit_memory_only_generation_bound"
+    assert behavior["hermes_host_adapter"] == "optional_standalone"
+    assert behavior["runtime_root_policy"] == "clean_install_only"
     assert status["external_limits"] == {
+        "pypi_publication": "not_established_by_this_snapshot",
         "official_plugin_directory": "not_established_by_this_snapshot",
         "openai_review_approval": "not_established_by_this_snapshot",
         "provider_signed_attestation": "not_established_by_this_snapshot",
+        "general_production_deployment": "not_established_by_this_snapshot",
     }

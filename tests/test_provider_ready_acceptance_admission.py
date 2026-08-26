@@ -18,6 +18,7 @@ from aar.canonical import canonical_json_bytes
 from aar.mcp.server import build_server
 from aar.provider_ready_runtime_models import WorkbenchGrantSet
 from aar.rlm_workbench_models import (
+    CallerWorkClaimInput,
     build_workbench_capability,
     derive_required_workbench_methods,
     normalize_workbench_planner_mode,
@@ -783,6 +784,89 @@ def test_A_GRANT_010_client_authored_grant_bytes_are_not_authority(
             )
     finally:
         application.close()
+
+
+def test_A_C03_claim_rejects_sibling_only_current_authority_before_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application, startup, _readback, database = _provider_application(tmp_path, monkeypatch)
+
+    async def scenario() -> tuple[dict[str, Any], str, str]:
+        async with Client(application.server) as client:
+            capabilities_result = await client.call_tool("aar_capabilities")
+            assert not capabilities_result.is_error
+            assert capabilities_result.structured_content is not None
+            capabilities = capabilities_result.structured_content
+            grant_ids = _issue_grants(
+                startup,
+                suffix="claim-sibling",
+                capabilities=("model.request", "broker.caller.cancel"),
+            )
+            execute_arguments = provider_ready._execute_arguments(
+                capabilities,
+                suffix="claim-sibling-operation",
+                grant_ids=grant_ids,
+            )
+            execute_arguments["spec"]["budgets"]["max_artifact_bytes"] = 0
+            execute_arguments["spec"]["budgets"]["max_subagent_calls"] = 0
+            accepted = await client.call_tool(
+                "aar_rlm_workbench_execute",
+                execute_arguments,
+            )
+            assert not accepted.is_error
+            assert accepted.structured_content is not None
+            assert accepted.structured_content.get("phase") == "preparing_workspace", (
+                accepted.structured_content
+            )
+            operation = accepted.structured_content["operation"]
+
+            with sqlite3.connect(database) as connection:
+                before = "\n".join(connection.iterdump())
+
+            successor_context = dict(execute_arguments["context"])
+            successor_context.update(
+                request_id="request-claim-sibling-successor",
+                idempotency_key="context-claim-sibling-successor",
+            )
+            claim_arguments = {
+                "context": successor_context,
+                "operation": operation,
+                "expected_control_revision": 1,
+                "expected_cancellation_revision": 0,
+                "expected_suspension_revision": 1,
+                "expected_cumulative_deadline_unix_ms": successor_context[
+                    "deadline_unix_ms"
+                ],
+                "ticket_id": "ticket-claim-sibling",
+                "expected_revision": 0,
+                "ticket_digest": "sha256:" + "1" * 64,
+                "adapter_id": "adapter-model-request",
+                "adapter_generation": capabilities["ready"]["runtime_generation"],
+                "claim_lease_ms": 60_000,
+                "idempotency_key": "command-claim-sibling-successor",
+            }
+            CallerWorkClaimInput.model_validate_json(
+                canonical_json_bytes(claim_arguments), strict=True
+            )
+            denied = await client.call_tool(
+                "aar_broker_work_claim",
+                claim_arguments,
+            )
+            assert not denied.is_error, [item.text for item in denied.content]
+            assert denied.structured_content is not None
+            with sqlite3.connect(database) as connection:
+                after = "\n".join(connection.iterdump())
+            return denied.structured_content, before, after
+
+    try:
+        failure, before, after = asyncio.run(scenario())
+    finally:
+        application.close()
+
+    assert failure["code"] == "GRANT_DENIED"
+    assert "broker.caller.claim" in failure["message"]
+    assert before == after
 
 
 anyio_backend = "asyncio"

@@ -1,5 +1,5 @@
 name: adaptive-agent-runtime
-version: 0.6.0a0
+version: 0.6.0a1
 description: Bounded AAR workspace, RLM, and immutable asset operations over local MCP.
 hermes_requires: '>=0.19.0'
 author: phenomenoner

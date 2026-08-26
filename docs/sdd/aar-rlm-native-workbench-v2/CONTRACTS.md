@@ -101,6 +101,8 @@ It permits at most 900,000 ms because the operation can enter lease-free caller 
 
 The job requests budgets; the context and grants authorize maxima. Admission succeeds only when every requested budget is less than or equal to every applicable host/grant/route maximum and the absolute deadline can cover the requested wall time. A mismatch fails before an operation or workspace is created. Silent capping is forbidden.
 
+The cumulative deadline is `min(context.deadline_unix_ms, intent_persisted.at_unix_ms + spec.budgets.total_wall_time_ms)`. The `intent_persisted` timestamp is the first immutable public operation event and is written with the outer operation's `created_at_unix_ms`. A caller-work host therefore reconstructs the exact deadline from public operation events plus its original request bytes; service-local observation time and private database reads are not authority.
+
 Cumulative usage is charged across attempts, successors, restarts, correction planner calls and failed cells. An idempotent replay of a certain receipt does not charge physical usage twice.
 
 ### 5.3 Caller-delegated start rule

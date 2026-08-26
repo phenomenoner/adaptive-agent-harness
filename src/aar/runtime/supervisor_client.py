@@ -18,6 +18,7 @@ import anyio
 from anyio.abc import SocketStream
 
 from aar.canonical import canonical_json_bytes, canonical_sha256
+from aar.provider_ready_runtime_models import IssuedWorkbenchGrant
 from aar.runtime.process_identity import (
     ProcessIdentityState,
     SupervisorDiscoveryRecord,
@@ -29,6 +30,8 @@ from aar.runtime.supervisor_protocol import (
     PrivateFrame,
     SupervisorAttachAck,
     SupervisorAttachPayload,
+    SupervisorGrantIssueRequest,
+    SupervisorGrantRevokeRequest,
     SupervisorProtocolError,
     extract_mcp_binding,
 )
@@ -42,6 +45,18 @@ MAX_FRAME_LINE_BYTES = ((MAX_PRIVATE_PAYLOAD_BYTES + 2) // 3) * 4 + 65_536
 
 class SupervisorClientError(RuntimeError):
     pass
+
+
+class SupervisorControlRejected(SupervisorClientError):
+    """The supervisor returned a terminal, certain rejection."""
+
+
+class SupervisorControlOutcomeIndeterminate(SupervisorClientError):
+    """A control request may have reached the live grant owner without a valid receipt."""
+
+    def __init__(self, message: str, *, grant_id: str) -> None:
+        super().__init__(message)
+        self.grant_id = grant_id
 
 
 def _is_reparse_or_symlink(path: Path) -> bool:
@@ -164,6 +179,102 @@ class SupervisorClient:
             ):
                 raise SupervisorClientError("supervisor attached receipt does not match discovery")
             await self._bridge(lines)
+        finally:
+            await stream.aclose()
+
+    async def issue_session_grant(
+        self, request: SupervisorGrantIssueRequest
+    ) -> IssuedWorkbenchGrant:
+        """Issue one explicit host-approved grant through the private owner channel."""
+
+        return await self._grant_control(
+            request=request,
+            request_kind="grant_issue",
+            response_kind="grant_issued",
+        )
+
+    async def revoke_session_grant(
+        self, request: SupervisorGrantRevokeRequest
+    ) -> IssuedWorkbenchGrant:
+        """Revoke one grant owned by the current activation process."""
+
+        return await self._grant_control(
+            request=request,
+            request_kind="grant_revoke",
+            response_kind="grant_revoked",
+        )
+
+    async def _grant_control(
+        self,
+        *,
+        request: SupervisorGrantIssueRequest | SupervisorGrantRevokeRequest,
+        request_kind: str,
+        response_kind: str,
+    ) -> IssuedWorkbenchGrant:
+        discovery = self._load_discovery()
+        credential = self._load_credential(discovery)
+        stream = await self._connect(discovery)
+        lines = _SocketLines(stream)
+        sent = False
+        terminal = False
+        try:
+            authority = canonical_sha256(
+                {
+                    "adapter": "aar-hermes-authority",
+                    "package_version": PACKAGE_VERSION,
+                    "process_identity": current_process_identity().model_dump(mode="json"),
+                    "runtime_home_digest": discovery.runtime_home_digest,
+                }
+            )
+            now = int(time.time() * 1000)
+            deadline = now + 60_000
+            payload = canonical_json_bytes(request)
+            request_id = f"{request_kind}-{os.getpid()}-{now}"
+            trace_id = f"trace-{hashlib.sha256(payload).hexdigest()[:32]}"
+            await lines.send(b"AUTH " + credential.hex().encode("ascii"))
+            await lines.send_frame(
+                PrivateFrame.issue(
+                    kind=request_kind,  # type: ignore[arg-type]
+                    request_id=request_id,
+                    trace_id=trace_id,
+                    runtime_generation=discovery.runtime_generation,
+                    dispatcher_generation=discovery.dispatcher_generation,
+                    authority_digest=authority,
+                    deadline_unix_ms=deadline,
+                    attachment_digest=discovery.attachment_credential_digest,
+                    payload=payload,
+                )
+            )
+            sent = True
+            frame = await lines.receive_frame()
+            self._validate_response_frame(frame)
+            if frame.kind == "error":
+                terminal = True
+                raise SupervisorControlRejected("supervisor rejected grant control request")
+            if (
+                frame.kind != response_kind
+                or frame.request_id != request_id
+                or frame.trace_id != trace_id
+                or frame.authority_digest != authority
+                or frame.deadline_unix_ms != deadline
+            ):
+                raise SupervisorClientError("grant control receipt does not match request")
+            grant = IssuedWorkbenchGrant.model_validate_json(frame.decoded_payload(), strict=True)
+            if grant.grant_id != request.grant_id:
+                raise SupervisorClientError("grant control receipt names a different grant")
+            if (response_kind == "grant_revoked") != grant.revoked:
+                raise SupervisorClientError("grant control receipt has the wrong revocation state")
+            terminal = True
+            return grant
+        except SupervisorControlRejected:
+            raise
+        except Exception as error:
+            if sent and not terminal:
+                raise SupervisorControlOutcomeIndeterminate(
+                    "grant control outcome is indeterminate; do not reuse the grant id",
+                    grant_id=request.grant_id,
+                ) from error
+            raise
         finally:
             await stream.aclose()
 

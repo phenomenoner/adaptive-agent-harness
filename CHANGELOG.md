@@ -2,6 +2,31 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
+## [0.6.0a1](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a1) — 2026-08-26
+
+`v0.6.0a1` adds a standalone Hermes host adapter and authenticated trusted-local authority path while
+keeping the frozen public MCP tool/schema surface unchanged. This immutable release snapshot is
+indexed by [`profiles/release-status-v1.json`](profiles/release-status-v1.json); exact post-freeze
+evidence is bound by `adaptive-agent-runtime-v0.6.0a1-release-receipt.json`. It does not establish
+official Plugin Directory publication, which requires separate external authority.
+
+### Added
+
+- add `aar-hermes-mcp` for exact provider-ready supervisor startup/reuse and live package, process,
+  protocol, generation, capability, activation, and route readback;
+- add explicit `aar-hermes-authority issue/revoke` commands for generation-bound, memory-only session
+  grants without startup, attach, reference-context, or ordinary-request auto-issuance;
+- add `host-caller-driver-v1` for real host-owned provider calls through the existing durable
+  caller-work claim/mark-send/commit protocol; direct service-owned sends fail closed.
+
+### Security and verification boundary
+
+- every provider-ready public mutation requires a current exact session grant before its first durable
+  write; static reference grants and `aar_reference_context` cannot authorize provider-ready writes;
+- a post-send lost or mismatched authority response is indeterminate and is never silently retried;
+- this release remains clean-install-only: it does not adopt, promote, archive, remove, or mutate an
+  existing runtime root, and live Hermes cutover requires separate fresh native acceptance evidence.
+
 ## [0.6.0a0](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a0) — 2026-08-26
 
 `v0.6.0a0` adds a clean-install-only provider-ready bootstrap and activation path without changing

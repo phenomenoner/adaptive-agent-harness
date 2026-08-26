@@ -1,23 +1,23 @@
 # Install AAR for Codex App
 
-This page is the Codex installation entrypoint for the **`0.4.0a6` release snapshot**. The immutable
+This page is the Codex installation entrypoint for the **`0.6.0a1` release snapshot**. The immutable
 in-tree contract is [`profiles/release-status-v1.json`](../profiles/release-status-v1.json), while
 exact source, wheel, CI, install, host, review, tag, and asset-readback evidence is bound by
-`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. The preceding `0.4.0a5` candidate is blocked,
-unreleased, and historical.
+`adaptive-agent-runtime-v0.6.0a1-release-receipt.json`. Earlier release pages and receipts are
+historical authorities for their exact versions, not current install guidance.
 
 The normal installation path starts with the exact release package and then lets the host inspect
 the setup plan:
 
 ```powershell
-uv tool install --force "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.4.0a6"
+uv tool install --force "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a1"
 aar-codex-setup
 ```
 
 Maintainers who already have an immutable wheel may instead use:
 
 ```powershell
-uv tool install --force D:\path\to\adaptive_agent_runtime-0.4.0a6-py3-none-any.whl
+uv tool install --force D:\path\to\adaptive_agent_runtime-0.6.0a1-py3-none-any.whl
 aar-codex-setup
 ```
 
@@ -48,7 +48,7 @@ non-empty. Preserve that receipt across the operator-authorized steps: after the
 readback is current, restart Codex Desktop even if the subsequent already-configured receipt has
 `restart_required: false`. No persistent installer ledger is needed for this handoff.
 
-The candidate's supervisor endpoint, credential, and shutdown-request paths use generation-unique
+The release's supervisor endpoint, credential, and shutdown-request paths use generation-unique
 names; `discovery.json` is a stable pointer carrying the publication ID and advances atomically.
 Normal lifecycle startup, stale-owner handling, shutdown consumption, and terminal cleanup are
 deliberately **non-destructive**. Retained generation-specific control artifacts are forensic state;
@@ -66,7 +66,7 @@ the receipt is not setup success; recover the exact owner and rerun setup.
 
 When the receipt reports `restart_required: true`, restart Codex Desktop, open a **fresh task**, load
 the deferred capability tool if needed, and call native `aar_capabilities` once. Verify package
-`0.4.0a6`, operation skill `0.9.6`, the new Codex profile cachebuster, attached-supervisor mode, and
+`0.6.0a1`, operation skill `0.11.0`, the current Codex profile cachebuster, attached-supervisor mode, and
 the current runtime generation. A stale task catalog, config text, CLI probe, or same-task transport
 error is not runtime proof.
 
@@ -89,8 +89,8 @@ wheel has passed its preflight. It does not grant provider mutation authority.
 
 Release maintainers additionally run Ruff, focused regressions, the full repository suite, Python
 3.11–3.14 compatibility, exact-wheel readback, fresh Codex scenarios, and the caller-delegated
-Luna/max drill. The 63-row repair matrix is pre-freeze evidence; post-freeze results belong in
-`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. Local installation does not establish
+provider drill. The 20-row provider-ready host matrix is the frozen claim budget; post-freeze results
+belong in `adaptive-agent-runtime-v0.6.0a1-release-receipt.json`. Local installation does not establish
 official Plugin Directory deployment or publication.
 
 The setup command does not grant provider credentials, external effects, activation, publication,

@@ -19,7 +19,7 @@ from aar.broker_models import (
     ModelRouteReceipt,
     ModelUsageRecord,
 )
-from aar.canonical import canonical_sha256
+from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.rlm_workbench_models import RecoveryPlannerInput, RlmWorkbenchExecuteInput
 from aar.runtime.caller_work import CallerWorkRepository, build_reconcile_fence
 from aar.runtime.dispatcher import AttemptFence
@@ -459,6 +459,50 @@ class RecoveryBrokerRoundTripPlanner(BrokerRoundTripPlanner):
             "code": 'recovered_answer = "ok"\nrecovered_answer',
             "expected_result_hint": "continue from the durable receipt without replay",
         }
+
+
+def test_cumulative_deadline_is_derived_from_public_intent_timestamp(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "registry.sqlite"
+    prepare_v6_registry(database, tmp_path / "registry-v5.snapshot.sqlite")
+    host = ReferenceHost(database, now_ms=lambda: FIXED_NOW_MS)
+    try:
+        request = workbench_request(host)
+        document = copy.deepcopy(request.root)
+        document["spec"]["budgets"]["total_wall_time_ms"] = 7_000
+        request = RlmWorkbenchExecuteInput.model_validate(document, strict=True)
+        envelope = workbench_envelope(host, request)
+        record, created = host.registry.accept(
+            envelope,
+            canonical_json_bytes(request.root).decode(),
+        )
+        assert created
+        assert host.rlm_workbench is not None
+        host.rlm_workbench._now_ms = lambda: FIXED_NOW_MS + 5_000
+        host.rlm_workbench.admit(record.operation, request)
+
+        with sqlite3.connect(database) as connection:
+            deadline = connection.execute(
+                "SELECT cumulative_deadline_unix_ms FROM rlm_workbench_jobs "
+                "WHERE operation_id = ?",
+                (record.operation.value,),
+            ).fetchone()
+            event_time = connection.execute(
+                "SELECT at_unix_ms FROM operation_events "
+                "WHERE operation_id = ? AND event_kind = 'intent_persisted'",
+                (record.operation.value,),
+            ).fetchone()
+        assert deadline == (
+            min(
+                request.root["context"]["deadline_unix_ms"],
+                record.created_at_unix_ms
+                + request.root["spec"]["budgets"]["total_wall_time_ms"],
+            ),
+        )
+        assert event_time == (record.created_at_unix_ms,)
+    finally:
+        host.close()
 
 
 def test_start_only_admission_creates_one_operation_scoped_ipython_generation(

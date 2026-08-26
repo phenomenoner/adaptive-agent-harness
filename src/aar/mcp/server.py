@@ -161,7 +161,7 @@ MCP_PROTOCOL_VERSIONS = (
     *reversed(MODERN_PROTOCOL_VERSIONS),
     *reversed(HANDSHAKE_PROTOCOL_VERSIONS),
 )
-OPERATION_SKILL_VERSION = "0.10.0"
+OPERATION_SKILL_VERSION = "0.11.0"
 SCHEMA_BUNDLE_DIGEST = "sha256:159f31737e958cc2835af3be414a6a531fe6729de05db393672ba57910cdf2d2"
 FIXTURE_SET_DIGEST = "sha256:d0b4155f148de388ae5ebdbd6ae951d094d2feb289324f68fb33a5a6c68ae020"
 SERVER_INSTRUCTIONS = (
@@ -495,14 +495,34 @@ def _validate_mutation_context(
     host: ReferenceHost,
     context: McpMutationContext,
     capability: str,
-) -> None:
+) -> tuple[Grant, ...]:
     _validate_read_context(host, context)
-    expected_grant = REFERENCE_GRANT_IDS.get(capability)
-    if expected_grant is None or context.grant_id != expected_grant:
-        raise GrantDenied(f"reference host did not issue {capability} to this request")
     remaining_ms = context.deadline_unix_ms - host.now_ms()
     if remaining_ms > context.budget_wall_time_ms:
         raise BudgetDenied("wall-time budget does not cover the request deadline")
+    principal = PrincipalRef(value=context.principal_id)
+    if host.provider_ready_startup is not None:
+        return host.provider_ready_startup.resolve_session_grants(
+            (context.grant_id,),
+            principal_id=context.principal_id,
+            session_id=context.session_id,
+            runtime_generation=context.runtime_generation,
+            now_unix_ms=host.now_ms(),
+            deadline_unix_ms=context.deadline_unix_ms,
+            required_capability=capability,
+            budget=Budget(wall_time_ms=context.budget_wall_time_ms),
+        )
+    expected_grant = REFERENCE_GRANT_IDS.get(capability)
+    if expected_grant is None or context.grant_id != expected_grant:
+        raise GrantDenied(f"reference host did not issue {capability} to this request")
+    return (
+        Grant(
+            grant_id=context.grant_id,
+            capability=capability,
+            issued_to=principal,
+            expires_at_unix_ms=context.deadline_unix_ms,
+        ),
+    )
 
 
 def _envelope(
@@ -513,13 +533,12 @@ def _envelope(
     *,
     workspace: WorkspaceHandle | None = None,
 ) -> RequestEnvelope:
-    _validate_mutation_context(host, context, capability)
-    principal = PrincipalRef(value=context.principal_id)
+    grants = _validate_mutation_context(host, context, capability)
     return RequestEnvelope(
         request_id=context.request_id,
         idempotency_key=context.idempotency_key,
         host=HostRef(value="reference-host"),
-        principal=principal,
+        principal=PrincipalRef(value=context.principal_id),
         lane=LaneRef(value="execute"),
         session=SessionRef(value=context.session_id),
         workspace=None if workspace is None else workspace.workspace,
@@ -528,14 +547,7 @@ def _envelope(
         expected_workspace_revision=None if workspace is None else workspace.revision,
         capability_digest=context.capability_digest,
         deadline_unix_ms=context.deadline_unix_ms,
-        grants=(
-            Grant(
-                grant_id=context.grant_id,
-                capability=capability,
-                issued_to=principal,
-                expires_at_unix_ms=context.deadline_unix_ms,
-            ),
-        ),
+        grants=grants,
         budget=Budget(wall_time_ms=context.budget_wall_time_ms),
         trace_id=f"trace-{context.request_id}",
         input_digest=input_digest,
@@ -627,13 +639,26 @@ def _assert_operation_binding(
 
 def _current_reference_grant(
     host: ReferenceHost,
-    context: McpReadContext,
+    context: McpMutationContext,
     grant_id: str | None,
     capability: str,
 ) -> Grant:
     _validate_read_context(host, context)
+    if grant_id is None:
+        raise GrantDenied(f"host did not issue current {capability} authority")
+    if host.provider_ready_startup is not None:
+        return host.provider_ready_startup.resolve_session_grants(
+            (grant_id,),
+            principal_id=context.principal_id,
+            session_id=context.session_id,
+            runtime_generation=context.runtime_generation,
+            now_unix_ms=host.now_ms(),
+            deadline_unix_ms=context.deadline_unix_ms,
+            required_capability=capability,
+            budget=Budget(wall_time_ms=context.budget_wall_time_ms),
+        )[0]
     expected_grant = REFERENCE_GRANT_IDS.get(capability)
-    if expected_grant is None or grant_id is None or grant_id != expected_grant:
+    if expected_grant is None or grant_id != expected_grant:
         raise GrantDenied(f"reference host did not issue current {capability} authority")
     return Grant(
         grant_id=grant_id,
@@ -703,6 +728,7 @@ def _assert_workbench_operation_binding(
     operation: OperationRef,
     *,
     mutation: McpRlmWorkbenchMutationContext | None = None,
+    required_capability: str = "rlm.workbench.execute",
 ) -> RequestEnvelope:
     request = _assert_operation_binding(host, context, operation)
     granted = {grant.capability for grant in request.grants}
@@ -711,6 +737,27 @@ def _assert_workbench_operation_binding(
     if context.deadline_unix_ms > request.deadline_unix_ms:
         raise DeadlineExpired("successor request cannot extend the cumulative deadline")
     if mutation is not None:
+        if host.provider_ready_startup is not None:
+            current_grants = host.provider_ready_startup.resolve_session_grants(
+                tuple(mutation.grant_ids),
+                principal_id=context.principal_id,
+                session_id=context.session_id,
+                required_capability=required_capability,
+                budget=Budget(
+                    wall_time_ms=mutation.budget_wall_time_ms,
+                    model_requests=mutation.budget_model_requests,
+                    input_tokens=mutation.budget_input_tokens,
+                    output_tokens=mutation.budget_output_tokens,
+                    child_operations=mutation.budget_child_operations,
+                    artifact_bytes=mutation.budget_artifact_bytes,
+                ),
+                deadline_unix_ms=context.deadline_unix_ms,
+                runtime_generation=context.runtime_generation,
+                now_unix_ms=host.now_ms(),
+            )
+            current_grant_ids = tuple(grant.grant_id for grant in current_grants)
+            if tuple(mutation.grant_ids) != current_grant_ids:
+                raise GrantDenied("successor grant IDs differ from current session authority")
         admitted_grants = tuple(grant.grant_id for grant in request.grants)
         if tuple(mutation.grant_ids) != admitted_grants:
             raise GrantDenied("successor grant IDs differ from the admitted workbench context")
@@ -781,6 +828,15 @@ def _validate_provider_ready_workbench_admission(
                 )
 
 
+CALLER_WORK_METHOD_CAPABILITIES = {
+    "cancel_before_send": "broker.caller.cancel",
+    "claim": "broker.caller.claim",
+    "commit": "broker.caller.commit",
+    "mark_send_started": "broker.caller.send",
+    "reconcile": "broker.caller.reconcile",
+}
+
+
 def _run_caller_work_command(
     host: ReferenceHost,
     model_type: type[Any],
@@ -791,7 +847,16 @@ def _run_caller_work_command(
     document = dict(command.root)
     context = McpRlmWorkbenchMutationContext.model_validate(document["context"], strict=True)
     operation = OperationRef.model_validate(document["operation"], strict=True)
-    _assert_workbench_operation_binding(host, context, operation, mutation=context)
+    required_capability = CALLER_WORK_METHOD_CAPABILITIES.get(method_name)
+    if required_capability is None:
+        raise GrantDenied(f"caller-work method has no authority binding: {method_name}")
+    _assert_workbench_operation_binding(
+        host,
+        context,
+        operation,
+        mutation=context,
+        required_capability=required_capability,
+    )
     if host.caller_work is None:
         raise ReferenceHostError("caller-work repository is unavailable")
     method = getattr(host.caller_work, method_name)
@@ -999,6 +1064,10 @@ def build_server(
         budget_wall_time_ms: PositiveCounter = 60_000,
     ) -> ReferenceContextToolResult:
         try:
+            if host.provider_ready_startup is not None:
+                raise GrantDenied(
+                    "reference context cannot authorize a provider-ready host mutation"
+                )
             if budget_wall_time_ms > 60_000:
                 raise BudgetDenied("reference-host wall-time budget cannot exceed 60000 ms")
             grant_id = REFERENCE_GRANT_IDS.get(capability)

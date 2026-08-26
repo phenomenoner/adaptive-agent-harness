@@ -12,6 +12,7 @@ from aar.compat.assets import (
     SKILL_FILES,
     verify_profiles,
 )
+from aar.mcp.server import OPERATION_SKILL_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -51,7 +52,7 @@ def test_profile_contract_binds_runtime_configs_and_skill() -> None:
     )
     assert contract["package"]["python_requires"] == ">=3.11,<3.15"
     assert contract["operation_skill"]["digest"] == metadata["skill_digest"]
-    assert contract["operation_skill"]["version"] == "0.10.0"
+    assert contract["operation_skill"]["version"] == OPERATION_SKILL_VERSION
     for host in ("codex", "hermes"):
         profile = contract["profiles"][host]
         content = (ROOT / profile["bundle"] / profile["config_file"]).read_bytes()
@@ -93,7 +94,7 @@ def test_codex_profile_uses_package_exported_host_launcher() -> None:
 
 def test_hermes_distribution_tracks_current_profile_release() -> None:
     distribution = (ROOT / HERMES_ROOT / "distribution.yaml").read_text(encoding="utf-8")
-    assert "version: 0.6.0a0\n" in distribution
+    assert "version: 0.6.0a1\n" in distribution
 
 
 def test_hermes_runtime_config_and_review_map_are_equivalent() -> None:

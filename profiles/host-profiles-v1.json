@@ -13,15 +13,15 @@
     "transport": "stdio"
   },
   "operation_skill": {
-    "digest": "sha256:708ce77448844f2745944fd1b783fce4eabe16beaf92ed1332cd8ec6cee5baa7",
+    "digest": "sha256:bfd414ae23507781871a7e38ef92653e3502bb38800170f0d0865ffe104eca61",
     "name": "aar-operations",
-    "version": "0.10.0"
+    "version": "0.11.0"
   },
   "package": {
     "command": "aar-mcp",
     "name": "adaptive-agent-runtime",
     "python_requires": ">=3.11,<3.15",
-    "version": "0.6.0a0"
+    "version": "0.6.0a1"
   },
   "profiles": {
     "codex": {

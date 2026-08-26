@@ -32,6 +32,7 @@ SUPERVISOR_PROTOCOL_VERSION = DEFAULT_PROTOCOL_VERSION
 PRIVATE_PROTOCOL_VERSION = SUPERVISOR_PROTOCOL_VERSION
 SUPERVISOR_PRIVATE_PROTOCOL_VERSION = SUPERVISOR_PROTOCOL_VERSION
 SUPERVISOR_DISCOVERY_SCHEMA_VERSION = DISCOVERY_SCHEMA_VERSION
+SUPERVISOR_GRANT_CONTROL_SCHEMA_VERSION = "aar.supervisor.grant-control.v1"
 MAX_PRIVATE_PAYLOAD_BYTES = 8 * 1024 * 1024
 MAX_PAYLOAD_BYTES = MAX_PRIVATE_PAYLOAD_BYTES
 MAX_MCP_JSON_BYTES = MAX_PRIVATE_PAYLOAD_BYTES
@@ -39,12 +40,32 @@ SUPERVISOR_PROTOCOL_DIGEST = canonical_sha256(
     {
         "schema_version": SUPERVISOR_SCHEMA_VERSION,
         "protocol_version": SUPERVISOR_PROTOCOL_VERSION,
-        "message_kinds": ("attach", "attached", "error", "mcp_request", "mcp_response"),
+        "message_kinds": (
+            "attach",
+            "attached",
+            "error",
+            "grant_issue",
+            "grant_issued",
+            "grant_revoke",
+            "grant_revoked",
+            "mcp_request",
+            "mcp_response",
+        ),
         "max_private_payload_bytes": MAX_PRIVATE_PAYLOAD_BYTES,
     }
 )
 
-MessageKind = Literal["attach", "attached", "mcp_request", "mcp_response", "error"]
+MessageKind = Literal[
+    "attach",
+    "attached",
+    "grant_issue",
+    "grant_issued",
+    "grant_revoke",
+    "grant_revoked",
+    "mcp_request",
+    "mcp_response",
+    "error",
+]
 LifecycleState = Literal[
     "starting",
     "migrating",
@@ -239,6 +260,28 @@ class SupervisorAttachAck(StrictModel):
         if not self.accepted and self.reason_code is None:
             raise ValueError("rejected supervisor attach requires reason_code")
         return self
+
+
+class SupervisorGrantIssueRequest(StrictModel):
+    """One explicit, owner-authenticated request for a memory-only session grant."""
+
+    schema_version: Literal["aar.supervisor.grant-control.v1"] = (
+        SUPERVISOR_GRANT_CONTROL_SCHEMA_VERSION
+    )
+    principal_id: OpaqueToken
+    session_id: OpaqueToken
+    capability: OpaqueToken
+    ttl_ms: PositiveCounter
+    grant_id: OpaqueToken
+
+
+class SupervisorGrantRevokeRequest(StrictModel):
+    """One explicit request to revoke a grant owned by the current supervisor process."""
+
+    schema_version: Literal["aar.supervisor.grant-control.v1"] = (
+        SUPERVISOR_GRANT_CONTROL_SCHEMA_VERSION
+    )
+    grant_id: OpaqueToken
 
 
 class SupervisorLifecycleReceipt(StrictModel):
@@ -530,6 +573,8 @@ SUPERVISOR_SCHEMA_MODELS: dict[str, type[StrictModel]] = {
     "private_frame": PrivateFrame,
     "supervisor_attach_payload": SupervisorAttachPayload,
     "supervisor_attach_ack": SupervisorAttachAck,
+    "supervisor_grant_issue_request": SupervisorGrantIssueRequest,
+    "supervisor_grant_revoke_request": SupervisorGrantRevokeRequest,
     "supervisor_lifecycle_receipt": SupervisorLifecycleReceipt,
     "mcp_authority_deadline": McpAuthorityDeadline,
 }
@@ -541,6 +586,7 @@ __all__ = [
     "MAX_PRIVATE_PAYLOAD_BYTES",
     "PRIVATE_PROTOCOL_VERSION",
     "SUPERVISOR_DISCOVERY_SCHEMA_VERSION",
+    "SUPERVISOR_GRANT_CONTROL_SCHEMA_VERSION",
     "SUPERVISOR_PRIVATE_PROTOCOL_VERSION",
     "SUPERVISOR_PROTOCOL_VERSION",
     "SUPERVISOR_SCHEMA_MODELS",
@@ -569,6 +615,8 @@ __all__ = [
     "SupervisorAttached",
     "SupervisorDiscoveryRecord",
     "SupervisorFrame",
+    "SupervisorGrantIssueRequest",
+    "SupervisorGrantRevokeRequest",
     "SupervisorLifecycleReceipt",
     "SupervisorProtocolError",
     "SupervisorReadyReceipt",

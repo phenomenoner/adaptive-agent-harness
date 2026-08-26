@@ -1,6 +1,6 @@
 <div align="center">
 
-> **`0.6.0a0`** public alpha · [`phenomenoner/adaptive-agent-harness@v0.6.0a0`](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a0)
+> **`0.6.0a1`** public alpha · [`phenomenoner/adaptive-agent-harness@v0.6.0a1`](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a1)
 
 # Adaptive Agent Harness
 
@@ -10,7 +10,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.6.0a0-blue)](docs/RELEASE-v0.6.0a0.md)
+[![Release](https://img.shields.io/badge/release-v0.6.0a1-blue)](docs/RELEASE-v0.6.0a1.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#project-status)
 
@@ -158,7 +158,7 @@ The governing rules are deliberately simple:
 
 ### Portable contracts
 
-- 30 MCP tools on the current v7 surface;
+- 38 MCP tools on the current v8 surface, including the frozen 30-tool v7 compatibility projection;
 - versioned schemas and digest-bound assets;
 - bundled operation guidance for Codex and Hermes profiles;
 - deterministic reference brokers for development and conformance testing;
@@ -211,21 +211,21 @@ See [Why RLM + IPython](docs/WHY-RLM-AND-IPYTHON.md) for the deeper design ratio
 
 ## Quick start
 
-> **Current public alpha:** `0.6.0a0`. Install the exact tag, inspect the capabilities returned by your
+> **Current public alpha:** `0.6.0a1`. Install the exact tag, inspect the capabilities returned by your
 > host, and start with disposable workspaces. This project executes model-authored Python and is
 > **not a security sandbox**.
 
 ### Install from an exact local wheel
 
 ```bash
-uv tool install --force /path/to/adaptive_agent_runtime-0.6.0a0-py3-none-any.whl
+uv tool install --force /path/to/adaptive_agent_runtime-0.6.0a1-py3-none-any.whl
 ```
 
 ### Install the latest published release snapshot
 
 ```bash
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a1"
 ```
 
 ### Codex App setup
@@ -300,20 +300,20 @@ The MCP frontend is intentionally replaceable. It does not own the continuity da
 
 ## Project status
 
-The current public alpha is **`0.6.0a0`**, published from the reviewed source tree as annotated tag
-`v0.6.0a0` and a GitHub prerelease. See the [release notes](docs/RELEASE-v0.6.0a0.md).
+The current public alpha is **`0.6.0a1`**, published from the reviewed source tree as annotated tag
+`v0.6.0a1` and a GitHub prerelease. See the [release notes](docs/RELEASE-v0.6.0a1.md).
 
-The previous published release snapshot is `0.4.0a6`, with stable source reference
-`phenomenoner/adaptive-agent-harness@v0.4.0a6` and the corresponding
-[GitHub release page](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.4.0a6).
+The previous published release snapshot is `0.6.0a0`, with stable source reference
+`phenomenoner/adaptive-agent-harness@v0.6.0a0` and the corresponding
+[GitHub release page](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a0).
 The in-tree machine-readable published snapshot is
 [`profiles/release-status-v1.json`](profiles/release-status-v1.json). Exact commit, tree, wheel,
 supported-Python CI, local install, fresh native/RLM, review, tag, and downloaded-asset evidence for
 that published snapshot is bound outside the objects it hashes by
-`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. The preceding `0.4.0a5` candidate is
-**blocked, unreleased, and historical**.
+`adaptive-agent-runtime-v0.6.0a1-release-receipt.json`. The `0.4.0a6` release remains available as a
+historical snapshot; `0.4.0a5` remains blocked and unreleased.
 
-The current candidate preserves the host-owned RLM boundary: the main agent fixes one callable model
+The current release preserves the host-owned RLM boundary: the main agent fixes one callable model
 and optional effort per job, the host performs each actual model call, and AAR stores bounded tickets,
 receipts, and continuation state without provider credentials. Its additive MCP v8 surface retains the
 frozen 30-tool v7 compatibility projection and appends eight reviewed workbench/caller-work tools.
@@ -329,12 +329,12 @@ reports `restart_required: true` or a preserved manual-plan receipt reports
 `restart_required_after_manual_apply: true`. A later no-op result with `restart_required: false`
 does not erase that handoff.
 
-The `0.6.0a0` GitHub release does not establish production deployment, official Plugin Directory
+The `0.6.0a1` GitHub release does not establish production deployment, official Plugin Directory
 review/publication, OpenAI approval, or provider-signed attestation; neither does the published GitHub
 snapshot. Those claims require separate external authority. Read [Technical status](TECHNICAL-STATUS.md),
 [Host compatibility](HOST-COMPATIBILITY.md), the
 [historical v0.4.0a6 release notes](docs/RELEASE-v0.4.0a6.md), and the
-[current release notes](docs/RELEASE-v0.6.0a0.md) before making production claims.
+[current release notes](docs/RELEASE-v0.6.0a1.md) before making production claims.
 
 ---
 

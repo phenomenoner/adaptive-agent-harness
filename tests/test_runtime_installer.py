@@ -14,6 +14,7 @@ import pytest
 from pydantic import ValidationError
 
 from aar import admin
+from aar.broker_models import ModelRouteCatalog, ModelRouteProfile
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.provider_ready_install_models import (
     CleanInstallPreparation,
@@ -31,6 +32,7 @@ from aar.provider_ready_models import (
     MethodAdapterManifest,
     ProviderReadyCandidate,
 )
+from aar.provider_ready_operator_inputs import issue_initial_host_activation_intent
 from aar.provider_ready_package_factory import (
     PACKAGE_FACTORY_DECLARATIONS,
     PACKAGE_FACTORY_WHEEL_MEMBER,
@@ -62,6 +64,7 @@ from aar.runtime.migrations import V6_STATEMENT_NAMES
 from aar.runtime.provider_ready_activation import ProviderReadyActivationStore
 from aar.runtime.reference_host import ReferenceHost
 from aar.runtime.registry import OperationRegistry
+from aar.versions import PACKAGE_VERSION
 
 DIGEST = canonical_sha256({"fixture": "clean-install"})
 ZERO_COMMIT = "0" * 40
@@ -148,6 +151,11 @@ def _wheel_bytes(repo: Path) -> tuple[bytes, dict[str, bytes]]:
         fixture_path = repo / "tests" / "fixtures" / "provider-ready" / fixture["path"]
         files[path] = fixture_path.read_bytes()
     files[PACKAGE_FACTORY_WHEEL_MEMBER] = (repo / "src" / PACKAGE_FACTORY_WHEEL_MEMBER).read_bytes()
+    files[f"adaptive_agent_runtime-{PACKAGE_VERSION}.dist-info/METADATA"] = (
+        "Metadata-Version: 2.4\n"
+        "Name: adaptive-agent-runtime\n"
+        f"Version: {PACKAGE_VERSION}\n"
+    ).encode()
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
         for name in sorted(files):
@@ -170,7 +178,7 @@ def _candidate_and_factory_data(
         "sha256:" + hashlib.sha256(files["aar/bundled/aar-operations/SKILL.md"]).hexdigest()
     )
     candidate = ProviderReadyCandidate(
-        package_version="0.6.0a0",
+        package_version=PACKAGE_VERSION,
         source_commit=ZERO_COMMIT,
         wheel_digest="sha256:" + hashlib.sha256(wheel).hexdigest(),
         contract_manifest_digest=contract_digest,
@@ -288,6 +296,152 @@ def _inputs_for_wheel(
     receipt_path.write_bytes(canonical_json_bytes(receipt.model_dump(mode="json")))
     wheel_path.write_bytes(wheel)
     return target, intent_path, receipt_path, wheel_path
+
+
+def test_public_initial_intent_issuer_reconstructs_target_bound_authority(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo = Path(__file__).parents[1]
+    target, intent_path, receipt_path, _wheel_path = _inputs(tmp_path, repo)
+    expected_template = HostActivationIntent.model_validate_json(
+        intent_path.read_bytes(), strict=True
+    )
+    catalog = ModelRouteCatalog.issue(
+        (
+            ModelRouteProfile(
+                profile_id="route-primary",
+                provider_driver="host-caller-driver-v1",
+                provider="test-provider",
+                model="test-model",
+                reasoning_effort="high",
+                max_output_tokens=8192,
+                fallback_policy="none",
+                cache_policy="disabled",
+            ),
+        )
+    )
+    catalog_path = tmp_path / "route-catalog.json"
+    catalog_path.write_bytes(canonical_json_bytes(catalog.model_dump(mode="json")))
+    expected = HostActivationIntent.issue(
+        schema_version=expected_template.schema_version,
+        profile_id=expected_template.profile_id,
+        activation_generation=1,
+        previous_activation_authority_digest=None,
+        candidate=expected_template.candidate,
+        runtime=expected_template.runtime,
+        planner=expected_template.planner,
+        adapters=expected_template.adapters,
+        routes=ActivationRoutePolicy.issue(
+            catalog_digest=catalog.catalog_digest,
+            allowed_profile_ids=expected_template.routes.allowed_profile_ids,
+            fallback_policy=expected_template.routes.fallback_policy,
+            cache_policy=expected_template.routes.cache_policy,
+        ),
+        grant_policy=expected_template.grant_policy,
+        cutover_authority_store_id=expected_template.cutover_authority_store_id,
+        recovery_compatibility_digest=expected_template.recovery_compatibility_digest,
+    )
+    template = {
+        key: expected_template.model_dump(mode="json")[key]
+        for key in (
+            "profile_id",
+            "planner",
+            "adapters",
+            "routes",
+            "grant_policy",
+            "cutover_authority_store_id",
+            "recovery_compatibility_digest",
+        )
+    }
+    template_path = tmp_path / "intent-template.json"
+    template_path.write_bytes(canonical_json_bytes(template))
+
+    issued = issue_initial_host_activation_intent(
+        target,
+        candidate_receipt_path=receipt_path,
+        route_catalog_path=catalog_path,
+        template_path=template_path,
+    )
+
+    assert issued == expected
+    assert not target.exists()
+
+    assert (
+        admin.main(
+            [
+                "activation",
+                "intent",
+                "--runtime-home",
+                str(target),
+                "--candidate-receipt",
+                str(receipt_path),
+                "--route-catalog",
+                str(catalog_path),
+                "--template",
+                str(template_path),
+            ]
+        )
+        == 0
+    )
+    cli_issued = HostActivationIntent.model_validate_json(
+        capsys.readouterr().out.encode(), strict=True
+    )
+    assert cli_issued == expected
+    assert not target.exists()
+
+    extra_template = dict(template)
+    extra_template["candidate"] = expected.candidate.model_dump(mode="json")
+    extra_path = tmp_path / "intent-template-extra.json"
+    extra_path.write_bytes(canonical_json_bytes(extra_template))
+    with pytest.raises(InstallerError, match="FRESH_INSTALL_INPUT_INVALID"):
+        issue_initial_host_activation_intent(
+            target,
+            candidate_receipt_path=receipt_path,
+            route_catalog_path=catalog_path,
+            template_path=extra_path,
+        )
+    assert not target.exists()
+
+    target.mkdir()
+    with pytest.raises(InstallerError, match="FRESH_INSTALL_TARGET_EXISTS"):
+        issue_initial_host_activation_intent(
+            target,
+            candidate_receipt_path=receipt_path,
+            route_catalog_path=catalog_path,
+            template_path=template_path,
+        )
+
+
+def test_admin_emits_exact_candidate_receipt(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo = Path(__file__).parents[1]
+    wheel, _files = _wheel_bytes(repo)
+    wheel_path = tmp_path / "candidate.whl"
+    wheel_path.write_bytes(wheel)
+
+    assert (
+        admin.main(
+            [
+                "runtime",
+                "candidate",
+                "--wheel",
+                str(wheel_path),
+                "--source-commit",
+                ZERO_COMMIT,
+            ]
+        )
+        == 0
+    )
+    issued = InstallCandidateReceipt.model_validate_json(
+        capsys.readouterr().out.encode(), strict=True
+    )
+    assert issued.candidate.package_version == PACKAGE_VERSION
+    assert issued.candidate.source_commit == ZERO_COMMIT
+    assert issued.wheel_size_bytes == len(wheel)
+    assert issued.wheel_digest == "sha256:" + hashlib.sha256(wheel).hexdigest()
 
 
 def _inputs(tmp_path: Path, repo: Path) -> tuple[Path, Path, Path, Path]:

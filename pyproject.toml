@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "adaptive-agent-runtime"
-version = "0.6.0a0"
+version = "0.6.0a1"
 description = "Host-neutral programmable execution and adaptation runtime for agent harnesses"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -35,6 +35,8 @@ dependencies = [
 aar-contract = "aar.contract:main"
 aar-admin = "aar.admin:main"
 aar-codex-mcp = "aar.compat.codex_mcp:main"
+aar-hermes-mcp = "aar.compat.hermes_mcp:main"
+aar-hermes-authority = "aar.compat.hermes_authority:main"
 aar-mcp = "aar.mcp.server:main"
 aar-mcp-public = "aar.mcp.public_server:main"
 aar-supervisor = "aar.runtime.supervisor:main"

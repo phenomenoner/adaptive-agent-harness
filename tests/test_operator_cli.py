@@ -173,5 +173,5 @@ def test_parser_exposes_only_explicit_operator_domains(
         parser.parse_args(["runtime", "--help"])
     assert raised.value.code == 0
     runtime_help = capsys.readouterr().out
-    assert "{install}" in runtime_help
+    assert "{install,candidate}" in runtime_help
     assert "initialize" not in runtime_help

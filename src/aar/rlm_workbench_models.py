@@ -244,6 +244,28 @@ def require_fully_configured_workbench_capability(
     return capability
 
 
+def derive_cumulative_deadline_unix_ms(
+    *,
+    intent_persisted_at_unix_ms: int,
+    context_deadline_unix_ms: int,
+    total_wall_time_ms: int,
+) -> int:
+    """Derive the durable deadline from public, immutable admission evidence."""
+
+    values = {
+        "intent_persisted_at_unix_ms": intent_persisted_at_unix_ms,
+        "context_deadline_unix_ms": context_deadline_unix_ms,
+        "total_wall_time_ms": total_wall_time_ms,
+    }
+    for name, value in values.items():
+        if type(value) is not int or value < 1:
+            raise ValueError(f"{name} must be a positive integer")
+    return min(
+        context_deadline_unix_ms,
+        intent_persisted_at_unix_ms + total_wall_time_ms,
+    )
+
+
 _WORKBENCH_METHOD_ORDER = (
     "model.request",
     "subagent.submit",

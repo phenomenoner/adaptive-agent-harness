@@ -19,6 +19,7 @@ from aar.versions import PACKAGE_VERSION
 PROFILE_CONTRACT_VERSION = "aar.host-profiles.v1"
 PROFILE_VERSION = PACKAGE_VERSION
 CODEX_PROFILE_VERSION = "0.5.0-a0+codex.20260820194429"
+RELEASE_RECEIPT_ASSET = f"adaptive-agent-runtime-v{PACKAGE_VERSION}-release-receipt.json"
 SKILL_FILES = ("SKILL.md", "agents/openai.yaml", "metadata.json")
 OPTIONAL_SKILL_FILES = ("SKILL.md", "agents/openai.yaml")
 CODEX_ROOT = Path("profiles/codex/plugins/adaptive-agent-runtime")
@@ -172,7 +173,7 @@ def host_documents(root: Path) -> dict[Path, bytes]:
 Release package: `{PACKAGE_VERSION}`; bundled operation skill: `{OPERATION_SKILL_VERSION}`. The
 source repository's immutable release snapshot is `profiles/release-status-v1.json`; exact
 post-freeze evidence is bound by
-`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. This profile does not establish official
+`{RELEASE_RECEIPT_ASSET}`. This profile does not establish official
 Plugin Directory publication, which requires separate external authority.
 Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so
 `aar-codex-mcp` and its declared IPython, NumPy, and pandas dependencies are available, then run
@@ -204,7 +205,7 @@ selected, digest-verified source artifacts and an already available external Cod
 Release package: `{PACKAGE_VERSION}`; bundled operation skill: `{OPERATION_SKILL_VERSION}`. The
 source repository's immutable release snapshot is `profiles/release-status-v1.json`; exact
 post-freeze evidence is bound by
-`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. This profile does not establish official
+`{RELEASE_RECEIPT_ASSET}`. This profile does not establish official
 Plugin Directory publication, which requires separate external authority.
 Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so `aar-mcp`
 and its declared IPython, NumPy, and pandas dependencies are on the Hermes host PATH, then install

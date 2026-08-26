@@ -7,6 +7,7 @@ from pathlib import Path
 from mcp.client.stdio import StdioServerParameters
 
 from aar.compat.smoke import _resolve_scenario_id, _run
+from aar.mcp.server import OPERATION_SKILL_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -32,7 +33,7 @@ def test_reusable_smoke_pack_exercises_only_real_stdio_tools(tmp_path: Path) -> 
     assert report["observed"]["server_name"] == "aar-mcp"
     assert set(report["checks"].values()) == {"passed"}
     assert report["checks"]["analysis_dependencies"] == "passed"
-    assert report["observed"]["operation_skill_version"] == "0.10.0"
+    assert report["observed"]["operation_skill_version"] == OPERATION_SKILL_VERSION
     assert report["observed"]["client_protocol_version"] == "2026-07-28"
     assert report["observed"]["server_protocol_version"] == "2026-07-28"
 

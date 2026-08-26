@@ -4,11 +4,14 @@ import asyncio
 import hashlib
 import json
 import sqlite3
+import threading
+import time
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import anyio
 import pytest
 from mcp import Client
 
@@ -16,7 +19,8 @@ import aar.runtime.provider_ready_startup as startup_module
 import aar.runtime.reference_host as reference_host_module
 from aar.broker_models import ModelRouteCatalog, ModelRouteProfile
 from aar.canonical import canonical_sha256
-from aar.mcp.server import build_server
+from aar.mcp.models import McpRlmWorkbenchMutationContext
+from aar.mcp.server import _assert_workbench_operation_binding, build_server
 from aar.provider_ready_install_models import InstallCandidateFactoryEntry
 from aar.provider_ready_models import GrantBudgetCeiling, MethodAdapterManifest
 from aar.provider_ready_package_factory import (
@@ -30,6 +34,7 @@ from aar.provider_ready_runtime_models import (
 from aar.runtime.migrations import apply_registry_v6, create_sqlite_backup
 from aar.runtime.model_broker import ReferenceModelBroker, StaticModelBrokerRegistry
 from aar.runtime.provider_ready_activation import (
+    GrantDenied,
     ProviderReadyActivationCoordinator,
     ProviderReadyActivationStore,
 )
@@ -37,8 +42,13 @@ from aar.runtime.provider_ready_startup import ProviderReadyStartup, ProviderRea
 from aar.runtime.reference_host import ReferenceHost
 from aar.runtime.registry import OperationRegistry
 from aar.runtime.supervisor import SupervisorService
+from aar.runtime.supervisor_client import SupervisorClient, SupervisorControlRejected
+from aar.runtime.supervisor_protocol import (
+    SupervisorGrantIssueRequest,
+    SupervisorGrantRevokeRequest,
+)
 from aar.runtime.workspace_models import ProgrammableWorkspaceHandle, WorkspaceBackendDescriptor
-from aar.schemas import SessionRef, WorkspaceRef
+from aar.schemas import OperationRef, SessionRef, WorkspaceRef
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKBENCH_SDD = ROOT / "docs/sdd/aar-rlm-native-workbench-v2"
@@ -52,12 +62,18 @@ CAPABILITIES = tuple(
     sorted(
         (
             "artifact.write",
+            "broker.caller.cancel",
+            "broker.caller.claim",
+            "broker.caller.commit",
+            "broker.caller.reconcile",
+            "broker.caller.send",
             "effect.propose",
             "evidence.query",
             "model.request",
             "rlm.workbench.execute",
             "subagent.result",
             "subagent.submit",
+            "workspace.create",
         )
     )
 )
@@ -675,6 +691,78 @@ async def test_supervisor_failure_has_no_discovery_after_provider_ready_barrier(
     assert not (runtime_home / "supervisor" / "discovery.json").exists()
 
 
+@pytest.mark.anyio
+async def test_private_host_authority_explicitly_issues_and_revokes_current_grant(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    startup, readback, _authority = _startup(
+        tmp_path,
+        monkeypatch,
+        reference_evidence=False,
+    )
+    runtime_home = readback.target
+    database = runtime_home / "reference.sqlite3"
+    _prepare_v6_registry(database, tmp_path / "host-authority.snapshot.sqlite3")
+    monkeypatch.setattr(
+        reference_host_module,
+        "SupervisedIPythonWorkspaceBackend",
+        _GrantAdmissionIPythonWorkspaceBackend,
+    )
+    service = SupervisorService(
+        runtime_home,
+        programmable_backend="ipython",
+        model_broker_registry=_route_owner(readback.route_catalog),
+        default_model_route_profile=ROUTE_PROFILE_ID,
+        provider_ready_startup=startup,
+    )
+    stop = threading.Event()
+    async with anyio.create_task_group() as task_group:
+        task_group.start_soon(service.run, stop)
+        with anyio.fail_after(10):
+            while service.discovery is None:
+                await anyio.sleep(0.01)
+        discovery = service.ready
+        client = SupervisorClient(runtime_home)
+        request = SupervisorGrantIssueRequest(
+            principal_id=PRINCIPAL,
+            session_id=SESSION,
+            capability="rlm.workbench.execute",
+            ttl_ms=60_000,
+            grant_id="grant-explicit-host-authority",
+        )
+        grant = await client.issue_session_grant(request)
+        assert grant.runtime_generation == discovery.runtime_generation
+        assert grant.revoked is False
+        assert (
+            startup.coordinator.accept_session_grant(
+                grant,
+                principal_id=PRINCIPAL,
+                session_id=SESSION,
+                capability="rlm.workbench.execute",
+                runtime_generation=discovery.runtime_generation,
+                now_unix_ms=int(time.time() * 1000),
+            )
+            == grant
+        )
+        with pytest.raises(SupervisorControlRejected):
+            await client.issue_session_grant(request)
+        revoked = await client.revoke_session_grant(
+            SupervisorGrantRevokeRequest(grant_id=grant.grant_id)
+        )
+        assert revoked.revoked is True
+        with pytest.raises(GrantDenied, match="revoked"):
+            startup.coordinator.accept_session_grant(
+                revoked,
+                principal_id=PRINCIPAL,
+                session_id=SESSION,
+                capability="rlm.workbench.execute",
+                runtime_generation=discovery.runtime_generation,
+                now_unix_ms=int(time.time() * 1000),
+            )
+        stop.set()
+        task_group.cancel_scope.cancel()
+
+
 def test_mcp_uses_only_current_memory_session_grants_in_provider_mode(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -705,7 +793,75 @@ def test_mcp_uses_only_current_memory_session_grants_in_provider_mode(
             assert capabilities_result.structured_content is not None
             capabilities = capabilities_result.structured_content
 
+            reference_context = await client.call_tool(
+                "aar_reference_context",
+                {
+                    "capability": "workspace.create",
+                    "context_key": "provider-ready-reference-denied",
+                    "budget_wall_time_ms": 10_000,
+                },
+            )
+            assert not reference_context.is_error
+            assert reference_context.structured_content is not None
+            assert reference_context.structured_content["failure"]["code"] == "AUTHORITY_DENIED"
+            assert reference_context.structured_content["context"] is None
+
             denied_payloads: list[dict[str, Any]] = []
+            static_workspace = await client.call_tool(
+                "aar_workspace_create",
+                {
+                    "context": {
+                        "runtime_generation": capabilities["ready"]["runtime_generation"],
+                        "capability_digest": capabilities["ready"]["capabilities"]["digest"],
+                        "principal_id": PRINCIPAL,
+                        "session_id": SESSION,
+                        "deadline_unix_ms": NOW_MS + 10_000,
+                        "request_id": "request-static-workspace-denied",
+                        "idempotency_key": "idempotency-static-workspace-denied",
+                        "grant_id": "reference-grant-workspace-create",
+                        "budget_wall_time_ms": 10_000,
+                    },
+                    "workspace_id": "static-workspace-denied",
+                },
+            )
+            assert not static_workspace.is_error
+            assert static_workspace.structured_content is not None
+            assert static_workspace.structured_content["failure"]["code"] == "AUTHORITY_DENIED"
+            assert static_workspace.structured_content["operation"] is None
+
+            workspace_grant = startup.coordinator.issue_session_grant(
+                principal_id=PRINCIPAL,
+                session_id=SESSION,
+                capability="workspace.create",
+                issued_at_unix_ms=NOW_MS,
+                ttl_ms=900_000,
+                policy_approved=True,
+                grant_id="grant-current-workspace-create",
+            )
+            current_workspace = await client.call_tool(
+                "aar_workspace_create",
+                {
+                    "context": {
+                        "runtime_generation": capabilities["ready"]["runtime_generation"],
+                        "capability_digest": capabilities["ready"]["capabilities"]["digest"],
+                        "principal_id": PRINCIPAL,
+                        "session_id": SESSION,
+                        "deadline_unix_ms": NOW_MS + 10_000,
+                        "request_id": "request-current-workspace-accepted",
+                        "idempotency_key": "idempotency-current-workspace-accepted",
+                        "grant_id": workspace_grant.grant_id,
+                        "budget_wall_time_ms": 10_000,
+                    },
+                    "workspace_id": "current-workspace-accepted",
+                },
+            )
+            assert not current_workspace.is_error
+            assert current_workspace.structured_content is not None
+            assert current_workspace.structured_content["failure"] is None
+            assert current_workspace.structured_content["handle"]["workspace"]["value"] == (
+                "current-workspace-accepted"
+            )
+
             no_auto_result = await client.call_tool(
                 "aar_rlm_workbench_execute",
                 _execute_arguments(
@@ -805,22 +961,47 @@ def test_mcp_uses_only_current_memory_session_grants_in_provider_mode(
             assert not mixed_result.is_error and mixed_result.structured_content is not None
             denied_payloads.append(mixed_result.structured_content)
 
-            accepted_result = await client.call_tool(
-                "aar_rlm_workbench_execute",
-                _execute_arguments(
-                    capabilities,
-                    suffix="current-accepted",
-                    grant_ids=tuple(
-                        sorted(
-                            (
-                                issued.grant_id,
-                                *(grant.grant_id for grant in method_grants),
-                            )
+            accepted_arguments = _execute_arguments(
+                capabilities,
+                suffix="current-accepted",
+                grant_ids=tuple(
+                    sorted(
+                        (
+                            issued.grant_id,
+                            *(grant.grant_id for grant in method_grants),
                         )
-                    ),
+                    )
                 ),
             )
+            accepted_result = await client.call_tool(
+                "aar_rlm_workbench_execute",
+                accepted_arguments,
+            )
             assert not accepted_result.is_error and accepted_result.structured_content is not None
+
+            operation = OperationRef.model_validate(
+                accepted_result.structured_content["operation"], strict=True
+            )
+            mutation = McpRlmWorkbenchMutationContext.model_validate(
+                accepted_arguments["context"], strict=True
+            )
+            bound = _assert_workbench_operation_binding(
+                application.host,
+                mutation,
+                operation,
+                mutation=mutation,
+            )
+            assert tuple(grant.grant_id for grant in bound.grants) == tuple(mutation.grant_ids)
+            for grant in (issued, *method_grants):
+                startup.coordinator.revoke_session_grant(grant)
+            with pytest.raises(GrantDenied, match="revoked"):
+                _assert_workbench_operation_binding(
+                    application.host,
+                    mutation,
+                    operation,
+                    mutation=mutation,
+                )
+
             workbench_result = await client.call_tool(
                 "aar_rlm_workbench_capabilities",
                 {
@@ -846,7 +1027,7 @@ def test_mcp_uses_only_current_memory_session_grants_in_provider_mode(
     assert all(payload["operation"] is None for payload in denied_payloads)
     assert "phase" in accepted, accepted
     assert accepted["phase"] == "preparing_workspace"
-    assert capabilities["package_version"] == "0.6.0a0"
+    assert capabilities["package_version"] == "0.6.0a1"
     assert "provider_ready" not in capabilities
     assert startup.grant_set.runtime_generation == capabilities["ready"]["runtime_generation"]
     with sqlite3.connect(database) as connection:

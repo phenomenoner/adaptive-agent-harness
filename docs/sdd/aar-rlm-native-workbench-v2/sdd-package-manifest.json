@@ -13,8 +13,8 @@
   "files": [
     {
       "path": "CONTRACTS.md",
-      "sha256": "sha256:158b14207c8faeb207a3747e646f3129df2910d1c6e41f412366181ac95e69ea",
-      "size_bytes": 23578
+      "sha256": "sha256:8c6ddbe4cc19e4ea5b3152845e7984636a720b455856163b594c677df094a98e",
+      "size_bytes": 24045
     },
     {
       "path": "LIFECYCLE.md",
@@ -638,7 +638,7 @@
     },
     {
       "path": "fixtures/registry-v5-migration-verification.json",
-      "sha256": "sha256:c475bed8e741a0637edced15f146a008c1db7bf26969f741f7607561d640434f",
+      "sha256": "sha256:3d74398921a69161f67826cfc310596cde519a2f462a45c65bc6d5506e0f1fee",
       "size_bytes": 2952
     },
     {
@@ -868,7 +868,7 @@
     }
   ],
   "implementation_status": "planned",
-  "manifest_digest": "sha256:cf772d19467fcdcc620ebfaf218aa7fc5cbc762a43566a315f723eb2ef3e7ecd",
+  "manifest_digest": "sha256:73a897c84d2197a2496dfe468e5f86e498ec4f3907c4e8fc1442f7d867718744",
   "normative_files": [
     "README.md",
     "CONTRACTS.md",
