@@ -153,12 +153,14 @@ def _markdown_section(text: str, heading: str) -> str:
     return "\n".join(body)
 
 
-def test_release_status_is_timeless_snapshot_contract() -> None:
+def test_release_status_is_timeless_release_contract() -> None:
     status = _status()
     tools = _tool_manifest()["tools"]
     assert status["schema_id"] == "aar.release-status.v1"
     assert status["snapshot"] == {
-        "scope": "immutable_release_snapshot",
+        "scope": "release_contract_snapshot",
+        "publication_status": "not_established_by_source",
+        "publication_authority": "external_readback_only",
         "version": SUCCESSOR,
         "tag": TAG,
         "operation_skill_version": OPERATION_SKILL_VERSION,
@@ -169,9 +171,8 @@ def test_release_status_is_timeless_snapshot_contract() -> None:
     assert MCP_TOOL_SURFACE_VERSION == "aar.mcp-tools.v8"
     assert len(tools) == 38
     serialized = json.dumps(status, sort_keys=True)
-    assert "candidate_unreleased" not in serialized
-    assert "PENDING" not in serialized
-    assert '"candidate"' not in serialized
+    assert "immutable_release_snapshot" not in serialized
+    assert "published_from_reviewed_source" not in serialized
 
 
 def test_release_status_uses_non_self_referential_external_receipt() -> None:
@@ -216,26 +217,21 @@ def _assert_no_stale_current_authority(text: str, *, surface: str) -> None:
         "repository status:** the `0.4.0a6` release snapshot",
         "adaptive_agent_runtime-0.4.0a6-py3-none-any.whl",
         ".git@v0.4.0a6",
-        "candidate_unreleased",
-        "candidate, unreleased",
-        "current source candidate",
-        "when its tag is published",
-        "install the candidate tag after publication",
-        "pending receipts",
-        "remain `pending`",
-        "are all `pending`",
-        "will resolve only after",
-        "does not exist until",
+        "immutable release snapshot",
+        "latest published release snapshot",
+        "current public alpha is",
+        "published from the reviewed source tree",
+        "this github prerelease publishes",
     ):
         assert stale not in lowered, f"{surface} contains stale current authority: {stale}"
 
 
 @pytest.mark.parametrize("path", CURRENT_PUBLIC_SURFACES)
-def test_current_public_surfaces_use_timeless_release_snapshot_wording(path: str) -> None:
+def test_current_public_surfaces_use_timeless_release_contract_wording(path: str) -> None:
     text = _surface(path)
     lowered = text.casefold()
     assert SUCCESSOR in text
-    assert "release snapshot" in lowered
+    assert "release contract" in lowered
     assert "profiles/release-status-v1.json" in text
     assert RELEASE_RECEIPT_ASSET in text
     _assert_no_stale_current_authority(text, surface=path)
@@ -243,12 +239,22 @@ def test_current_public_surfaces_use_timeless_release_snapshot_wording(path: str
     assert any(
         phrase in lowered
         for phrase in (
+            "does not establish that the target tag",
+            "does not establish publication",
+            "does not establish that publication",
             "does not establish",
             "does not constitute",
             "requires separate",
             "not official",
         )
     ), f"{path} omits the separate Plugin Directory authority boundary"
+
+
+def test_readme_hero_does_not_claim_target_release_already_exists() -> None:
+    hero = "\n".join(_surface("README.md").splitlines()[:20])
+    assert "release-contract target" in hero
+    assert "source text does not establish publication" in hero
+    assert "releases/tag/v0.6.0a1" not in hero
 
 
 @pytest.mark.parametrize(
@@ -285,6 +291,11 @@ def test_translated_quick_starts_preserve_current_release_boundary(path: str) ->
     _assert_restart_handoff(text, surface=path)
     assert SUCCESSOR in text
     assert "0.6.0a0" not in text
+    assert "release-contract target" in text[:1000]
+    assert "source text does not establish publication" in text[:1000]
+    assert "releases/tag/v0.6.0a1" not in text
+    assert "Use only after external GitHub readback confirms the target tag exists." in text
+    assert "release-contract evidence represented by this source" in text
     current_tool_lines = [line for line in text.splitlines()[:200] if "38" in line and "v8" in line]
     assert len(current_tool_lines) == 1, f"{path} omits the current 38-tool v8 surface"
 
@@ -305,7 +316,7 @@ def test_generated_hermes_release_readme_matches_source() -> None:
     assert (ROOT / relative).read_bytes() == generated[relative]
     text = generated[relative].decode()
     assert "Release package" in text
-    assert "release snapshot" in text.casefold()
+    assert "release contract" in text.casefold()
     assert "profiles/release-status-v1.json" in text
     assert RELEASE_RECEIPT_ASSET in text
 

@@ -97,19 +97,14 @@ def test_public_release_guard_matches_opaque_task_ids_and_local_receipts() -> No
 
 def test_public_release_guard_rejects_internal_project_provenance() -> None:
     pattern = PUBLIC_RELEASE_CHECK.BYTE_PATTERNS["internal-project-provenance"]
-    internal_project = (
-        b"AAR-vs-"
-        + b"prime-agent-minions/"
-        + b"benchmark-"
-        + b"plan-2026-08-12"
-    )
+    internal_project = b"AAR-vs-" + b"prime-agent-minions/" + b"benchmark-" + b"plan-2026-08-12"
     placeholder_schema = b"https://" + b"local.invalid/aar-prime/run-manifest.schema.json"
     assert pattern.search(internal_project)
     assert pattern.search(placeholder_schema)
     assert not pattern.search(b"docs/MODEL-ROUTING-AND-EVALUATION.md")
 
 
-def test_public_release_guard_accepts_current_release_identity() -> None:
+def test_public_release_guard_accepts_current_release_contract_identity() -> None:
     assert (
         PUBLIC_RELEASE_CHECK.release_identity_failures(
             ROOT, PUBLIC_RELEASE_CHECK.EXPECTED_TRANSLATIONS
@@ -118,7 +113,7 @@ def test_public_release_guard_accepts_current_release_identity() -> None:
     )
 
 
-def test_public_release_guard_rejects_localized_release_identity_drift(
+def test_public_release_guard_rejects_localized_release_contract_identity_drift(
     tmp_path: Path,
 ) -> None:
     version = "1.2.3a1"
@@ -127,29 +122,32 @@ def test_public_release_guard_rejects_localized_release_identity_drift(
         f'[project]\nname = "example"\nversion = "{version}"\n', encoding="utf-8"
     )
     (tmp_path / "README.md").write_text(
-        f"releases/tag/{tag}\n@{tag}\n**`{version}`**\n", encoding="utf-8"
+        f"**Release-contract target:** `{version}` / `{tag}`\n@{tag}\ndoes not establish that\n",
+        encoding="utf-8",
     )
     (tmp_path / "CHANGELOG.md").write_text(
-        f"## [{version}]\nreleases/tag/{tag}\n", encoding="utf-8"
+        f"## {version} — release-contract target\ndoes not establish\n", encoding="utf-8"
     )
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / f"RELEASE-{tag}.md").write_text(
-        f"# Adaptive Agent Harness {tag}\n@{tag}\n", encoding="utf-8"
+        f"# Adaptive Agent Harness {tag}\n"
+        f"Target source reference: `phenomenoner/adaptive-agent-harness@{tag}`\n"
+        "target tag, GitHub prerelease\n"
+        "source file does not claim that publication occurred\n",
+        encoding="utf-8",
     )
     translation_dir = tmp_path / "docs" / "i18n"
     translation_dir.mkdir()
     locale = translation_dir / "README.de.md"
     locale.write_text(
-        f"releases/tag/{tag}\n@{tag}\n**`{version}`**\n", encoding="utf-8"
+        f"**`{version}` release-contract target**\n"
+        f"@{tag}\nsource text does not establish publication\n",
+        encoding="utf-8",
     )
-    assert PUBLIC_RELEASE_CHECK.release_identity_failures(
-        tmp_path, {locale.name}
-    ) == []
+    assert PUBLIC_RELEASE_CHECK.release_identity_failures(tmp_path, {locale.name}) == []
 
     locale.write_text(locale.read_text(encoding="utf-8").replace(tag, "v1.2.3a0"))
-    failures = PUBLIC_RELEASE_CHECK.release_identity_failures(
-        tmp_path, {locale.name}
-    )
+    failures = PUBLIC_RELEASE_CHECK.release_identity_failures(tmp_path, {locale.name})
     assert any(
         failure["kind"] == "release-identity-marker"
         and failure["detail"].startswith("docs/i18n/README.de.md")

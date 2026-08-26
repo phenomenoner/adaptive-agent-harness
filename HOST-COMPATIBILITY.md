@@ -1,9 +1,10 @@
 # Host Compatibility
 
-This page is the host-facing part of the **`v0.6.0a1` release snapshot**. Its immutable in-tree
-authority is [`profiles/release-status-v1.json`](profiles/release-status-v1.json); exact post-freeze
-evidence is bound by `adaptive-agent-runtime-v0.6.0a1-release-receipt.json`. Earlier release pages are
-historical and are not current install guidance.
+This page is the host-facing part of the **`v0.6.0a1` release contract**. Its in-tree authority is
+[`profiles/release-status-v1.json`](profiles/release-status-v1.json). This source does not establish
+that the target tag, GitHub prerelease, or `adaptive-agent-runtime-v0.6.0a1-release-receipt.json`
+exists; publication and exact post-freeze evidence require external readback. Earlier release pages
+are historical and are not current install guidance.
 
 ## Compatibility matrix
 
@@ -96,6 +97,7 @@ or stale classification.
 
 ## External publication boundary
 
-This release snapshot does not establish PyPI publication, general production deployment, official
+This release contract does not establish publication of the target tag, GitHub prerelease, or
+receipt. It also does not establish PyPI publication, general production deployment, official
 Plugin Directory availability, reviewer access, OpenAI review or approval, or provider-signed
 attestation. No compatibility row on this page should be read as that external authority.

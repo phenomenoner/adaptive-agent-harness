@@ -1,12 +1,14 @@
 # Adaptive Agent Harness v0.6.0a1
 
-Source snapshot: `phenomenoner/adaptive-agent-harness@v0.6.0a1`.
+Target source reference: `phenomenoner/adaptive-agent-harness@v0.6.0a1`.
 
 `v0.6.0a1` adds an opt-in standalone Hermes host adapter for the clean-install-only provider-ready
-runtime introduced in `v0.6.0a0`. This immutable release snapshot is indexed by
-[`profiles/release-status-v1.json`](../profiles/release-status-v1.json); exact post-freeze evidence is
-bound by `adaptive-agent-runtime-v0.6.0a1-release-receipt.json`. It does not establish official Plugin
-Directory publication, which requires separate external authority.
+runtime introduced in `v0.6.0a0`. Its in-tree release contract is
+[`profiles/release-status-v1.json`](../profiles/release-status-v1.json). This source does not
+establish that the target tag, GitHub prerelease, or
+`adaptive-agent-runtime-v0.6.0a1-release-receipt.json` exists; publication and exact post-freeze
+evidence require external readback. It does not establish official Plugin Directory publication,
+which requires separate external authority.
 
 ## Highlights
 
@@ -48,6 +50,7 @@ choice, or final delivery. IPython is not a security sandbox.
 
 ## Release boundary
 
-This GitHub prerelease publishes source, tag, wheel, sdist, and release evidence after the named gates
-complete. It does not claim PyPI publication, official Plugin Directory approval, provider-wide
-execution, or general production deployment.
+If the named gates complete, the GitHub prerelease may publish source, tag, wheel, sdist, and release
+evidence. This source file does not claim that publication occurred. Such a prerelease still would
+not establish PyPI publication, official Plugin Directory approval, provider-wide execution, or
+general production deployment.

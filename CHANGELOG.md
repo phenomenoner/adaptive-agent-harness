@@ -2,13 +2,14 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
-## [0.6.0a1](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a1) — 2026-08-26
+## 0.6.0a1 — 2026-08-26 release-contract target
 
 `v0.6.0a1` adds a standalone Hermes host adapter and authenticated trusted-local authority path while
-keeping the frozen public MCP tool/schema surface unchanged. This immutable release snapshot is
-indexed by [`profiles/release-status-v1.json`](profiles/release-status-v1.json); exact post-freeze
-evidence is bound by `adaptive-agent-runtime-v0.6.0a1-release-receipt.json`. It does not establish
-official Plugin Directory publication, which requires separate external authority.
+keeping the frozen public MCP tool/schema surface unchanged. Its in-tree release contract is
+[`profiles/release-status-v1.json`](profiles/release-status-v1.json). This source does not establish
+that the target tag, GitHub prerelease, or `adaptive-agent-runtime-v0.6.0a1-release-receipt.json`
+exists; publication and exact post-freeze evidence require external readback. It also does not
+establish official Plugin Directory publication, which requires separate external authority.
 
 ### Added
 

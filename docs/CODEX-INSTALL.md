@@ -1,13 +1,13 @@
 # Install AAR for Codex App
 
-This page is the Codex installation entrypoint for the **`0.6.0a1` release snapshot**. The immutable
-in-tree contract is [`profiles/release-status-v1.json`](../profiles/release-status-v1.json), while
-exact source, wheel, CI, install, host, review, tag, and asset-readback evidence is bound by
-`adaptive-agent-runtime-v0.6.0a1-release-receipt.json`. Earlier release pages and receipts are
-historical authorities for their exact versions, not current install guidance.
+This page is the Codex installation entrypoint for the **`0.6.0a1` release contract**. The in-tree
+contract is [`profiles/release-status-v1.json`](../profiles/release-status-v1.json). This source does
+not establish that the target tag, GitHub prerelease, or
+`adaptive-agent-runtime-v0.6.0a1-release-receipt.json` exists; publication and exact source, wheel,
+CI, install, host, review, tag, and asset-readback evidence require external readback. Earlier release
+pages and receipts are historical authorities for their exact versions, not current install guidance.
 
-The normal installation path starts with the exact release package and then lets the host inspect
-the setup plan:
+After GitHub readback confirms the target tag exists, the pinned-source installation path is:
 
 ```powershell
 uv tool install --force "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a1"

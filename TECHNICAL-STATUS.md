@@ -1,15 +1,17 @@
 # Technical Status
 
-**Release snapshot:** `v0.6.0a1`
+**Release-contract target:** `v0.6.0a1`
 **Package:** `adaptive-agent-runtime==0.6.0a1`
 **MCP surface:** `aar.mcp-tools.v8`, 38 tools, including the frozen 30-tool v7 compatibility projection
 **Operation skill:** `aar-operations` `0.11.0`
 
-The immutable machine-readable authority for this page and the other current public surfaces is
+The machine-readable release contract for this page and the other current public surfaces is
 [`profiles/release-status-v1.json`](profiles/release-status-v1.json). Exact commit, tree, wheel,
 sdist, CI, clean-install, activation, native-host, provider, review, tag, and downloaded-asset evidence
-is bound after the source freeze by `adaptive-agent-runtime-v0.6.0a1-release-receipt.json` rather than
-being embedded in the objects it hashes. `v0.6.0a0`, `v0.5.0a0`, and `v0.4.0a6` are predecessor
+is established after source freeze only by external readback and
+`adaptive-agent-runtime-v0.6.0a1-release-receipt.json`, rather than being embedded in the objects it
+hashes. This source snapshot does not establish that the target tag, GitHub prerelease, or receipt
+exists. `v0.6.0a0`, `v0.5.0a0`, and `v0.4.0a6` are predecessor
 release snapshots; their release notes and receipts are historical authorities for those versions,
 not current install guidance.
 
@@ -20,7 +22,7 @@ host.
 
 > AAR computes and proposes. The host authorizes and delivers.
 
-## Current release behavior
+## Release-contract behavior
 
 `v0.6.0a1` keeps the public 38-tool MCP v8 names and schemas unchanged while adding an optional
 standalone Hermes adapter and explicit trusted-local session-grant authority:
@@ -41,9 +43,9 @@ standalone Hermes adapter and explicit trusted-local session-grant authority:
 - AAR receives no provider credential and performs no host-owned physical provider request.
 
 The public operator path is credential-free. It derives an exact
-`aar.install-candidate-receipt.v1` from a released wheel and source identity, then issues a
+`aar.install-candidate-receipt.v1` from a verified wheel and source identity, then issues a
 self-digested, target-bound `aar.host-activation-intent.v1` from explicit host-owned inputs. Neither
-command installs, activates, migrates, or mutates an existing runtime root. This release is
+command installs, activates, migrates, or mutates an existing runtime root. This release contract is
 **clean-install-only**: install into a fresh absent root and retain predecessor roots unchanged.
 
 ## Current capabilities
@@ -102,7 +104,8 @@ cannot establish the whole release receipt. Each claim keeps its own evidence al
 
 ## Publication and authority limits
 
-This release snapshot does not establish PyPI publication, general production deployment, official
+This source release contract does not establish publication of the target tag, GitHub prerelease,
+or receipt. It also does not establish PyPI publication, general production deployment, official
 Plugin Directory availability, reviewer access, OpenAI review or approval, or provider-signed
 attestation. Those require separate external authority. The subprocess Codex configuration route
 continues to report `NO_ATOMIC_AUTHORITY` and returns a manual plan before any forward mutation.

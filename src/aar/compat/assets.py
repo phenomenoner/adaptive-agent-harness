@@ -171,9 +171,9 @@ def host_documents(root: Path) -> dict[Path, bytes]:
     codex_readme = f"""# Codex host profile
 
 Release package: `{PACKAGE_VERSION}`; bundled operation skill: `{OPERATION_SKILL_VERSION}`. The
-source repository's immutable release snapshot is `profiles/release-status-v1.json`; exact
-post-freeze evidence is bound by
-`{RELEASE_RECEIPT_ASSET}`. This profile does not establish official
+source repository's release contract is `profiles/release-status-v1.json`; it does not establish
+that the target tag, GitHub prerelease, or `{RELEASE_RECEIPT_ASSET}` exists. Publication and exact
+post-freeze evidence require external readback. This profile does not establish official
 Plugin Directory publication, which requires separate external authority.
 Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so
 `aar-codex-mcp` and its declared IPython, NumPy, and pandas dependencies are available, then run
@@ -203,9 +203,9 @@ selected, digest-verified source artifacts and an already available external Cod
     hermes_readme = f"""# Hermes host profile
 
 Release package: `{PACKAGE_VERSION}`; bundled operation skill: `{OPERATION_SKILL_VERSION}`. The
-source repository's immutable release snapshot is `profiles/release-status-v1.json`; exact
-post-freeze evidence is bound by
-`{RELEASE_RECEIPT_ASSET}`. This profile does not establish official
+source repository's release contract is `profiles/release-status-v1.json`; it does not establish
+that the target tag, GitHub prerelease, or `{RELEASE_RECEIPT_ASSET}` exists. Publication and exact
+post-freeze evidence require external readback. This profile does not establish official
 Plugin Directory publication, which requires separate external authority.
 Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so `aar-mcp`
 and its declared IPython, NumPy, and pandas dependencies are on the Hermes host PATH, then install

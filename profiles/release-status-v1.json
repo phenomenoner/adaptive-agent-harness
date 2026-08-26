@@ -1,7 +1,9 @@
 {
   "schema_id": "aar.release-status.v1",
   "snapshot": {
-    "scope": "immutable_release_snapshot",
+    "scope": "release_contract_snapshot",
+    "publication_status": "not_established_by_source",
+    "publication_authority": "external_readback_only",
     "version": "0.6.0a1",
     "tag": "v0.6.0a1",
     "operation_skill_version": "0.11.0",
