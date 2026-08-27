@@ -13,9 +13,10 @@ from aar.mcp.server import build_server
 from aar.runtime.ownership import RuntimeOwnershipConflict, RuntimeOwnershipLock
 
 
-def test_runtime_ownership_lock_is_mode_0600_under_permissive_umask(tmp_path: Path) -> None:
+def test_runtime_ownership_uses_database_inode_without_auxiliary_artifact(
+    tmp_path: Path,
+) -> None:
     database = tmp_path / "mode.sqlite3"
-    canonical_lock = tmp_path / "supervisor" / "runtime-owner.lock"
     previous = os.umask(0)
     try:
         ownership = RuntimeOwnershipLock(database)
@@ -23,33 +24,23 @@ def test_runtime_ownership_lock_is_mode_0600_under_permissive_umask(tmp_path: Pa
         os.umask(previous)
     try:
         assert stat.S_IMODE(ownership.path.stat().st_mode) == 0o600
-        assert stat.S_IMODE(ownership.path.parent.stat().st_mode) == 0o700
-        assert ownership.path == canonical_lock
+        assert ownership.path == database.resolve()
         assert not Path(f"{database}.runtime.lock").exists()
+        assert not (tmp_path / "supervisor").exists()
+        with sqlite3.connect(database) as connection:
+            connection.execute("CREATE TABLE probe(value INTEGER NOT NULL)")
+            connection.execute("INSERT INTO probe(value) VALUES (42)")
+            connection.commit()
+            assert connection.execute("SELECT value FROM probe").fetchone() == (42,)
     finally:
         ownership.close()
 
 
-@pytest.mark.parametrize("variant", ("directory-mode", "directory-symlink", "lock-mode"))
-def test_runtime_ownership_rejects_unsafe_private_state(tmp_path: Path, variant: str) -> None:
+def test_runtime_ownership_rejects_non_file_database_path(tmp_path: Path) -> None:
     database = tmp_path / "runtime.sqlite3"
-    private_directory = tmp_path / "supervisor"
-    if variant == "directory-symlink":
-        if os.name == "nt":
-            pytest.skip("Windows symlink creation is privilege-dependent")
-        foreign = tmp_path / "foreign"
-        foreign.mkdir(mode=0o700)
-        private_directory.symlink_to(foreign, target_is_directory=True)
-    else:
-        private_directory.mkdir(mode=0o700)
-        if variant == "directory-mode":
-            private_directory.chmod(0o755)
-        else:
-            lock = private_directory / "runtime-owner.lock"
-            lock.write_text("pid=1\n", encoding="ascii")
-            lock.chmod(0o644)
+    database.mkdir()
 
-    with pytest.raises(RuntimeOwnershipConflict, match=r"owner-only|real directory"):
+    with pytest.raises(RuntimeOwnershipConflict, match="not a regular file"):
         RuntimeOwnershipLock(database)
 
 
@@ -121,4 +112,7 @@ def test_runtime_ownership_is_released_by_hard_process_exit(tmp_path: Path) -> N
         process.wait(timeout=10)
 
     with RuntimeOwnershipLock(database) as ownership:
-        assert ownership.path.read_text(encoding="ascii") == f"pid={os.getpid()}\n"
+        assert ownership.path == database.resolve()
+        assert ownership.path.is_file()
+        assert not Path(f"{database}.runtime.lock").exists()
+        assert not (tmp_path / "supervisor").exists()

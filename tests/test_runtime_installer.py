@@ -855,7 +855,8 @@ def test_startup_readback_accepts_only_valid_postpublication_runtime_state(
     supervisor = target / "supervisor"
     supervisor.mkdir(mode=0o700)
     with RuntimeOwnershipLock(target / DATABASE_NAME) as ownership:
-        assert stat.S_IMODE(ownership.path.stat().st_mode) == 0o600
+        assert ownership.path == (target / DATABASE_NAME).resolve()
+        assert not (supervisor / "runtime-owner.lock").exists()
 
     with pytest.raises(InstallerError, match="FRESH_INSTALL_READBACK_FAILED"):
         verify_published_install(target)
