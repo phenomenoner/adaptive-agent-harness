@@ -221,7 +221,6 @@ class SupervisorService:
             model_broker_registry=self.model_broker_registry,
             default_model_route_profile=self.default_model_route_profile,
             provider_ready_startup=self.provider_ready_startup,
-            runtime_ownership_path=self.private_dir / "runtime-owner.lock",
         )
         host = self.application.host
         self._append_lifecycle("starting", reason="ownership_acquired")

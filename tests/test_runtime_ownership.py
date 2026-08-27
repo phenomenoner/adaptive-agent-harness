@@ -15,18 +15,42 @@ from aar.runtime.ownership import RuntimeOwnershipConflict, RuntimeOwnershipLock
 
 def test_runtime_ownership_lock_is_mode_0600_under_permissive_umask(tmp_path: Path) -> None:
     database = tmp_path / "mode.sqlite3"
-    explicit_lock = tmp_path / "private" / "runtime-owner.lock"
+    canonical_lock = tmp_path / "supervisor" / "runtime-owner.lock"
     previous = os.umask(0)
     try:
-        ownership = RuntimeOwnershipLock(database, lock_path=explicit_lock)
+        ownership = RuntimeOwnershipLock(database)
     finally:
         os.umask(previous)
     try:
         assert stat.S_IMODE(ownership.path.stat().st_mode) == 0o600
-        assert ownership.path == explicit_lock
+        assert stat.S_IMODE(ownership.path.parent.stat().st_mode) == 0o700
+        assert ownership.path == canonical_lock
         assert not Path(f"{database}.runtime.lock").exists()
     finally:
         ownership.close()
+
+
+@pytest.mark.parametrize("variant", ("directory-mode", "directory-symlink", "lock-mode"))
+def test_runtime_ownership_rejects_unsafe_private_state(tmp_path: Path, variant: str) -> None:
+    database = tmp_path / "runtime.sqlite3"
+    private_directory = tmp_path / "supervisor"
+    if variant == "directory-symlink":
+        if os.name == "nt":
+            pytest.skip("Windows symlink creation is privilege-dependent")
+        foreign = tmp_path / "foreign"
+        foreign.mkdir(mode=0o700)
+        private_directory.symlink_to(foreign, target_is_directory=True)
+    else:
+        private_directory.mkdir(mode=0o700)
+        if variant == "directory-mode":
+            private_directory.chmod(0o755)
+        else:
+            lock = private_directory / "runtime-owner.lock"
+            lock.write_text("pid=1\n", encoding="ascii")
+            lock.chmod(0o644)
+
+    with pytest.raises(RuntimeOwnershipConflict, match=r"owner-only|real directory"):
+        RuntimeOwnershipLock(database)
 
 
 def current_generation(database: Path) -> int:

@@ -12,13 +12,30 @@ class RuntimeOwnershipConflict(RuntimeError):
 class RuntimeOwnershipLock:
     """Process-scoped non-blocking ownership for one reference-host database."""
 
+    _PRIVATE_DIRECTORY_NAME = "supervisor"
+    _LOCK_FILE_NAME = "runtime-owner.lock"
     _WINDOWS_LOCK_OFFSET = 4_096
 
-    def __init__(self, database_path: Path, *, lock_path: Path | None = None) -> None:
+    def __init__(self, database_path: Path) -> None:
         database_path = database_path.resolve()
-        requested_lock = Path(f"{database_path}.runtime.lock") if lock_path is None else lock_path
-        requested_lock.parent.mkdir(parents=True, exist_ok=True)
-        self.path = requested_lock.parent.resolve() / requested_lock.name
+        private_directory = database_path.parent / self._PRIVATE_DIRECTORY_NAME
+        private_directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        directory_state = os.lstat(private_directory)
+        reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+        if (
+            not stat.S_ISDIR(directory_state.st_mode)
+            or stat.S_ISLNK(directory_state.st_mode)
+            or bool(getattr(directory_state, "st_file_attributes", 0) & reparse_flag)
+        ):
+            raise RuntimeOwnershipConflict(
+                "reference-host runtime lock directory is not a real directory: "
+                f"{private_directory}"
+            )
+        if os.name != "nt" and stat.S_IMODE(directory_state.st_mode) & 0o077:
+            raise RuntimeOwnershipConflict(
+                f"reference-host runtime lock directory is not owner-only: {private_directory}"
+            )
+        self.path = private_directory / self._LOCK_FILE_NAME
         flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0)
         if os.name != "nt":
             flags |= getattr(os, "O_NOFOLLOW", 0)
@@ -28,6 +45,10 @@ class RuntimeOwnershipLock:
             if not stat.S_ISREG(observed.st_mode):
                 raise RuntimeOwnershipConflict(
                     f"reference-host runtime lock is not a regular file: {self.path}"
+                )
+            if os.name != "nt" and stat.S_IMODE(observed.st_mode) != 0o600:
+                raise RuntimeOwnershipConflict(
+                    f"reference-host runtime lock is not owner-only: {self.path}"
                 )
             self._stream = os.fdopen(descriptor, "r+b")
         except BaseException:

@@ -946,7 +946,6 @@ def build_server(
     mcp_sampling_transport: McpSamplingGatewayTransport | None = None,
     workbench_backend_availability: dict[str, dict[str, Any]] | None = None,
     provider_ready_startup: ProviderReadyStartup | None = None,
-    runtime_ownership_path: Path | None = None,
 ) -> AarMcpApplication:
     if provider_ready_startup is not None:
         # Do this before the ownership lock or database-parent mkdir.  Supervisor
@@ -959,7 +958,7 @@ def build_server(
         )
     database_path = database_path.resolve()
     database_path.parent.mkdir(parents=True, exist_ok=True)
-    runtime_ownership = RuntimeOwnershipLock(database_path, lock_path=runtime_ownership_path)
+    runtime_ownership = RuntimeOwnershipLock(database_path)
     try:
         host = ReferenceHost(
             database_path,
