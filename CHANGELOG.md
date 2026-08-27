@@ -28,6 +28,9 @@ establish official Plugin Directory publication, which requires separate externa
   write; static reference grants and `aar_reference_context` cannot authorize provider-ready writes;
   caller-work claim additionally requires the ticket method's exact current executable adapter
   identity and generation before reserving a send;
+- `aar-admin activation verify` joins the supplied profile to the exact installed candidate,
+  activation history, current authority, and registry without mutation; a valid foreign profile or
+  incomplete installed authority fails closed;
 - Windows single-runtime ownership uses one process-owned, first-instance named-pipe handle with no
   retained lock artifact, preventing concurrent local owners without thread-recursive mutex behavior;
 - a post-send lost or mismatched authority response is indeterminate and is never silently retried;

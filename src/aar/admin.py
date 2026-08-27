@@ -17,11 +17,13 @@ from aar.runtime.installer import (
     InstallResult,
     PublicationIndeterminate,
     install_clean_runtime,
+    verify_published_install,
 )
 from aar.runtime.operator import (
     OperatorError,
     activation_status,
     emit_canonical,
+    load_activation_profile,
     verify_activation_profile,
 )
 
@@ -95,7 +97,17 @@ def _run_read_only(args: argparse.Namespace) -> int:
         emit_canonical(activation_status(args.runtime_home))
         return 0
     if command == ("activation", "verify"):
-        emit_canonical(verify_activation_profile(args.runtime_home, args.profile))
+        supplied_profile = load_activation_profile(args.profile)
+        installed = verify_published_install(args.runtime_home, allow_runtime_state=True)
+        emit_canonical(
+            verify_activation_profile(
+                args.runtime_home,
+                supplied_profile=supplied_profile,
+                installed_profile=installed.profile,
+                installed_authority=installed.authority,
+                installed_candidate=installed.receipt.candidate,
+            )
+        )
         return 0
     raise AssertionError(f"unhandled read-only command: {command!r}")
 

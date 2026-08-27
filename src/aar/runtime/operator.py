@@ -22,9 +22,14 @@ from urllib.parse import quote
 from pydantic import ValidationError
 
 from aar.canonical import canonical_json_bytes, canonical_sha256
-from aar.provider_ready_models import HostActivationIntent, HostActivationProfile
+from aar.provider_ready_models import (
+    HostActivationIntent,
+    HostActivationProfile,
+    ProviderReadyCandidate,
+)
 from aar.provider_ready_operator_models import (
     CUTOVER_PLAN_SCHEMA_VERSION,
+    ActivationGenerationAuthority,
     CandidateBinding,
     CutoverPlan,
     DatabaseChecks,
@@ -562,18 +567,75 @@ def activation_status(runtime_home: Path, *, now_ms: int | None = None) -> Activ
 
 def verify_activation_profile(
     runtime_home: Path,
-    profile_path: Path,
     *,
+    supplied_profile: HostActivationProfile,
+    installed_profile: HostActivationProfile,
+    installed_authority: ActivationGenerationAuthority,
+    installed_candidate: ProviderReadyCandidate,
     now_ms: int | None = None,
 ) -> ActivationReadback:
-    """Strictly load supplied bytes before returning the read-only registry status.
+    """Join supplied profile bytes to the exact immutable installed authority."""
 
-    Full v6 history/factory/grant verification is composed by C1/C2.  B1 does
-    not fabricate an activated verdict.
-    """
-
-    load_activation_profile(profile_path)
-    return activation_status(runtime_home, now_ms=now_ms)
+    if supplied_profile != installed_profile:
+        raise OperatorError(
+            "ACTIVATION_BINDING_MISMATCH",
+            "supplied activation profile does not belong to the installed runtime",
+        )
+    observation = inspect_registry(RuntimeHomePaths.resolve(runtime_home))
+    if observation.schema_version != 6:
+        raise OperatorError(
+            "ACTIVATION_BINDING_MISMATCH",
+            "installed activation profile requires a v6 registry",
+        )
+    intent = installed_profile.intent
+    authority = installed_authority
+    candidate = CandidateBinding.model_validate(
+        installed_candidate.model_dump(mode="python"), strict=True
+    )
+    observed = time.time_ns() // 1_000_000 if now_ms is None else now_ms
+    return ActivationReadback.issue(
+        schema_version=ACTIVATION_READBACK_SCHEMA_VERSION,
+        observed_at_unix_ms=observed,
+        state="profile_verified",
+        reason_code="none",
+        runtime_generation=None,
+        supervisor_process_identity_digest=None,
+        candidate=candidate,
+        registry_schema_version=6,
+        registry_schema_digest=observation.schema_digest,
+        migration_attestation_digest=installed_profile.migration_attestation_digest,
+        profile_id=intent.profile_id,
+        activation_generation=intent.activation_generation,
+        intent_digest=intent.intent_digest,
+        profile_digest=installed_profile.profile_digest,
+        previous_activation_authority_digest=authority.previous_activation_authority_digest,
+        activation_authority_digest=authority.authority_digest,
+        grant_set_digest=None,
+        capability_digest=None,
+        broker_catalog_digest=None,
+        tool_surface_digest=None,
+        methods=_unconfigured_methods(),
+        planner=PlannerReadback(
+            mode=None,
+            ready=False,
+            factory_id=None,
+            factory_digest=None,
+            method_manifest_digest=None,
+        ),
+        route_catalog_digest=intent.routes.catalog_digest,
+        route_profile_ids=intent.routes.allowed_profile_ids,
+        authority_store_id=authority.authority_store_id,
+        authority_history_tip_digest=authority.authority_digest,
+        operator_epoch_kind=None,
+        operator_epoch=None,
+        latest_operator_receipt_digest=None,
+        evidence_sources=(
+            "activation_current",
+            "activation_history",
+            "installed_assets",
+            "registry",
+        ),
+    )
 
 
 def emit_canonical(document: Any, *, stream: Any = None) -> None:

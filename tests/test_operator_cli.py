@@ -78,7 +78,7 @@ def test_activation_status_is_strict_read_only(
     assert _snapshot(runtime_home) == before
 
 
-def test_activation_verify_validates_supplied_bytes_without_mutation(
+def test_activation_verify_rejects_noninstalled_runtime_without_mutation(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -96,13 +96,12 @@ def test_activation_verify_validates_supplied_bytes_without_mutation(
                 str(VALID / "final-profile.json"),
             ]
         )
-        == 0
+        == 2
     )
 
     captured = capsys.readouterr()
-    readback = ActivationReadback.model_validate_json(captured.out, strict=True)
-    assert readback.state == "migration_required"
-    assert captured.err == ""
+    assert captured.out == ""
+    assert "FRESH_INSTALL_READBACK_FAILED" in captured.err
     assert _snapshot(runtime_home) == before
 
 

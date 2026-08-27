@@ -33,6 +33,7 @@ from aar.provider_ready_models import (
     ProviderReadyCandidate,
 )
 from aar.provider_ready_operator_inputs import issue_initial_host_activation_intent
+from aar.provider_ready_operator_models import CandidateBinding
 from aar.provider_ready_package_factory import (
     PACKAGE_FACTORY_DECLARATIONS,
     PACKAGE_FACTORY_WHEEL_MEMBER,
@@ -778,7 +779,7 @@ def _installed_runtime(tmp_path: Path) -> Path:
     return target
 
 
-def test_installed_v6_activation_verify_reports_reconcile_without_mutation(
+def test_installed_v6_activation_verify_reads_exact_authority_without_mutation(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -801,13 +802,58 @@ def test_installed_v6_activation_verify_reports_reconcile_without_mutation(
 
     captured = capsys.readouterr()
     readback = ActivationReadback.model_validate_json(captured.out, strict=True)
-    assert readback.state == "recovery_required"
-    assert readback.reason_code == "RECONCILE_INPUT_REQUIRED"
+    installed = verify_published_install(target)
+    assert readback.state == "profile_verified"
+    assert readback.reason_code == "none"
     assert readback.registry_schema_version == 6
-    assert readback.evidence_sources == ("registry",)
-    assert "REGISTRY_VERSION_UNSUPPORTED" not in captured.out
+    assert readback.candidate == CandidateBinding.model_validate(
+        installed.receipt.candidate.model_dump(mode="python"), strict=True
+    )
+    assert readback.profile_id == installed.profile.intent.profile_id
+    assert readback.profile_digest == installed.profile.profile_digest
+    assert readback.activation_authority_digest == installed.authority.authority_digest
+    assert readback.authority_history_tip_digest == installed.authority.authority_digest
+    assert readback.evidence_sources == (
+        "activation_current",
+        "activation_history",
+        "installed_assets",
+        "registry",
+    )
     assert captured.err == ""
     assert _path_snapshot(target) == before
+
+
+def test_installed_v6_activation_verify_rejects_valid_foreign_profile_without_mutation(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    first_inputs = tmp_path / "first"
+    second_inputs = tmp_path / "second"
+    first_inputs.mkdir()
+    second_inputs.mkdir()
+    first = _installed_runtime(first_inputs)
+    second = _installed_runtime(second_inputs)
+    first_before = _path_snapshot(first)
+    second_before = _path_snapshot(second)
+
+    assert (
+        admin.main(
+            [
+                "activation",
+                "verify",
+                "--runtime-home",
+                str(first),
+                "--profile",
+                str(second / "authority" / "profile.json"),
+            ]
+        )
+        == 2
+    )
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "ACTIVATION_BINDING_MISMATCH" in captured.err
+    assert _path_snapshot(first) == first_before
+    assert _path_snapshot(second) == second_before
 
 
 def test_startup_readback_accepts_only_valid_postpublication_runtime_state(

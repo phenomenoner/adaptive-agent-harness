@@ -856,21 +856,23 @@ def test_A_GRANT_010_client_authored_grant_bytes_are_not_authority(
 
 
 @pytest.mark.parametrize(
-    ("mutation", "omit_row"),
+    ("mutation", "omit_row", "host_generation"),
     (
-        ({"contract_id": "aar.wrong-contract.v1"}, False),
-        ({"configured": False}, False),
-        ({"reference_only": True}, False),
-        ({"backend_kind": "reference"}, False),
-        ({"adapter_id": "foreign-adapter"}, False),
-        ({"adapter_generation": 6}, False),
-        ({}, True),
+        ({"contract_id": "aar.wrong-contract.v1"}, False, 7),
+        ({"configured": False}, False, 7),
+        ({"reference_only": True}, False, 7),
+        ({"backend_kind": "reference"}, False, 7),
+        ({"adapter_id": "foreign-adapter"}, False, 7),
+        ({"adapter_generation": 6}, False, 6),
+        ({}, False, 6),
+        ({}, True, 7),
     ),
 )
 def test_A_C03_current_claim_adapter_helper_rejects_every_noncurrent_row_axis(
     monkeypatch: pytest.MonkeyPatch,
     mutation: dict[str, object],
     omit_row: bool,
+    host_generation: int,
 ) -> None:
     request = {
         "method": "model.request",
@@ -886,7 +888,7 @@ def test_A_C03_current_claim_adapter_helper_rejects_every_noncurrent_row_axis(
     }
     row.update(mutation)
     host: Any = SimpleNamespace(
-        runtime_generation=7,
+        runtime_generation=host_generation,
         caller_work=SimpleNamespace(
             get=lambda _ticket_id: SimpleNamespace(root={"request": request})
         ),

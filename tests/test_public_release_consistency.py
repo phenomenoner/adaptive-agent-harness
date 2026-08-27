@@ -270,6 +270,19 @@ def test_stale_current_version_negative_fixtures_are_rejected(fixture: str) -> N
         _assert_no_stale_current_authority(fixture, surface="synthetic fixture")
 
 
+def _assert_current_tool_surface(text: str, *, surface: str) -> None:
+    current_tool_lines = [line for line in text.splitlines()[:200] if "38" in line and "v8" in line]
+    assert len(current_tool_lines) == 1, f"{surface} omits the current 38-tool v8 surface"
+
+
+def test_stale_current_tool_count_negative_fixture_is_rejected() -> None:
+    with pytest.raises(AssertionError, match="omits the current 38-tool v8 surface"):
+        _assert_current_tool_surface(
+            "Current public MCP surface: 30 tools on v7.",
+            surface="synthetic stale tool-count fixture",
+        )
+
+
 @pytest.mark.parametrize("path", CURRENT_INSTALL_GUIDES)
 def test_current_install_guidance_preserves_both_restart_receipt_paths(path: str) -> None:
     _assert_restart_handoff(_surface(path), surface=path)
@@ -296,8 +309,7 @@ def test_translated_quick_starts_preserve_current_release_boundary(path: str) ->
     assert "releases/tag/v0.6.0a1" not in text
     assert "Use only after external GitHub readback confirms the target tag exists." in text
     assert "release-contract evidence represented by this source" in text
-    current_tool_lines = [line for line in text.splitlines()[:200] if "38" in line and "v8" in line]
-    assert len(current_tool_lines) == 1, f"{path} omits the current 38-tool v8 surface"
+    _assert_current_tool_surface(text, surface=path)
 
 
 def test_generated_codex_profile_matches_source() -> None:
