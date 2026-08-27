@@ -13,7 +13,7 @@ class RuntimeOwnershipConflict(RuntimeError):
 class RuntimeOwnershipLock:
     """Process-scoped non-blocking ownership for one reference-host database."""
 
-    _WINDOWS_MUTEX_PREFIX = "Local\\AAR.RuntimeOwnership."
+    _WINDOWS_PIPE_PREFIX = r"\\.\pipe\AAR.RuntimeOwnership."
 
     def __init__(self, database_path: Path) -> None:
         self.path = database_path.resolve()
@@ -22,7 +22,7 @@ class RuntimeOwnershipLock:
                 f"reference-host database is not a regular file: {self.path}"
             )
         self._stream = None
-        self._windows_mutex = None
+        self._windows_pipe = None
         if os.name == "nt":
             self._lock_windows()
         else:
@@ -67,36 +67,148 @@ class RuntimeOwnershipLock:
         import ctypes
         from ctypes import wintypes
 
+        class SecurityAttributes(ctypes.Structure):
+            _fields_ = (
+                ("length", wintypes.DWORD),
+                ("security_descriptor", ctypes.c_void_p),
+                ("inherit_handle", wintypes.BOOL),
+            )
+
+        class SidAndAttributes(ctypes.Structure):
+            _fields_ = (
+                ("sid", ctypes.c_void_p),
+                ("attributes", wintypes.DWORD),
+            )
+
+        class TokenUser(ctypes.Structure):
+            _fields_ = (("user", SidAndAttributes),)
+
         win_dll = ctypes.WinDLL  # type: ignore[attr-defined]
         get_last_error = ctypes.get_last_error  # type: ignore[attr-defined]
         win_error = ctypes.WinError  # type: ignore[attr-defined]
         kernel32 = win_dll("kernel32", use_last_error=True)
-        create_mutex = kernel32.CreateMutexW
-        create_mutex.argtypes = (ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR)
-        create_mutex.restype = wintypes.HANDLE
-        wait_for_single_object = kernel32.WaitForSingleObject
-        wait_for_single_object.argtypes = (wintypes.HANDLE, wintypes.DWORD)
-        wait_for_single_object.restype = wintypes.DWORD
+        advapi32 = win_dll("advapi32", use_last_error=True)
+
+        get_current_process = kernel32.GetCurrentProcess
+        get_current_process.argtypes = ()
+        get_current_process.restype = wintypes.HANDLE
+        open_process_token = advapi32.OpenProcessToken
+        open_process_token.argtypes = (
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.HANDLE),
+        )
+        open_process_token.restype = wintypes.BOOL
+        get_token_information = advapi32.GetTokenInformation
+        get_token_information.argtypes = (
+            wintypes.HANDLE,
+            ctypes.c_int,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+        )
+        get_token_information.restype = wintypes.BOOL
+        convert_sid_to_string = advapi32.ConvertSidToStringSidW
+        convert_sid_to_string.argtypes = (
+            ctypes.c_void_p,
+            ctypes.POINTER(wintypes.LPWSTR),
+        )
+        convert_sid_to_string.restype = wintypes.BOOL
+        convert_sddl = advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW
+        convert_sddl.argtypes = (
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            ctypes.POINTER(ctypes.c_void_p),
+            ctypes.POINTER(wintypes.DWORD),
+        )
+        convert_sddl.restype = wintypes.BOOL
+        local_free = kernel32.LocalFree
+        local_free.argtypes = (ctypes.c_void_p,)
+        local_free.restype = ctypes.c_void_p
         close_handle = kernel32.CloseHandle
         close_handle.argtypes = (wintypes.HANDLE,)
         close_handle.restype = wintypes.BOOL
 
+        token = wintypes.HANDLE()
+        if not open_process_token(get_current_process(), 0x0008, ctypes.byref(token)):
+            raise win_error(get_last_error())
+        sid_text = wintypes.LPWSTR()
+        try:
+            required = wintypes.DWORD()
+            get_token_information(token, 1, None, 0, ctypes.byref(required))
+            error_code = get_last_error()
+            if required.value == 0 or error_code != 122:
+                raise win_error(error_code)
+            token_buffer = ctypes.create_string_buffer(required.value)
+            if not get_token_information(
+                token,
+                1,
+                token_buffer,
+                required.value,
+                ctypes.byref(required),
+            ):
+                raise win_error(get_last_error())
+            token_user = ctypes.cast(
+                token_buffer, ctypes.POINTER(TokenUser)
+            ).contents
+            if not convert_sid_to_string(token_user.user.sid, ctypes.byref(sid_text)):
+                raise win_error(get_last_error())
+            account_sid = sid_text.value
+            if not account_sid:
+                raise RuntimeError("Windows account SID was empty")
+        finally:
+            if sid_text:
+                local_free(ctypes.cast(sid_text, ctypes.c_void_p))
+            close_handle(token)
+
+        security_descriptor = ctypes.c_void_p()
+        sddl = f"D:P(A;;0x0012008d;;;{account_sid})"
+        if not convert_sddl(sddl, 1, ctypes.byref(security_descriptor), None):
+            raise win_error(get_last_error())
+        security_attributes = SecurityAttributes(
+            ctypes.sizeof(SecurityAttributes),
+            security_descriptor,
+            False,
+        )
+        create_named_pipe = kernel32.CreateNamedPipeW
+        create_named_pipe.argtypes = (
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            ctypes.POINTER(SecurityAttributes),
+        )
+        create_named_pipe.restype = wintypes.HANDLE
+
         identity = os.path.normcase(str(self.path)).encode("utf-8")
-        mutex_name = self._WINDOWS_MUTEX_PREFIX + hashlib.sha256(identity).hexdigest()
-        handle = create_mutex(None, False, mutex_name)
+        pipe_name = self._WINDOWS_PIPE_PREFIX + hashlib.sha256(identity).hexdigest()
+        try:
+            handle = create_named_pipe(
+                pipe_name,
+                0x00080001,
+                0x00000009,
+                1,
+                0,
+                1,
+                0,
+                ctypes.byref(security_attributes),
+            )
+            invalid_handle = ctypes.c_void_p(-1).value
+            error_code = get_last_error() if handle == invalid_handle else 0
+        finally:
+            local_free(security_descriptor)
+        if handle == invalid_handle:
+            if error_code in (5, 183, 231):
+                raise RuntimeOwnershipConflict(
+                    f"reference-host database already has a live owner: {self.path}"
+                )
+            raise win_error(error_code)
         if not handle:
             raise win_error(get_last_error())
-        wait_result = wait_for_single_object(handle, 0)
-        if wait_result in (0x00000000, 0x00000080):
-            self._windows_mutex = handle
-            return
-        error_code = get_last_error()
-        close_handle(handle)
-        if wait_result == 0x00000102:
-            raise RuntimeOwnershipConflict(
-                f"reference-host database already has a live owner: {self.path}"
-            )
-        raise win_error(error_code)
+        self._windows_pipe = handle
 
     def close(self) -> None:
         if os.name == "nt":
@@ -114,10 +226,10 @@ class RuntimeOwnershipLock:
             stream.close()
 
     def _close_windows(self) -> None:
-        handle = self._windows_mutex
+        handle = self._windows_pipe
         if handle is None:
             return
-        self._windows_mutex = None
+        self._windows_pipe = None
         import ctypes
         from ctypes import wintypes
 
@@ -125,18 +237,11 @@ class RuntimeOwnershipLock:
         get_last_error = ctypes.get_last_error  # type: ignore[attr-defined]
         win_error = ctypes.WinError  # type: ignore[attr-defined]
         kernel32 = win_dll("kernel32", use_last_error=True)
-        release_mutex = kernel32.ReleaseMutex
-        release_mutex.argtypes = (wintypes.HANDLE,)
-        release_mutex.restype = wintypes.BOOL
         close_handle = kernel32.CloseHandle
         close_handle.argtypes = (wintypes.HANDLE,)
         close_handle.restype = wintypes.BOOL
-        release_error = None
-        if not release_mutex(handle):
-            release_error = win_error(get_last_error())
-        close_handle(handle)
-        if release_error is not None:
-            raise release_error
+        if not close_handle(handle):
+            raise win_error(get_last_error())
 
     def __enter__(self) -> RuntimeOwnershipLock:
         return self

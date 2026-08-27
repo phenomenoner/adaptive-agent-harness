@@ -90,7 +90,7 @@ from aar.runtime.brokers import (
     BrokerCallIndeterminate,
     BrokerGrantDenied,
 )
-from aar.runtime.caller_work import CallerWorkError
+from aar.runtime.caller_work import CallerWorkConflict, CallerWorkError
 from aar.runtime.ipython_backend import WorkspaceWorkerLost, WorkspaceWorkerProtocolError
 from aar.runtime.model_broker import ModelBrokerRegistry, StaticModelBrokerRegistry
 from aar.runtime.models import WorkspaceExecuteSpec, WorkspaceHandle
@@ -837,6 +837,30 @@ CALLER_WORK_METHOD_CAPABILITIES = {
 }
 
 
+def _assert_current_claim_adapter(host: ReferenceHost, document: dict[str, Any]) -> None:
+    """Bind an untrusted claim pair to the ticket method's immutable current row."""
+
+    if host.caller_work is None:
+        raise ReferenceHostError("caller-work repository is unavailable")
+    ticket = host.caller_work.get(str(document["ticket_id"]))
+    request = ticket.root["request"]
+    rows = {
+        row["method"]: row for row in _workbench_capability(host).root["methods"]
+    }
+    row = rows.get(request["method"])
+    if (
+        row is None
+        or row["contract_id"] != request["contract_id"]
+        or not row["configured"]
+        or row["reference_only"]
+        or row["backend_kind"] != "caller_driver"
+        or row["adapter_id"] != document["adapter_id"]
+        or row["adapter_generation"] != document["adapter_generation"]
+        or row["adapter_generation"] != host.runtime_generation
+    ):
+        raise CallerWorkConflict("claim adapter is not current for ticket method")
+
+
 def _run_caller_work_command(
     host: ReferenceHost,
     model_type: type[Any],
@@ -859,6 +883,8 @@ def _run_caller_work_command(
     )
     if host.caller_work is None:
         raise ReferenceHostError("caller-work repository is unavailable")
+    if method_name == "claim":
+        _assert_current_claim_adapter(host, document)
     method = getattr(host.caller_work, method_name)
     return _workbench_result(method(document))
 

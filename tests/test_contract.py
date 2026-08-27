@@ -234,5 +234,21 @@ def test_every_mutating_mcp_handler_reaches_current_authority_admission() -> Non
         if isinstance(call, ast.Call)
     }
     assert "_assert_workbench_operation_binding" in caller_helper_calls
+    assert "_assert_current_claim_adapter" in caller_helper_calls
+    caller_helper_source = ast.unparse(functions["_run_caller_work_command"])
+    assert caller_helper_source.index("_assert_current_claim_adapter") < caller_helper_source.index(
+        "getattr"
+    )
+    claim_adapter_source = ast.unparse(functions["_assert_current_claim_adapter"])
+    for required_guard in (
+        "row['contract_id'] != request['contract_id']",
+        "not row['configured']",
+        "row['reference_only']",
+        "row['backend_kind'] != 'caller_driver'",
+        "row['adapter_id'] != document['adapter_id']",
+        "row['adapter_generation'] != document['adapter_generation']",
+        "row['adapter_generation'] != host.runtime_generation",
+    ):
+        assert required_guard in claim_adapter_source
     binding_source = ast.unparse(functions["_assert_workbench_operation_binding"])
     assert "host.provider_ready_startup.resolve_session_grants" in binding_source

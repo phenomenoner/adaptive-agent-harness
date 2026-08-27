@@ -5,10 +5,12 @@ source repository's release contract is `profiles/release-status-v1.json`; it do
 that the target tag, GitHub prerelease, or `adaptive-agent-runtime-v0.6.0a1-release-receipt.json` exists. Publication and exact
 post-freeze evidence require external readback. This profile does not establish official
 Plugin Directory publication, which requires separate external authority.
-Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so `aar-mcp`
-and its declared IPython, NumPy, and pandas dependencies are on the Hermes host PATH, then install
-this directory with `hermes profile install <directory> --name <profile>`. The runtime reads
-`config.yaml.mcp_servers`; `mcp.json` is the equivalent reviewable server map.
+Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so
+`aar-hermes-mcp` and its declared IPython, NumPy, and pandas dependencies are on the Hermes host
+PATH, then install this directory with `hermes profile install <directory> --name <profile>`. Set
+the three required profile values to the reviewed absolute runtime home, host-owned route catalog,
+and allowed default route profile. The runtime reads `config.yaml.mcp_servers`; `mcp.json` is the
+equivalent reviewable server map. Unset placeholders remain literal and the launcher fails closed.
 
 The profile provides ordinary MCP operations and host-owned RLM model calls. It contains no provider
 credentials and does not authorize billable inference. A Hermes client may own the physical call and

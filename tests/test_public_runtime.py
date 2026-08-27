@@ -7,6 +7,7 @@ import pytest
 from aar.mcp.public_auth import PublicIdentity
 from aar.mcp.public_rlm_models import PublicRlmJobSpec
 from aar.mcp.public_runtime import TenantCapacityExceeded, TenantRuntimePool
+from aar.runtime.ownership import RuntimeOwnershipConflict
 from aar.schemas import WorkspaceRef
 
 
@@ -17,6 +18,25 @@ def _identity(value: str) -> PublicIdentity:
         session_id=f"session-{value}",
         scopes=("aar:rlm", "aar:workspace"),
     )
+
+
+def test_two_tenant_pools_cannot_own_the_same_runtime_concurrently(tmp_path: Path) -> None:
+    data_root = tmp_path / "tenants"
+    first = TenantRuntimePool(data_root, max_active_tenants=1)
+    second = TenantRuntimePool(data_root, max_active_tenants=1)
+    identity = _identity("a")
+    lease = first.acquire(identity)
+    try:
+        with pytest.raises(RuntimeOwnershipConflict, match="already has a live owner"):
+            second.acquire(identity)
+    finally:
+        lease.__exit__(None, None, None)
+        first.close()
+    try:
+        with second.acquire(identity) as successor:
+            assert successor.host.ready().runtime_generation == 2
+    finally:
+        second.close()
 
 
 def test_tenant_pool_evicts_only_idle_runtime_and_reopens_persisted_state(

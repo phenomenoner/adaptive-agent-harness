@@ -18,12 +18,18 @@ establish official Plugin Directory publication, which requires separate externa
 - add explicit `aar-hermes-authority issue/revoke` commands for generation-bound, memory-only session
   grants without startup, attach, reference-context, or ordinary-request auto-issuance;
 - add `host-caller-driver-v1` for real host-owned provider calls through the existing durable
-  caller-work claim/mark-send/commit protocol; direct service-owned sends fail closed.
+  caller-work claim/mark-send/commit protocol; direct service-owned sends fail closed;
+- ship the Hermes profile on `aar-hermes-mcp` with explicit operator-owned absolute runtime-home,
+  route-catalog, and default-route-profile bindings rather than ambient working-directory state.
 
 ### Security and verification boundary
 
 - every provider-ready public mutation requires a current exact session grant before its first durable
   write; static reference grants and `aar_reference_context` cannot authorize provider-ready writes;
+  caller-work claim additionally requires the ticket method's exact current executable adapter
+  identity and generation before reserving a send;
+- Windows single-runtime ownership uses one system-wide, first-instance named-pipe handle with no
+  retained lock artifact, so ownership is process-scoped rather than thread-recursive or session-local;
 - a post-send lost or mismatched authority response is indeterminate and is never silently retried;
 - this release remains clean-install-only: it does not adopt, promote, archive, remove, or mutate an
   existing runtime root, and live Hermes cutover requires separate fresh native acceptance evidence.

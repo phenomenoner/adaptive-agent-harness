@@ -6,15 +6,18 @@ import sqlite3
 import stat
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
+import test_mcp_workbench_tools as workbench_tools
 import test_supervisor_provider_ready_integration as provider_ready
 from mcp import Client
 
+import aar.mcp.server as mcp_server_module
 import aar.runtime.provider_ready_startup as startup_module
 import aar.runtime.reference_host as reference_host_module
-from aar.canonical import canonical_json_bytes
+from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.mcp.server import build_server
 from aar.provider_ready_runtime_models import WorkbenchGrantSet
 from aar.rlm_workbench_models import (
@@ -24,6 +27,7 @@ from aar.rlm_workbench_models import (
     normalize_workbench_planner_mode,
     workbench_method_capabilities,
 )
+from aar.runtime.caller_work import CallerWorkConflict
 from aar.runtime.provider_ready_activation import (
     ProviderReadyActivationCoordinator,
     ProviderReadyActivationStore,
@@ -138,6 +142,71 @@ def _call_workbench(
     if spec is not None:
         arguments["spec"] = spec
     return client.call_tool("aar_rlm_workbench_execute", arguments)
+
+
+def _install_pending_caller_ticket(
+    application: Any,
+    database: Path,
+    operation: dict[str, Any],
+    *,
+    ticket_id: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    repository = application.host.caller_work
+    assert repository is not None
+    suspension_revision = 1
+    with sqlite3.connect(database) as connection:
+        row = connection.execute(
+            """
+            SELECT control_revision, cancellation_revision,
+                   cumulative_deadline_unix_ms
+            FROM rlm_workbench_jobs WHERE operation_id = ?
+            """,
+            (operation["value"],),
+        ).fetchone()
+        assert row is not None
+        authority = {
+            "operation": operation,
+            "control_revision": int(row[0]),
+            "cancellation_revision": int(row[1]),
+            "suspension_revision": suspension_revision,
+            "cumulative_deadline_unix_ms": int(row[2]),
+        }
+        ticket = workbench_tools._pending_ticket(
+            operation,
+            suspension_revision=suspension_revision,
+            deadline_unix_ms=int(row[2]),
+            ticket_id=ticket_id,
+        )
+        owner = ticket.root["owner"]
+        request = ticket.root["request"]
+        connection.execute(
+            "UPDATE rlm_workbench_jobs SET phase = 'waiting_external' WHERE operation_id = ?",
+            (operation["value"],),
+        )
+        connection.execute(
+            """
+            INSERT INTO rlm_workbench_suspensions(
+                operation_id, suspension_revision, control_revision,
+                logical_owner_json, logical_owner_digest, broker_method,
+                contract_id, request_digest, ticket_id, state,
+                created_at_unix_ms
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+            """,
+            (
+                operation["value"],
+                suspension_revision,
+                int(row[0]),
+                json.dumps(owner, sort_keys=True, separators=(",", ":")),
+                canonical_sha256(owner),
+                request["method"],
+                request["contract_id"],
+                ticket.root["request_digest"],
+                ticket_id,
+                NOW_MS,
+            ),
+        )
+        connection.commit()
+    return repository.create_ticket(ticket).root, authority
 
 
 @pytest.mark.parametrize(
@@ -782,6 +851,163 @@ def test_A_GRANT_010_client_authored_grant_bytes_are_not_authority(
                 runtime_generation=1,
                 now_unix_ms=NOW_MS + 1,
             )
+    finally:
+        application.close()
+
+
+@pytest.mark.parametrize(
+    ("mutation", "omit_row"),
+    (
+        ({"contract_id": "aar.wrong-contract.v1"}, False),
+        ({"configured": False}, False),
+        ({"reference_only": True}, False),
+        ({"backend_kind": "reference"}, False),
+        ({"adapter_id": "foreign-adapter"}, False),
+        ({"adapter_generation": 6}, False),
+        ({}, True),
+    ),
+)
+def test_A_C03_current_claim_adapter_helper_rejects_every_noncurrent_row_axis(
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: dict[str, object],
+    omit_row: bool,
+) -> None:
+    request = {
+        "method": "model.request",
+        "contract_id": "aar.broker-contract.model-request.v2",
+    }
+    row: dict[str, object] = {
+        **request,
+        "configured": True,
+        "reference_only": False,
+        "backend_kind": "caller_driver",
+        "adapter_id": "current-adapter",
+        "adapter_generation": 7,
+    }
+    row.update(mutation)
+    host: Any = SimpleNamespace(
+        runtime_generation=7,
+        caller_work=SimpleNamespace(
+            get=lambda _ticket_id: SimpleNamespace(root={"request": request})
+        ),
+    )
+    monkeypatch.setattr(
+        mcp_server_module,
+        "_workbench_capability",
+        lambda _host: SimpleNamespace(root={"methods": [] if omit_row else [row]}),
+    )
+
+    with pytest.raises(
+        CallerWorkConflict, match="claim adapter is not current for ticket method"
+    ):
+        mcp_server_module._assert_current_claim_adapter(
+            host,
+            {
+                "ticket_id": "ticket-current-adapter",
+                "adapter_id": "current-adapter",
+                "adapter_generation": 7,
+            },
+        )
+
+
+def test_A_C03_claim_rejects_wrong_or_stale_adapter_before_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application, startup, _readback, database = _provider_application(tmp_path, monkeypatch)
+
+    async def scenario() -> None:
+        async with Client(application.server) as client:
+            capabilities_result = await client.call_tool("aar_capabilities")
+            assert not capabilities_result.is_error
+            assert capabilities_result.structured_content is not None
+            capabilities = capabilities_result.structured_content
+            grant_ids = _issue_grants(
+                startup,
+                suffix="claim-current-adapter",
+                capabilities=("broker.caller.claim", "model.request"),
+            )
+            execute_arguments = provider_ready._execute_arguments(
+                capabilities,
+                suffix="claim-current-adapter-operation",
+                grant_ids=grant_ids,
+            )
+            execute_arguments["spec"]["budgets"]["max_artifact_bytes"] = 0
+            execute_arguments["spec"]["budgets"]["max_subagent_calls"] = 0
+            accepted = await client.call_tool("aar_rlm_workbench_execute", execute_arguments)
+            assert not accepted.is_error
+            assert accepted.structured_content is not None
+            operation = accepted.structured_content["operation"]
+            pending, authority = _install_pending_caller_ticket(
+                application,
+                database,
+                operation,
+                ticket_id="ticket-current-adapter",
+            )
+            current = startup.backend_availability(
+                capabilities["ready"]["runtime_generation"]
+            )[pending["request"]["method"]]
+            base_context = dict(execute_arguments["context"])
+            base = {
+                "context": base_context,
+                "operation": authority["operation"],
+                "expected_control_revision": authority["control_revision"],
+                "expected_cancellation_revision": authority["cancellation_revision"],
+                "expected_suspension_revision": authority["suspension_revision"],
+                "expected_cumulative_deadline_unix_ms": authority[
+                    "cumulative_deadline_unix_ms"
+                ],
+                "ticket_id": pending["ticket_id"],
+                "expected_revision": pending["revision"],
+                "ticket_digest": pending["ticket_digest"],
+                "adapter_id": current["adapter_id"],
+                "adapter_generation": current["adapter_generation"],
+                "claim_lease_ms": 60_000,
+                "idempotency_key": "command-current-adapter",
+            }
+            variants = (
+                ("wrong-id", {"adapter_id": "foreign-adapter"}),
+                (
+                    "stale-generation",
+                    {"adapter_generation": current["adapter_generation"] + 1},
+                ),
+            )
+            for suffix, mutation in variants:
+                command = json.loads(json.dumps(base))
+                command.update(mutation)
+                command["idempotency_key"] = f"command-{suffix}"
+                command["context"].update(
+                    request_id=f"request-{suffix}",
+                    idempotency_key=f"context-{suffix}",
+                )
+                CallerWorkClaimInput.model_validate_json(
+                    canonical_json_bytes(command), strict=True
+                )
+                with sqlite3.connect(database) as connection:
+                    before = "\n".join(connection.iterdump())
+                denied = await client.call_tool("aar_broker_work_claim", command)
+                assert not denied.is_error
+                assert denied.structured_content is not None
+                assert denied.structured_content["code"] == "CALLER_WORK_CONFLICT"
+                assert (
+                    denied.structured_content["message"]
+                    == "claim adapter is not current for ticket method"
+                )
+                with sqlite3.connect(database) as connection:
+                    after = "\n".join(connection.iterdump())
+                assert after == before, suffix
+
+            base["context"].update(
+                request_id="request-current-adapter",
+                idempotency_key="context-current-adapter",
+            )
+            accepted_claim = await client.call_tool("aar_broker_work_claim", base)
+            assert not accepted_claim.is_error
+            assert accepted_claim.structured_content is not None
+            assert accepted_claim.structured_content["state"] == "send_reserved"
+
+    try:
+        asyncio.run(scenario())
     finally:
         application.close()
 

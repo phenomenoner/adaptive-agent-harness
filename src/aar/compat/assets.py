@@ -52,8 +52,15 @@ def _codex_mcp() -> dict[str, Any]:
 def _hermes_mcp() -> dict[str, Any]:
     return {
         "aar": {
-            "args": [],
-            "command": "aar-mcp",
+            "args": [
+                "--runtime-home",
+                "${AAR_RUNTIME_HOME}",
+                "--route-catalog",
+                "${AAR_ROUTE_CATALOG}",
+                "--default-route-profile",
+                "${AAR_DEFAULT_ROUTE_PROFILE}",
+            ],
+            "command": "aar-hermes-mcp",
             "connect_timeout": 30,
             "timeout": 60,
         }
@@ -64,8 +71,14 @@ def _hermes_config() -> bytes:
     return (
         b"mcp_servers:\n"
         b"  aar:\n"
-        b"    command: aar-mcp\n"
-        b"    args: []\n"
+        b"    command: aar-hermes-mcp\n"
+        b"    args:\n"
+        b"      - --runtime-home\n"
+        b"      - ${AAR_RUNTIME_HOME}\n"
+        b"      - --route-catalog\n"
+        b"      - ${AAR_ROUTE_CATALOG}\n"
+        b"      - --default-route-profile\n"
+        b"      - ${AAR_DEFAULT_ROUTE_PROFILE}\n"
         b"    connect_timeout: 30\n"
         b"    timeout: 60\n"
     )
@@ -162,6 +175,16 @@ def host_documents(root: Path) -> dict[Path, bytes]:
         "description: Bounded AAR workspace, RLM, and immutable asset operations over local MCP.\n"
         "hermes_requires: '>=0.19.0'\n"
         "author: phenomenoner\n"
+        "env_requires:\n"
+        "  - name: AAR_RUNTIME_HOME\n"
+        "    description: Absolute path to the installed provider-ready AAR runtime home.\n"
+        "    required: true\n"
+        "  - name: AAR_ROUTE_CATALOG\n"
+        "    description: Absolute path to the host-owned model route catalog JSON.\n"
+        "    required: true\n"
+        "  - name: AAR_DEFAULT_ROUTE_PROFILE\n"
+        "    description: Default route profile ID allowed by the installed AAR authority.\n"
+        "    required: true\n"
         "distribution_owned:\n"
         "  - config.yaml\n"
         "  - mcp.json\n"
@@ -207,10 +230,12 @@ source repository's release contract is `profiles/release-status-v1.json`; it do
 that the target tag, GitHub prerelease, or `{RELEASE_RECEIPT_ASSET}` exists. Publication and exact
 post-freeze evidence require external readback. This profile does not establish official
 Plugin Directory publication, which requires separate external authority.
-Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so `aar-mcp`
-and its declared IPython, NumPy, and pandas dependencies are on the Hermes host PATH, then install
-this directory with `hermes profile install <directory> --name <profile>`. The runtime reads
-`config.yaml.mcp_servers`; `mcp.json` is the equivalent reviewable server map.
+Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so
+`aar-hermes-mcp` and its declared IPython, NumPy, and pandas dependencies are on the Hermes host
+PATH, then install this directory with `hermes profile install <directory> --name <profile>`. Set
+the three required profile values to the reviewed absolute runtime home, host-owned route catalog,
+and allowed default route profile. The runtime reads `config.yaml.mcp_servers`; `mcp.json` is the
+equivalent reviewable server map. Unset placeholders remain literal and the launcher fails closed.
 
 The profile provides ordinary MCP operations and host-owned RLM model calls. It contains no provider
 credentials and does not authorize billable inference. A Hermes client may own the physical call and

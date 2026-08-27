@@ -33,7 +33,7 @@
     },
     "hermes": {
       "bundle": "profiles/hermes/adaptive-agent-runtime",
-      "config_digest": "sha256:49d3ef8a0e4e2a1e7b76fec5e2a9f1f8ccb37b89af55427e4151f41bc3639585",
+      "config_digest": "sha256:7122d4fed2eb81a857224e949bc123ef03dcd4d79189e87bb10f6577b90acffc",
       "config_file": "config.yaml",
       "format": "hermes-profile-distribution"
     }

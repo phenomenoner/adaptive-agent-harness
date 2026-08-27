@@ -3,6 +3,16 @@ version: 0.6.0a1
 description: Bounded AAR workspace, RLM, and immutable asset operations over local MCP.
 hermes_requires: '>=0.19.0'
 author: phenomenoner
+env_requires:
+  - name: AAR_RUNTIME_HOME
+    description: Absolute path to the installed provider-ready AAR runtime home.
+    required: true
+  - name: AAR_ROUTE_CATALOG
+    description: Absolute path to the host-owned model route catalog JSON.
+    required: true
+  - name: AAR_DEFAULT_ROUTE_PROFILE
+    description: Default route profile ID allowed by the installed AAR authority.
+    required: true
 distribution_owned:
   - config.yaml
   - mcp.json
