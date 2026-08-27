@@ -14,7 +14,7 @@ from aar.mcp.server import build_server
 from aar.runtime.ownership import RuntimeOwnershipConflict, RuntimeOwnershipLock
 
 
-def test_windows_runtime_ownership_uses_system_wide_first_instance_pipe() -> None:
+def test_windows_runtime_ownership_uses_process_owned_first_instance_pipe() -> None:
     assert RuntimeOwnershipLock._WINDOWS_PIPE_PREFIX == r"\\.\pipe\AAR.RuntimeOwnership."
     assert not hasattr(RuntimeOwnershipLock, "_WINDOWS_MUTEX_PREFIX")
 

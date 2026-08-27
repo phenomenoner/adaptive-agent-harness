@@ -28,8 +28,8 @@ establish official Plugin Directory publication, which requires separate externa
   write; static reference grants and `aar_reference_context` cannot authorize provider-ready writes;
   caller-work claim additionally requires the ticket method's exact current executable adapter
   identity and generation before reserving a send;
-- Windows single-runtime ownership uses one system-wide, first-instance named-pipe handle with no
-  retained lock artifact, so ownership is process-scoped rather than thread-recursive or session-local;
+- Windows single-runtime ownership uses one process-owned, first-instance named-pipe handle with no
+  retained lock artifact, preventing concurrent local owners without thread-recursive mutex behavior;
 - a post-send lost or mismatched authority response is indeterminate and is never silently retried;
 - this release remains clean-install-only: it does not adopt, promote, archive, remove, or mutate an
   existing runtime root, and live Hermes cutover requires separate fresh native acceptance evidence.
