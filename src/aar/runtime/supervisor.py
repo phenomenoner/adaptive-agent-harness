@@ -70,6 +70,10 @@ class SupervisorAttachRejected(SupervisorError):
     pass
 
 
+class _GrantControlResponseLost(SupervisorError):
+    """A grant changed in memory but its exact response was not delivered."""
+
+
 def _is_reparse_or_symlink(path: Path) -> bool:
     try:
         metadata = path.lstat()
@@ -333,6 +337,7 @@ class SupervisorService:
     async def _handle_client(self, stream: SocketStream) -> None:
         lines = _SocketLines(stream)
         connection_authority = BOOTSTRAP_AUTHORITY_DIGEST
+        frame: PrivateFrame | None = None
         try:
             self._verify_peer(stream)
             await self._authenticate_credential(lines)
@@ -347,9 +352,16 @@ class SupervisorService:
                 raise SupervisorAttachRejected("unsupported initial private frame kind")
         except (anyio.EndOfStream, anyio.ClosedResourceError):
             return
+        except _GrantControlResponseLost:
+            return
         except BaseException as error:
             with contextlib.suppress(BaseException):
-                await self._send_error(lines, type(error).__name__, connection_authority)
+                await self._send_error(
+                    lines,
+                    type(error).__name__,
+                    connection_authority,
+                    request_frame=frame,
+                )
         finally:
             await stream.aclose()
 
@@ -444,19 +456,22 @@ class SupervisorService:
             )
             grant = startup.coordinator.revoke_session_grant(request.grant_id)
             response_kind = "grant_revoked"
-        await lines.send_frame(
-            PrivateFrame.issue(
-                kind=response_kind,
-                request_id=frame.request_id,
-                trace_id=frame.trace_id,
-                runtime_generation=discovery.runtime_generation,
-                dispatcher_generation=discovery.dispatcher_generation,
-                authority_digest=frame.authority_digest,
-                deadline_unix_ms=frame.deadline_unix_ms,
-                attachment_digest=discovery.attachment_credential_digest,
-                payload=canonical_json_bytes(grant),
+        try:
+            await lines.send_frame(
+                PrivateFrame.issue(
+                    kind=response_kind,
+                    request_id=frame.request_id,
+                    trace_id=frame.trace_id,
+                    runtime_generation=discovery.runtime_generation,
+                    dispatcher_generation=discovery.dispatcher_generation,
+                    authority_digest=frame.authority_digest,
+                    deadline_unix_ms=frame.deadline_unix_ms,
+                    attachment_digest=discovery.attachment_credential_digest,
+                    payload=canonical_json_bytes(grant),
+                )
             )
-        )
+        except BaseException as error:
+            raise _GrantControlResponseLost from error
 
     async def _run_mcp_session(self, lines: _SocketLines, connection_authority: str) -> None:
         assert self.application is not None
@@ -547,22 +562,37 @@ class SupervisorService:
             raise SupervisorAttachRejected("private frame deadline expired")
 
     async def _send_error(
-        self, lines: _SocketLines, reason: str, connection_authority: str
+        self,
+        lines: _SocketLines,
+        reason: str,
+        connection_authority: str,
+        *,
+        request_frame: PrivateFrame | None,
     ) -> None:
         discovery = self.discovery
         if discovery is None:
             return
-        now = int(time.time() * 1000)
         payload = canonical_json_bytes({"error": reason})
+        if request_frame is None:
+            now = int(time.time() * 1000)
+            request_id = f"error-{_bytes_digest(payload)[7:31]}"
+            trace_id = f"trace-{_bytes_digest(payload)[7:39]}"
+            authority_digest = connection_authority
+            deadline_unix_ms = now + 60_000
+        else:
+            request_id = request_frame.request_id
+            trace_id = request_frame.trace_id
+            authority_digest = request_frame.authority_digest
+            deadline_unix_ms = request_frame.deadline_unix_ms
         await lines.send_frame(
             PrivateFrame.issue(
                 kind="error",
-                request_id=f"error-{_bytes_digest(payload)[7:31]}",
-                trace_id=f"trace-{_bytes_digest(payload)[7:39]}",
+                request_id=request_id,
+                trace_id=trace_id,
                 runtime_generation=discovery.runtime_generation,
                 dispatcher_generation=discovery.dispatcher_generation,
-                authority_digest=connection_authority,
-                deadline_unix_ms=now + 60_000,
+                authority_digest=authority_digest,
+                deadline_unix_ms=deadline_unix_ms,
                 attachment_digest=discovery.attachment_credential_digest,
                 payload=payload,
             )

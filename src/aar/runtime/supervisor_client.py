@@ -248,16 +248,18 @@ class SupervisorClient:
             sent = True
             frame = await lines.receive_frame()
             self._validate_response_frame(frame)
-            if frame.kind == "error":
-                terminal = True
-                raise SupervisorControlRejected("supervisor rejected grant control request")
             if (
-                frame.kind != response_kind
-                or frame.request_id != request_id
+                frame.request_id != request_id
                 or frame.trace_id != trace_id
                 or frame.authority_digest != authority
                 or frame.deadline_unix_ms != deadline
             ):
+                raise SupervisorClientError("grant control receipt does not match request")
+            if frame.kind == "error":
+                self._validate_terminal_error(frame)
+                terminal = True
+                raise SupervisorControlRejected("supervisor rejected grant control request")
+            if frame.kind != response_kind:
                 raise SupervisorClientError("grant control receipt does not match request")
             grant = IssuedWorkbenchGrant.model_validate_json(frame.decoded_payload(), strict=True)
             if grant.grant_id != request.grant_id:
@@ -351,6 +353,22 @@ class SupervisorClient:
             )
         if frame.deadline_unix_ms < int(time.time() * 1000):
             raise SupervisorClientError("supervisor response deadline expired")
+
+    @staticmethod
+    def _validate_terminal_error(frame: PrivateFrame) -> None:
+        payload = frame.decoded_payload()
+        try:
+            document = json.loads(payload)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise SupervisorClientError("supervisor terminal error payload is malformed") from error
+        if (
+            not isinstance(document, dict)
+            or set(document) != {"error"}
+            or not isinstance(document["error"], str)
+            or not document["error"]
+            or canonical_json_bytes(document) != payload
+        ):
+            raise SupervisorClientError("supervisor terminal error payload is malformed")
 
     def _load_discovery(self) -> SupervisorDiscoveryRecord:
         if _is_reparse_or_symlink(self.private_dir) or _is_reparse_or_symlink(

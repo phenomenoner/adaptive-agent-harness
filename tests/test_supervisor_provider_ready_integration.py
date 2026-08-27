@@ -17,6 +17,7 @@ from mcp import Client
 
 import aar.runtime.provider_ready_startup as startup_module
 import aar.runtime.reference_host as reference_host_module
+import aar.runtime.supervisor as supervisor_module
 from aar.broker_models import ModelRouteCatalog, ModelRouteProfile
 from aar.canonical import canonical_sha256
 from aar.mcp.models import McpRlmWorkbenchMutationContext
@@ -42,8 +43,13 @@ from aar.runtime.provider_ready_startup import ProviderReadyStartup, ProviderRea
 from aar.runtime.reference_host import ReferenceHost
 from aar.runtime.registry import OperationRegistry
 from aar.runtime.supervisor import SupervisorService
-from aar.runtime.supervisor_client import SupervisorClient, SupervisorControlRejected
+from aar.runtime.supervisor_client import (
+    SupervisorClient,
+    SupervisorControlOutcomeIndeterminate,
+    SupervisorControlRejected,
+)
 from aar.runtime.supervisor_protocol import (
+    PrivateFrame,
     SupervisorGrantIssueRequest,
     SupervisorGrantRevokeRequest,
 )
@@ -759,6 +765,79 @@ async def test_private_host_authority_explicitly_issues_and_revokes_current_gran
                 runtime_generation=discovery.runtime_generation,
                 now_unix_ms=int(time.time() * 1000),
             )
+        stop.set()
+        task_group.cancel_scope.cancel()
+
+
+@pytest.mark.anyio
+async def test_post_mutation_response_failure_is_indeterminate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    startup, readback, _authority = _startup(
+        tmp_path,
+        monkeypatch,
+        reference_evidence=False,
+    )
+    runtime_home = readback.target
+    database = runtime_home / "reference.sqlite3"
+    _prepare_v6_registry(database, tmp_path / "post-mutation.snapshot.sqlite3")
+    monkeypatch.setattr(
+        reference_host_module,
+        "SupervisedIPythonWorkspaceBackend",
+        _GrantAdmissionIPythonWorkspaceBackend,
+    )
+    original_send_frame = supervisor_module._SocketLines.send_frame
+    failed = False
+
+    async def fail_first_grant_receipt(
+        lines: supervisor_module._SocketLines,
+        frame: PrivateFrame,
+    ) -> None:
+        nonlocal failed
+        if frame.kind == "grant_issued" and not failed:
+            failed = True
+            raise anyio.BrokenResourceError
+        await original_send_frame(lines, frame)
+
+    monkeypatch.setattr(
+        supervisor_module._SocketLines,
+        "send_frame",
+        fail_first_grant_receipt,
+    )
+    service = SupervisorService(
+        runtime_home,
+        programmable_backend="ipython",
+        model_broker_registry=_route_owner(readback.route_catalog),
+        default_model_route_profile=ROUTE_PROFILE_ID,
+        provider_ready_startup=startup,
+    )
+    stop = threading.Event()
+    async with anyio.create_task_group() as task_group:
+        task_group.start_soon(service.run, stop)
+        with anyio.fail_after(10):
+            while service.discovery is None:
+                await anyio.sleep(0.01)
+        client = SupervisorClient(runtime_home)
+        request = SupervisorGrantIssueRequest(
+            principal_id=PRINCIPAL,
+            session_id=SESSION,
+            capability="rlm.workbench.execute",
+            ttl_ms=60_000,
+            grant_id="grant-post-mutation-response-loss",
+        )
+        with pytest.raises(SupervisorControlOutcomeIndeterminate) as raised:
+            await client.issue_session_grant(request)
+        assert raised.value.grant_id == request.grant_id
+        assert failed is True
+        live = startup.coordinator.accept_session_grant(
+            request.grant_id,
+            principal_id=PRINCIPAL,
+            session_id=SESSION,
+            capability="rlm.workbench.execute",
+            runtime_generation=service.ready.runtime_generation,
+            now_unix_ms=int(time.time() * 1000),
+        )
+        assert live.grant_id == request.grant_id
         stop.set()
         task_group.cancel_scope.cancel()
 

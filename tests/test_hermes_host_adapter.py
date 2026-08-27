@@ -9,8 +9,8 @@ import anyio
 import pytest
 
 from aar.broker_models import ModelRouteCatalog, ModelRouteProfile
-from aar.canonical import canonical_sha256
-from aar.compat import hermes_mcp
+from aar.canonical import canonical_json_bytes, canonical_sha256
+from aar.compat import hermes_authority, hermes_mcp
 from aar.provider_ready_package_factory import PACKAGE_FACTORY_DECLARATIONS
 from aar.runtime.hermes_host import build_hermes_model_registry, load_hermes_route_catalog
 from aar.runtime.model_broker import ModelProviderFailure
@@ -18,10 +18,12 @@ from aar.runtime.provider_ready_startup import ProviderReadyStartupError
 from aar.runtime.supervisor_client import (
     SupervisorClient,
     SupervisorControlOutcomeIndeterminate,
+    SupervisorControlRejected,
 )
 from aar.runtime.supervisor_protocol import (
     SUPERVISOR_PROTOCOL_DIGEST,
     SUPERVISOR_PROTOCOL_VERSION,
+    PrivateFrame,
     SupervisorGrantIssueRequest,
 )
 from aar.versions import PACKAGE_VERSION
@@ -297,6 +299,143 @@ def test_sent_grant_control_without_terminal_receipt_is_indeterminate(
     with pytest.raises(SupervisorControlOutcomeIndeterminate) as raised:
         anyio.run(client.issue_session_grant, request)
     assert raised.value.grant_id == request.grant_id
+
+
+@pytest.mark.parametrize(
+    "mismatch_axis",
+    (
+        "request_id",
+        "trace_id",
+        "authority_digest",
+        "deadline_unix_ms",
+        "payload",
+        "noncanonical_payload",
+    ),
+)
+def test_sent_grant_control_with_malformed_or_mismatched_error_is_indeterminate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mismatch_axis: str,
+) -> None:
+    class MismatchedErrorStream:
+        def __init__(self) -> None:
+            self.sent: list[bytes] = []
+
+        async def send(self, payload: bytes) -> None:
+            self.sent.append(payload.rstrip(b"\n"))
+
+        async def receive(self, _max_bytes: int) -> bytes:
+            sent = PrivateFrame.model_validate_json(self.sent[-1], strict=True)
+            values = {
+                "request_id": sent.request_id,
+                "trace_id": sent.trace_id,
+                "authority_digest": sent.authority_digest,
+                "deadline_unix_ms": sent.deadline_unix_ms,
+                "payload": canonical_json_bytes({"error": "rejected"}),
+            }
+            replacements = {
+                "request_id": "unrelated-request",
+                "trace_id": "trace-unrelated",
+                "authority_digest": DIGEST,
+                "deadline_unix_ms": sent.deadline_unix_ms + 1,
+                "payload": b"not-json",
+            }
+            if mismatch_axis == "noncanonical_payload":
+                values["payload"] = b'{"error": "rejected"}'
+            else:
+                values[mismatch_axis] = replacements[mismatch_axis]
+            frame = PrivateFrame.issue(
+                kind="error",
+                request_id=values["request_id"],
+                trace_id=values["trace_id"],
+                runtime_generation=sent.runtime_generation,
+                dispatcher_generation=sent.dispatcher_generation,
+                authority_digest=values["authority_digest"],
+                deadline_unix_ms=values["deadline_unix_ms"],
+                attachment_digest=sent.attachment_digest,
+                payload=values["payload"],
+            )
+            return canonical_json_bytes(frame) + b"\n"
+
+        async def aclose(self) -> None:
+            return None
+
+    discovery: Any = SimpleNamespace(
+        runtime_generation=4,
+        dispatcher_generation=4,
+        runtime_home_digest=DIGEST,
+        attachment_credential_digest=DIGEST,
+    )
+    client = SupervisorClient(tmp_path)
+    client.discovery = discovery
+    monkeypatch.setattr(client, "_load_discovery", lambda: discovery)
+    monkeypatch.setattr(client, "_load_credential", lambda _discovery: b"credential")
+    stream = MismatchedErrorStream()
+
+    async def connect(_discovery):
+        return stream
+
+    monkeypatch.setattr(client, "_connect", connect)
+    request = SupervisorGrantIssueRequest(
+        principal_id="principal-local",
+        session_id="session-local",
+        capability="workspace.create",
+        ttl_ms=60_000,
+        grant_id=f"grant-{mismatch_axis}",
+    )
+    with pytest.raises(SupervisorControlOutcomeIndeterminate) as raised:
+        anyio.run(client.issue_session_grant, request)
+    assert raised.value.grant_id == request.grant_id
+    assert len(stream.sent) == 2
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_exit", "expected_outcome"),
+    (
+        (
+            SupervisorControlOutcomeIndeterminate(
+                "indeterminate",
+                grant_id="grant-cli-indeterminate",
+            ),
+            3,
+            "indeterminate",
+        ),
+        (SupervisorControlRejected("rejected"), 2, "rejected"),
+    ),
+)
+def test_hermes_authority_cli_preserves_control_certainty(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    error: Exception,
+    expected_exit: int,
+    expected_outcome: str,
+) -> None:
+    async def fail(_args):
+        raise error
+
+    monkeypatch.setattr(hermes_authority, "_run", fail)
+    exit_code = hermes_authority.main(
+        [
+            "issue",
+            "--principal-id",
+            "principal-local",
+            "--session-id",
+            "session-local",
+            "--capability",
+            "workspace.create",
+            "--ttl-ms",
+            "60000",
+            "--grant-id",
+            "grant-cli-indeterminate",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert exit_code == expected_exit
+    assert captured.out == ""
+    payload = json.loads(captured.err)
+    assert payload["outcome"] == expected_outcome
+    if expected_outcome == "indeterminate":
+        assert payload["grant_id"] == "grant-cli-indeterminate"
 
 
 def test_route_catalog_loader_rejects_symlink_authority(
