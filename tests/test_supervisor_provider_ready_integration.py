@@ -756,6 +756,7 @@ async def test_private_host_authority_explicitly_issues_and_revokes_current_gran
             SupervisorGrantRevokeRequest(grant_id=grant.grant_id)
         )
         assert revoked.revoked is True
+        assert revoked == grant.model_copy(update={"revoked": True})
         with pytest.raises(GrantDenied, match="revoked"):
             startup.coordinator.accept_session_grant(
                 revoked,

@@ -37,9 +37,11 @@ marks the conservative may-have-sent boundary, performs the physical model call 
 provider authority, and commits the exact response/usage receipt. If that flow is bypassed, the
 standalone broker fails closed. Do not relabel a reference route as a real provider route.
 
-## Hermes MCP configuration
+## Fresh isolated Hermes MCP configuration
 
-Use the installed entry point and exact host paths:
+Use this configuration only inside a new isolated Hermes home that has never been bound to another
+AAR runtime. Do not edit, switch, replace, or reuse an existing Hermes MCP entry, profile, or home.
+Use the installed entry point and exact paths owned by that fresh home:
 
 ```yaml
 mcp_servers:
@@ -103,15 +105,17 @@ Exit status meanings:
 - `3`: outcome indeterminate after send. Preserve the reported grant ID and do not reuse it;
 - `1`: local/pre-send failure.
 
-## Restart and rollback
+## Restart inside the fresh installation
 
 Every supervisor restart destroys the live grant map. Refresh `aar_capabilities`, use the successor
 runtime generation, and issue a new grant through a new explicit command. A prior grant ID must not
 be accepted after restart.
 
-Rollback changes only the Hermes MCP command and arguments back to the retained prior runtime. It
-does not mutate either runtime root. Verify rollback from a fresh native `aar_capabilities` response;
-a config file or launcher probe alone is not runtime evidence.
+This prerelease is clean-install-only. It does not upgrade, cut over, roll back, adopt, replace, or
+reconfigure an existing Hermes installation or runtime root. Official acceptance uses a new
+persistent runtime root plus a fresh isolated Hermes home, and proves every pre-existing Hermes
+configuration and old runtime root remains byte-identical. Switching any live integration pointer
+is outside this release.
 
 ## Boundaries
 

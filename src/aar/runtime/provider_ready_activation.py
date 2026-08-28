@@ -113,6 +113,9 @@ class ProviderReadyActivationStore:
     def read(self, runtime_generation: int) -> WorkbenchGrantSet:
         return self._durable.read(runtime_generation)
 
+    def verify_persisted(self, current_set: WorkbenchGrantSet) -> None:
+        self._durable.verify_persisted(current_set)
+
     readback = read
 
     def issue_session_grant(

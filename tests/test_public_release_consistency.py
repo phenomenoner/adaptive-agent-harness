@@ -58,8 +58,10 @@ CURRENT_INSTALL_GUIDES = (
 CLEAN_INSTALL_SCOPE_SURFACES = (
     "CHANGELOG.md",
     "TECHNICAL-STATUS.md",
+    "docs/HERMES-PROVIDER-READY.md",
     "docs/sdd/aar-hermes-provider-ready-host-v1/ACCEPTANCE.md",
     "docs/sdd/aar-hermes-provider-ready-host-v1/README.md",
+    HERMES_PROFILE_README,
 )
 
 OPERATION_SKILL_COPIES = (
@@ -198,9 +200,7 @@ def test_release_status_uses_non_self_referential_external_receipt() -> None:
 def test_release_status_separates_declared_candidate_source_from_verified_release_source() -> None:
     behavior = _status()["behavior"]
     assert behavior["install_candidate_source_identity"] == "caller_declared_not_git_verified"
-    assert behavior["official_source_identity_authority"] == (
-        "external_release_receipt_tag_target"
-    )
+    assert behavior["official_source_identity_authority"] == ("external_release_receipt_tag_target")
     required = set(_status()["evidence_binding"]["receipt"]["required_fields"])
     assert {
         "source.commit",
@@ -430,6 +430,10 @@ def test_current_release_scope_does_not_reintroduce_live_cutover(path: str) -> N
         "installed release acceptance or live cutover",
         "after hermes config cutover",
         "pre-cutover hermes integration pointer",
+        "rollback changes only the hermes mcp command",
+        "change the hermes mcp command and arguments back",
+        "uv tool install --force",
+        "after an upgrade",
         "**cutover:**",
     ):
         assert stale_required_claim not in text

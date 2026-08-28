@@ -11,12 +11,17 @@ import pytest
 from aar.broker_models import ModelRouteCatalog, ModelRouteProfile
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.compat import hermes_authority, hermes_mcp
+from aar.provider_ready_models import GrantBudgetCeiling
 from aar.provider_ready_package_factory import PACKAGE_FACTORY_DECLARATIONS
+from aar.provider_ready_runtime_models import IssuedWorkbenchGrant, WorkbenchGrantSet
+from aar.runtime import supervisor_client as supervisor_client_module
 from aar.runtime.hermes_host import build_hermes_model_registry, load_hermes_route_catalog
 from aar.runtime.model_broker import ModelProviderFailure
+from aar.runtime.provider_ready_activation import ProviderReadyActivationStore
 from aar.runtime.provider_ready_startup import ProviderReadyStartupError
 from aar.runtime.supervisor_client import (
     SupervisorClient,
+    SupervisorClientError,
     SupervisorControlOutcomeIndeterminate,
     SupervisorControlRejected,
 )
@@ -25,11 +30,46 @@ from aar.runtime.supervisor_protocol import (
     SUPERVISOR_PROTOCOL_VERSION,
     PrivateFrame,
     SupervisorGrantIssueRequest,
+    SupervisorGrantRevokeRequest,
 )
 from aar.versions import PACKAGE_VERSION
 
 DIGEST = canonical_sha256({"fixture": "hermes-host-adapter"})
 PROCESS_IDENTITY = {"pid": 1234, "start_time": "test-process-start"}
+
+
+def _grant_set_fixture(
+    *,
+    runtime_generation: int = 4,
+    activation_generation: int = 3,
+    route_catalog_digest: str | None = None,
+) -> WorkbenchGrantSet:
+    return WorkbenchGrantSet.issue(
+        schema_version="aar.workbench-grant-set.v1",
+        runtime_generation=runtime_generation,
+        activation_generation=activation_generation,
+        profile_id="profile-current",
+        profile_digest=canonical_sha256({"profile": "current"}),
+        activation_authority_digest=canonical_sha256({"authority": "current"}),
+        capability_digest=canonical_sha256({"capability": "current"}),
+        route_catalog_digest=(
+            route_catalog_digest
+            if route_catalog_digest is not None
+            else canonical_sha256({"route": "current"})
+        ),
+        principal_ids=("principal-local",),
+        session_binding_policy="bind_exact_request_session",
+        capabilities=("workspace.create",),
+        budget_ceiling=GrantBudgetCeiling(
+            wall_time_ms=60_000,
+            model_requests=4,
+            input_tokens=8_000,
+            output_tokens=4_000,
+            child_operations=2,
+            artifact_bytes=2_000_000,
+        ),
+        max_ttl_ms=60_000,
+    )
 
 
 def _catalog(
@@ -99,10 +139,7 @@ def _workbench(generation: int) -> dict[str, object]:
 def test_shipped_hermes_intent_authorizes_explicit_caller_servicing_capabilities() -> None:
     template = json.loads(
         (
-            Path(__file__).parents[1]
-            / "docs"
-            / "examples"
-            / "provider-ready-intent-template.json"
+            Path(__file__).parents[1] / "docs" / "examples" / "provider-ready-intent-template.json"
         ).read_text(encoding="utf-8")
     )
     assert template["grant_policy"]["capabilities"] == [
@@ -406,6 +443,22 @@ def test_unknown_hermes_route_driver_is_rejected() -> None:
         )
 
 
+def test_stale_discovery_cannot_read_predecessor_grant_authority(tmp_path: Path) -> None:
+    authority = tmp_path / "authority"
+    authority.mkdir(mode=0o700)
+    store = ProviderReadyActivationStore(authority)
+    store.publish(_grant_set_fixture(runtime_generation=4, activation_generation=3))
+    store.publish(_grant_set_fixture(runtime_generation=5, activation_generation=4))
+    client = SupervisorClient(tmp_path)
+    discovery: Any = SimpleNamespace(runtime_generation=4)
+
+    with pytest.raises(
+        SupervisorClientError,
+        match="current persisted grant authority does not match discovery",
+    ):
+        client._load_current_grant_set(discovery)
+
+
 def test_sent_grant_control_without_terminal_receipt_is_indeterminate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -419,15 +472,18 @@ def test_sent_grant_control_without_terminal_receipt_is_indeterminate(
         async def aclose(self) -> None:
             return None
 
+    grant_set = _grant_set_fixture()
     discovery: Any = SimpleNamespace(
         runtime_generation=4,
         dispatcher_generation=4,
         runtime_home_digest=DIGEST,
         attachment_credential_digest=DIGEST,
+        capability_digest=grant_set.capability_digest,
     )
     client = SupervisorClient(tmp_path)
     monkeypatch.setattr(client, "_load_discovery", lambda: discovery)
     monkeypatch.setattr(client, "_load_credential", lambda _discovery: b"credential")
+    monkeypatch.setattr(client, "_load_current_grant_set", lambda _discovery: grant_set)
 
     async def connect(_discovery):
         return LostResponseStream()
@@ -504,16 +560,19 @@ def test_sent_grant_control_with_malformed_or_mismatched_error_is_indeterminate(
         async def aclose(self) -> None:
             return None
 
+    grant_set = _grant_set_fixture()
     discovery: Any = SimpleNamespace(
         runtime_generation=4,
         dispatcher_generation=4,
         runtime_home_digest=DIGEST,
         attachment_credential_digest=DIGEST,
+        capability_digest=grant_set.capability_digest,
     )
     client = SupervisorClient(tmp_path)
     client.discovery = discovery
     monkeypatch.setattr(client, "_load_discovery", lambda: discovery)
     monkeypatch.setattr(client, "_load_credential", lambda _discovery: b"credential")
+    monkeypatch.setattr(client, "_load_current_grant_set", lambda _discovery: grant_set)
     stream = MismatchedErrorStream()
 
     async def connect(_discovery):
@@ -530,6 +589,252 @@ def test_sent_grant_control_with_malformed_or_mismatched_error_is_indeterminate(
     with pytest.raises(SupervisorControlOutcomeIndeterminate) as raised:
         anyio.run(client.issue_session_grant, request)
     assert raised.value.grant_id == request.grant_id
+    assert len(stream.sent) == 2
+
+
+@pytest.mark.parametrize(
+    ("command", "mismatch_axis"),
+    (
+        *(
+            ("issue", axis)
+            for axis in (
+                "noncanonical_payload",
+                "malformed_payload",
+                "authority_replaced_during_request",
+                "deadline_expires_during_authority_read",
+                "grant_set_digest",
+                "capability",
+                "principal_id",
+                "session_id",
+                "runtime_generation",
+                "activation_generation",
+                "profile_digest",
+                "activation_authority_digest",
+                "capability_digest",
+                "route_catalog_digest",
+                "wall_time_ms",
+                "model_requests",
+                "input_tokens",
+                "output_tokens",
+                "child_operations",
+                "artifact_bytes",
+                "issued_before_request",
+                "issued_after_response",
+                "ttl_relation",
+            )
+        ),
+        *(
+            ("revoke", axis)
+            for axis in (
+                "noncanonical_payload",
+                "malformed_payload",
+                "grant_set_digest",
+                "principal_not_current",
+                "capability_not_current",
+                "runtime_generation",
+                "activation_generation",
+                "profile_digest",
+                "activation_authority_digest",
+                "capability_digest",
+                "route_catalog_digest",
+                "wall_time_ms",
+                "model_requests",
+                "input_tokens",
+                "output_tokens",
+                "child_operations",
+                "artifact_bytes",
+            )
+        ),
+    ),
+)
+def test_sent_grant_success_body_mismatch_is_indeterminate_without_retry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+    mismatch_axis: str,
+) -> None:
+    alternate_digest = canonical_sha256({"mismatch_axis": mismatch_axis})
+    grant_set = _grant_set_fixture()
+    budget = grant_set.budget_ceiling
+    discovery: Any = SimpleNamespace(
+        runtime_generation=4,
+        dispatcher_generation=4,
+        runtime_home_digest=DIGEST,
+        attachment_credential_digest=DIGEST,
+        capability_digest=grant_set.capability_digest,
+    )
+    grant_id = f"grant-{command}-{mismatch_axis}"
+    base_grant = IssuedWorkbenchGrant(
+        grant_id=grant_id,
+        grant_set_digest=grant_set.grant_set_digest,
+        capability="workspace.create",
+        principal_id="principal-local",
+        session_id="session-local",
+        runtime_generation=grant_set.runtime_generation,
+        activation_generation=grant_set.activation_generation,
+        profile_digest=grant_set.profile_digest,
+        activation_authority_digest=grant_set.activation_authority_digest,
+        capability_digest=grant_set.capability_digest,
+        route_catalog_digest=grant_set.route_catalog_digest,
+        wall_time_ms=budget.wall_time_ms,
+        model_requests=budget.model_requests,
+        input_tokens=budget.input_tokens,
+        output_tokens=budget.output_tokens,
+        child_operations=budget.child_operations,
+        artifact_bytes=budget.artifact_bytes,
+        issued_at_unix_ms=1_000_000,
+        expires_at_unix_ms=1_060_000,
+        revoked=command == "revoke",
+    )
+
+    updates: dict[str, object] = {
+        "grant_set_digest": alternate_digest,
+        "capability": "workspace.execute",
+        "principal_id": "principal-other",
+        "principal_not_current": "principal-other",
+        "session_id": "session-other",
+        "capability_not_current": "workspace.execute",
+        "runtime_generation": 5,
+        "activation_generation": 4,
+        "profile_digest": alternate_digest,
+        "activation_authority_digest": alternate_digest,
+        "capability_digest": alternate_digest,
+        "route_catalog_digest": alternate_digest,
+        "wall_time_ms": budget.wall_time_ms - 1,
+        "model_requests": budget.model_requests - 1,
+        "input_tokens": budget.input_tokens - 1,
+        "output_tokens": budget.output_tokens - 1,
+        "child_operations": budget.child_operations - 1,
+        "artifact_bytes": budget.artifact_bytes - 1,
+    }
+    grant_values = base_grant.model_dump(mode="python")
+    if mismatch_axis == "issued_before_request":
+        grant_values.update(issued_at_unix_ms=999_999, expires_at_unix_ms=1_059_999)
+    elif mismatch_axis == "issued_after_response":
+        grant_values.update(issued_at_unix_ms=1_000_001, expires_at_unix_ms=1_060_001)
+    elif mismatch_axis == "ttl_relation":
+        grant_values["expires_at_unix_ms"] = 1_060_001
+    elif mismatch_axis == "principal_not_current":
+        grant_values["principal_id"] = updates[mismatch_axis]
+    elif mismatch_axis == "capability_not_current":
+        grant_values["capability"] = updates[mismatch_axis]
+    elif mismatch_axis in {
+        "authority_replaced_during_request",
+        "deadline_expires_during_authority_read",
+        "malformed_payload",
+    }:
+        pass
+    elif mismatch_axis != "noncanonical_payload":
+        grant_values[mismatch_axis] = updates[mismatch_axis]
+    response_grant = IssuedWorkbenchGrant(**grant_values)
+
+    class MismatchedSuccessStream:
+        def __init__(self) -> None:
+            self.sent: list[bytes] = []
+
+        async def send(self, payload: bytes) -> None:
+            self.sent.append(payload.rstrip(b"\n"))
+
+        async def receive(self, _max_bytes: int) -> bytes:
+            sent = PrivateFrame.model_validate_json(self.sent[-1], strict=True)
+            payload = canonical_json_bytes(response_grant)
+            if mismatch_axis == "noncanonical_payload":
+                payload = json.dumps(
+                    response_grant.model_dump(mode="json"),
+                    sort_keys=True,
+                    separators=(", ", ": "),
+                ).encode()
+            elif mismatch_axis == "malformed_payload":
+                payload = b"not-json"
+            response = PrivateFrame.issue(
+                kind="grant_issued" if command == "issue" else "grant_revoked",
+                request_id=sent.request_id,
+                trace_id=sent.trace_id,
+                runtime_generation=sent.runtime_generation,
+                dispatcher_generation=sent.dispatcher_generation,
+                authority_digest=sent.authority_digest,
+                deadline_unix_ms=sent.deadline_unix_ms,
+                attachment_digest=sent.attachment_digest,
+                payload=payload,
+            )
+            return canonical_json_bytes(response) + b"\n"
+
+        async def aclose(self) -> None:
+            return None
+
+    client = SupervisorClient(tmp_path)
+    client.discovery = discovery
+    monkeypatch.setattr(client, "_load_discovery", lambda: discovery)
+    monkeypatch.setattr(client, "_load_credential", lambda _discovery: b"credential")
+    if mismatch_axis == "authority_replaced_during_request":
+        grant_sets = iter(
+            (
+                grant_set,
+                _grant_set_fixture(route_catalog_digest=alternate_digest),
+            )
+        )
+        monkeypatch.setattr(
+            client,
+            "_load_current_grant_set",
+            lambda _discovery: next(grant_sets),
+        )
+    else:
+        monkeypatch.setattr(
+            client,
+            "_load_current_grant_set",
+            lambda _discovery: grant_set,
+        )
+    stream = MismatchedSuccessStream()
+
+    async def connect(_discovery):
+        return stream
+
+    monkeypatch.setattr(client, "_connect", connect)
+    if mismatch_axis == "deadline_expires_during_authority_read":
+        clock = iter((1_000.0, 1_000.0, 1_061.0))
+        monkeypatch.setattr(supervisor_client_module.time, "time", lambda: next(clock))
+    else:
+        monkeypatch.setattr(supervisor_client_module.time, "time", lambda: 1_000.0)
+    request = (
+        SupervisorGrantIssueRequest(
+            principal_id="principal-local",
+            session_id="session-local",
+            capability="workspace.create",
+            ttl_ms=60_000,
+            grant_id=grant_id,
+        )
+        if command == "issue"
+        else SupervisorGrantRevokeRequest(grant_id=grant_id)
+    )
+    SupervisorClient._validate_grant_success_body(
+        grant=base_grant,
+        payload=canonical_json_bytes(base_grant),
+        request=request,
+        response_kind="grant_issued" if command == "issue" else "grant_revoked",
+        grant_set=grant_set,
+        request_started_unix_ms=1_000_000,
+        response_received_unix_ms=1_000_000,
+    )
+
+    async def run_operation() -> IssuedWorkbenchGrant:
+        if isinstance(request, SupervisorGrantIssueRequest):
+            return await client.issue_session_grant(request)
+        return await client.revoke_session_grant(request)
+
+    with pytest.raises(SupervisorControlOutcomeIndeterminate) as raised:
+        anyio.run(run_operation)
+
+    assert raised.value.grant_id == grant_id
+    cause = raised.value.__cause__
+    assert isinstance(cause, SupervisorClientError)
+    assert str(cause) in {
+        "current grant authority changed during grant control",
+        "grant control success body is malformed",
+        "grant control success body does not match current grant authority",
+        "grant issue success body does not match request",
+        "grant revoke success body does not match request",
+        "supervisor response deadline expired",
+    }
     assert len(stream.sent) == 2
 
 

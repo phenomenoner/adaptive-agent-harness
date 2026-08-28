@@ -18,13 +18,14 @@ import anyio
 from anyio.abc import SocketStream
 
 from aar.canonical import canonical_json_bytes, canonical_sha256
-from aar.provider_ready_runtime_models import IssuedWorkbenchGrant
+from aar.provider_ready_runtime_models import IssuedWorkbenchGrant, WorkbenchGrantSet
 from aar.runtime.process_identity import (
     ProcessIdentityState,
     SupervisorDiscoveryRecord,
     current_process_identity,
     observe_process_identity,
 )
+from aar.runtime.provider_ready_activation import ProviderReadyActivationStore
 from aar.runtime.supervisor_protocol import (
     MAX_PRIVATE_PAYLOAD_BYTES,
     PrivateFrame,
@@ -212,6 +213,7 @@ class SupervisorClient:
         response_kind: str,
     ) -> IssuedWorkbenchGrant:
         discovery = self._load_discovery()
+        grant_set_before = self._load_current_grant_set(discovery)
         credential = self._load_credential(discovery)
         stream = await self._connect(discovery)
         lines = _SocketLines(stream)
@@ -261,11 +263,24 @@ class SupervisorClient:
                 raise SupervisorControlRejected("supervisor rejected grant control request")
             if frame.kind != response_kind:
                 raise SupervisorClientError("grant control receipt does not match request")
-            grant = IssuedWorkbenchGrant.model_validate_json(frame.decoded_payload(), strict=True)
-            if grant.grant_id != request.grant_id:
-                raise SupervisorClientError("grant control receipt names a different grant")
-            if (response_kind == "grant_revoked") != grant.revoked:
-                raise SupervisorClientError("grant control receipt has the wrong revocation state")
+            grant_payload = frame.decoded_payload()
+            try:
+                grant = IssuedWorkbenchGrant.model_validate_json(grant_payload, strict=True)
+            except (TypeError, ValueError) as error:
+                raise SupervisorClientError("grant control success body is malformed") from error
+            grant_set_after = self._load_current_grant_set(discovery)
+            self._validate_response_frame(frame)
+            if grant_set_after != grant_set_before:
+                raise SupervisorClientError("current grant authority changed during grant control")
+            self._validate_grant_success_body(
+                grant=grant,
+                payload=grant_payload,
+                request=request,
+                response_kind=response_kind,
+                grant_set=grant_set_after,
+                request_started_unix_ms=now,
+                response_received_unix_ms=int(time.time() * 1000),
+            )
             terminal = True
             return grant
         except SupervisorControlRejected:
@@ -279,6 +294,80 @@ class SupervisorClient:
             raise
         finally:
             await stream.aclose()
+
+    def _load_current_grant_set(self, discovery: SupervisorDiscoveryRecord) -> WorkbenchGrantSet:
+        try:
+            store = ProviderReadyActivationStore(
+                self.runtime_home / "authority",
+                current_runtime_generation=discovery.runtime_generation,
+            )
+            grant_set = store.read(discovery.runtime_generation)
+        except Exception as error:
+            raise SupervisorClientError(
+                "current persisted grant authority is unavailable"
+            ) from error
+        try:
+            store.verify_persisted(grant_set)
+        except Exception as error:
+            raise SupervisorClientError(
+                "current persisted grant authority does not match discovery"
+            ) from error
+        return grant_set
+
+    @staticmethod
+    def _validate_grant_success_body(
+        *,
+        grant: IssuedWorkbenchGrant,
+        payload: bytes,
+        request: SupervisorGrantIssueRequest | SupervisorGrantRevokeRequest,
+        response_kind: str,
+        grant_set: WorkbenchGrantSet,
+        request_started_unix_ms: int,
+        response_received_unix_ms: int,
+    ) -> None:
+        budget = grant_set.budget_ceiling
+        common_matches = (
+            payload == canonical_json_bytes(grant)
+            and grant.grant_id == request.grant_id
+            and grant.grant_set_digest == grant_set.grant_set_digest
+            and grant.runtime_generation == grant_set.runtime_generation
+            and grant.activation_generation == grant_set.activation_generation
+            and grant.profile_digest == grant_set.profile_digest
+            and grant.activation_authority_digest == grant_set.activation_authority_digest
+            and grant.capability_digest == grant_set.capability_digest
+            and grant.route_catalog_digest == grant_set.route_catalog_digest
+            and grant.wall_time_ms == budget.wall_time_ms
+            and grant.model_requests == budget.model_requests
+            and grant.input_tokens == budget.input_tokens
+            and grant.output_tokens == budget.output_tokens
+            and grant.child_operations == budget.child_operations
+            and grant.artifact_bytes == budget.artifact_bytes
+            and grant.principal_id in grant_set.principal_ids
+            and grant.capability in grant_set.capabilities
+            and grant.issued_at_unix_ms <= response_received_unix_ms
+            and grant.expires_at_unix_ms - grant.issued_at_unix_ms <= grant_set.max_ttl_ms
+        )
+        if not common_matches:
+            raise SupervisorClientError(
+                "grant control success body does not match current grant authority"
+            )
+
+        if isinstance(request, SupervisorGrantIssueRequest):
+            issue_matches = (
+                response_kind == "grant_issued"
+                and not grant.revoked
+                and grant.principal_id == request.principal_id
+                and grant.session_id == request.session_id
+                and grant.capability == request.capability
+                and grant.issued_at_unix_ms >= request_started_unix_ms
+                and grant.expires_at_unix_ms - grant.issued_at_unix_ms == request.ttl_ms
+            )
+            if not issue_matches:
+                raise SupervisorClientError("grant issue success body does not match request")
+            return
+
+        if response_kind != "grant_revoked" or not grant.revoked:
+            raise SupervisorClientError("grant revoke success body does not match request")
 
     async def _bridge(self, lines: _SocketLines) -> None:
         assert self.discovery is not None
@@ -371,9 +460,7 @@ class SupervisorClient:
             raise SupervisorClientError("supervisor terminal error payload is malformed")
 
     def _load_discovery(self) -> SupervisorDiscoveryRecord:
-        if _is_reparse_or_symlink(self.private_dir) or _is_reparse_or_symlink(
-            self.discovery_path
-        ):
+        if _is_reparse_or_symlink(self.private_dir) or _is_reparse_or_symlink(self.discovery_path):
             raise SupervisorClientError("supervisor discovery path is a reparse link")
         try:
             discovery = SupervisorDiscoveryRecord.model_validate_json(
