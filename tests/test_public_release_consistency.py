@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -187,6 +188,25 @@ def test_release_status_uses_non_self_referential_external_receipt() -> None:
     }
 
 
+def test_release_status_separates_declared_candidate_source_from_verified_release_source() -> None:
+    behavior = _status()["behavior"]
+    assert behavior["install_candidate_source_identity"] == "caller_declared_not_git_verified"
+    assert behavior["official_source_identity_authority"] == (
+        "external_release_receipt_tag_target"
+    )
+    required = set(_status()["evidence_binding"]["receipt"]["required_fields"])
+    assert {
+        "source.commit",
+        "source.tree",
+        "artifacts.wheel.sha256",
+        "artifacts.sdist.sha256",
+        "artifacts.install_candidate_receipt.sha256",
+        "release.tag",
+        "release.tag_target",
+        "release.asset_readback",
+    } <= required
+
+
 def test_release_status_separates_frozen_and_post_freeze_evidence() -> None:
     verification = _status()["verification"]
     assert verification["frozen_before_release"] == {
@@ -224,6 +244,15 @@ def _assert_no_stale_current_authority(text: str, *, surface: str) -> None:
         "this github prerelease publishes",
     ):
         assert stale not in lowered, f"{surface} contains stale current authority: {stale}"
+    historical_versions = tuple(_status()["historical"])
+    current_authority = re.compile(
+        r"\b(?:current|latest)\b|this github prerelease publishes|"
+        r"published from the reviewed source"
+    )
+    for line in lowered.splitlines():
+        stale_version = any(version in line for version in historical_versions)
+        if stale_version and current_authority.search(line):
+            raise AssertionError(f"{surface} contains stale current authority: {line.strip()}")
 
 
 @pytest.mark.parametrize("path", CURRENT_PUBLIC_SURFACES)
@@ -263,6 +292,7 @@ def test_readme_hero_does_not_claim_target_release_already_exists() -> None:
         "This page is the host-facing part of the **`v0.4.0a6` release snapshot**.",
         "This page is the Codex installation entrypoint for the **`0.4.0a6` release snapshot**.",
         "**Repository status:** the `0.4.0a6` release snapshot is current.",
+        "Repository status: the 0.6.0a0 release snapshot is current.",
     ),
 )
 def test_stale_current_version_negative_fixtures_are_rejected(fixture: str) -> None:
@@ -271,8 +301,21 @@ def test_stale_current_version_negative_fixtures_are_rejected(fixture: str) -> N
 
 
 def _assert_current_tool_surface(text: str, *, surface: str) -> None:
-    current_tool_lines = [line for line in text.splitlines()[:200] if "38" in line and "v8" in line]
+    lines = text.splitlines()[:200]
+    current_tool_lines = [line for line in lines if "38" in line and "v8" in line]
     assert len(current_tool_lines) == 1, f"{surface} omits the current 38-tool v8 surface"
+    for line in lines:
+        lowered = line.casefold()
+        stale_projection = "30" in lowered and "v7" in lowered
+        current_claim = "current" in lowered or "public mcp surface" in lowered
+        compatibility_context = (
+            "38" in lowered
+            and "v8" in lowered
+            and ("frozen" in lowered or "compatibility" in lowered)
+        )
+        assert not (stale_projection and current_claim and not compatibility_context), (
+            f"{surface} contains contradictory stale current tool surface: {line.strip()}"
+        )
 
 
 def test_stale_current_tool_count_negative_fixture_is_rejected() -> None:
@@ -280,6 +323,15 @@ def test_stale_current_tool_count_negative_fixture_is_rejected() -> None:
         _assert_current_tool_surface(
             "Current public MCP surface: 30 tools on v7.",
             surface="synthetic stale tool-count fixture",
+        )
+
+
+def test_contradictory_current_tool_surface_negative_fixture_is_rejected() -> None:
+    with pytest.raises(AssertionError, match="contradictory stale current tool surface"):
+        _assert_current_tool_surface(
+            "Current public MCP surface: 38 tools on v8.\n"
+            "Current public MCP surface: 30 tools on v7.",
+            surface="synthetic contradictory tool-count fixture",
         )
 
 

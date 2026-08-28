@@ -88,6 +88,8 @@
     "provider_credentials_owner": "host",
     "provider_physical_call_owner": "host",
     "provider_ready_session_grants": "explicit_memory_only_generation_bound",
+    "install_candidate_source_identity": "caller_declared_not_git_verified",
+    "official_source_identity_authority": "external_release_receipt_tag_target",
     "hermes_host_adapter": "optional_standalone",
     "runtime_root_policy": "clean_install_only"
   },

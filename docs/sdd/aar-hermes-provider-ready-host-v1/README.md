@@ -126,6 +126,23 @@ new persisted state. Restart intentionally destroys every issued grant.
 
 ## Ownership and compatibility
 
+### Release source identity authority
+
+The public `aar-admin runtime candidate` command MUST derive the exact wheel digest and bind it to
+the caller-declared 40-character source commit. That pre-install receipt is deterministic artifact
+identity; it MUST NOT claim that the wheel independently proves its Git source. Malformed source
+identity and wheel/member tamper fail closed at candidate issuance, while a well-formed but incorrect
+source declaration remains unverified rather than acquiring authority from the artifact that carries
+it.
+
+Official source identity is established only by the post-freeze external
+`aar.release-receipt.v1`. Before installed release acceptance or live cutover, that receipt MUST bind
+the exact tag and tag target, source commit/tree, wheel and sdist names/digests, published candidate
+receipt digest, CI head/conclusion, and downloaded asset readback. Any tag-target, source, artifact,
+or candidate-receipt mismatch fails closed. The runtime does not contact GitHub, hold release
+credentials, or persist this release authority; downloaded receipts remain independently verifiable
+offline. No embedded wheel attestation is authoritative in v1.
+
 - Host/operator: chooses runtime home, route catalog, principal, session, capability, TTL, and the
   exact moment to invoke authority.
 - Hermes adapter: authenticates, frames, launches/attaches, and reports receipts; it does not widen

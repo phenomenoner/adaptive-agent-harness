@@ -842,6 +842,175 @@ async def test_post_mutation_response_failure_is_indeterminate(
         task_group.cancel_scope.cancel()
 
 
+@pytest.mark.anyio
+async def test_revoke_pre_mutation_rejection_is_terminal_and_leaves_grant_live(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    startup, readback, _authority = _startup(
+        tmp_path,
+        monkeypatch,
+        reference_evidence=False,
+    )
+    runtime_home = readback.target
+    database = runtime_home / "reference.sqlite3"
+    _prepare_v6_registry(database, tmp_path / "revoke-rejected.snapshot.sqlite3")
+    monkeypatch.setattr(
+        reference_host_module,
+        "SupervisedIPythonWorkspaceBackend",
+        _GrantAdmissionIPythonWorkspaceBackend,
+    )
+    service = SupervisorService(
+        runtime_home,
+        programmable_backend="ipython",
+        model_broker_registry=_route_owner(readback.route_catalog),
+        default_model_route_profile=ROUTE_PROFILE_ID,
+        provider_ready_startup=startup,
+    )
+    stop = threading.Event()
+    async with anyio.create_task_group() as task_group:
+        task_group.start_soon(service.run, stop)
+        with anyio.fail_after(10):
+            while service.discovery is None:
+                await anyio.sleep(0.01)
+        client = SupervisorClient(runtime_home)
+        issued = await client.issue_session_grant(
+            SupervisorGrantIssueRequest(
+                principal_id=PRINCIPAL,
+                session_id=SESSION,
+                capability="rlm.workbench.execute",
+                ttl_ms=60_000,
+                grant_id="grant-revoke-pre-mutation-rejection",
+            )
+        )
+        events: list[str] = []
+        original_send_frame = supervisor_module._SocketLines.send_frame
+
+        async def record_terminal_rejection(
+            lines: supervisor_module._SocketLines,
+            frame: PrivateFrame,
+        ) -> None:
+            if frame.kind in {"error", "grant_revoked"}:
+                events.append(f"send_{frame.kind}")
+            await original_send_frame(lines, frame)
+
+        def reject_before_mutation(grant_id: str) -> object:
+            assert grant_id == issued.grant_id
+            events.append("revoke_rejected")
+            raise GrantDenied("injected pre-mutation rejection")
+
+        monkeypatch.setattr(
+            supervisor_module._SocketLines,
+            "send_frame",
+            record_terminal_rejection,
+        )
+        monkeypatch.setattr(
+            startup.coordinator,
+            "revoke_session_grant",
+            reject_before_mutation,
+        )
+        with pytest.raises(SupervisorControlRejected):
+            await client.revoke_session_grant(
+                SupervisorGrantRevokeRequest(grant_id=issued.grant_id)
+            )
+        assert events == ["revoke_rejected", "send_error"]
+        assert (
+            startup.coordinator.accept_session_grant(
+                issued,
+                principal_id=PRINCIPAL,
+                session_id=SESSION,
+                capability="rlm.workbench.execute",
+                runtime_generation=service.ready.runtime_generation,
+                now_unix_ms=int(time.time() * 1000),
+            )
+            == issued
+        )
+        stop.set()
+        task_group.cancel_scope.cancel()
+
+
+@pytest.mark.anyio
+async def test_revoke_post_mutation_response_failure_is_indeterminate_and_revokes_grant(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    startup, readback, _authority = _startup(
+        tmp_path,
+        monkeypatch,
+        reference_evidence=False,
+    )
+    runtime_home = readback.target
+    database = runtime_home / "reference.sqlite3"
+    _prepare_v6_registry(database, tmp_path / "revoke-response-loss.snapshot.sqlite3")
+    monkeypatch.setattr(
+        reference_host_module,
+        "SupervisedIPythonWorkspaceBackend",
+        _GrantAdmissionIPythonWorkspaceBackend,
+    )
+    service = SupervisorService(
+        runtime_home,
+        programmable_backend="ipython",
+        model_broker_registry=_route_owner(readback.route_catalog),
+        default_model_route_profile=ROUTE_PROFILE_ID,
+        provider_ready_startup=startup,
+    )
+    stop = threading.Event()
+    async with anyio.create_task_group() as task_group:
+        task_group.start_soon(service.run, stop)
+        with anyio.fail_after(10):
+            while service.discovery is None:
+                await anyio.sleep(0.01)
+        client = SupervisorClient(runtime_home)
+        issued = await client.issue_session_grant(
+            SupervisorGrantIssueRequest(
+                principal_id=PRINCIPAL,
+                session_id=SESSION,
+                capability="rlm.workbench.execute",
+                ttl_ms=60_000,
+                grant_id="grant-revoke-post-mutation-response-loss",
+            )
+        )
+        events: list[str] = []
+        original_revoke = startup.coordinator.revoke_session_grant
+        original_send_frame = supervisor_module._SocketLines.send_frame
+
+        def record_mutation(grant_id: str) -> object:
+            assert grant_id == issued.grant_id
+            events.append("revoked")
+            return original_revoke(grant_id)
+
+        async def lose_revocation_receipt(
+            lines: supervisor_module._SocketLines,
+            frame: PrivateFrame,
+        ) -> None:
+            if frame.kind == "grant_revoked":
+                events.append("send_grant_revoked")
+                raise anyio.BrokenResourceError
+            await original_send_frame(lines, frame)
+
+        monkeypatch.setattr(startup.coordinator, "revoke_session_grant", record_mutation)
+        monkeypatch.setattr(
+            supervisor_module._SocketLines,
+            "send_frame",
+            lose_revocation_receipt,
+        )
+        with pytest.raises(SupervisorControlOutcomeIndeterminate) as raised:
+            await client.revoke_session_grant(
+                SupervisorGrantRevokeRequest(grant_id=issued.grant_id)
+            )
+        assert raised.value.grant_id == issued.grant_id
+        assert events == ["revoked", "send_grant_revoked"]
+        with pytest.raises(GrantDenied, match="revoked"):
+            startup.coordinator.accept_session_grant(
+                issued.grant_id,
+                principal_id=PRINCIPAL,
+                session_id=SESSION,
+                capability="rlm.workbench.execute",
+                runtime_generation=service.ready.runtime_generation,
+                now_unix_ms=int(time.time() * 1000),
+            )
+        stop.set()
+        task_group.cancel_scope.cancel()
+
+
 def test_mcp_uses_only_current_memory_session_grants_in_provider_mode(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

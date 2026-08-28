@@ -214,6 +214,150 @@ def test_verify_hermes_ready_joins_live_and_persisted_bindings(
         )
 
 
+@pytest.mark.parametrize(
+    ("mismatch_axis", "fixture_name", "path", "replacement"),
+    (
+        (
+            "supervisor_protocol",
+            "capabilities",
+            ("supervisor", "protocol_digest"),
+            canonical_sha256({"fixture": "mismatched-supervisor-protocol"}),
+        ),
+        (
+            "ready_runtime_generation",
+            "capabilities",
+            ("ready", "runtime_generation"),
+            8,
+        ),
+        (
+            "supervisor_dispatcher_generation",
+            "capabilities",
+            ("supervisor", "dispatcher_generation"),
+            8,
+        ),
+        (
+            "ready_capability_digest",
+            "capabilities",
+            ("ready", "capabilities", "digest"),
+            canonical_sha256({"fixture": "mismatched-ready-capability"}),
+        ),
+        (
+            "activation_grant_set_capability_binding",
+            "activation_binding",
+            ("capability_digest",),
+            canonical_sha256({"fixture": "mismatched-activation-capability"}),
+        ),
+        (
+            "activation_route_catalog_binding",
+            "activation_binding",
+            ("route_catalog_digest",),
+            canonical_sha256({"fixture": "mismatched-activation-route-catalog"}),
+        ),
+    ),
+)
+def test_verify_hermes_ready_rejects_each_live_owner_mismatch_without_handoff(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mismatch_axis: str,
+    fixture_name: str,
+    path: tuple[str, ...],
+    replacement: object,
+) -> None:
+    """AC-08: every omitted live-owner binding fails closed without replacement."""
+
+    catalog = _catalog()
+    generation = 7
+    workbench = _workbench(generation)
+    activation_binding: dict[str, object] = {
+        "runtime_generation": generation,
+        "capability_digest": canonical_sha256(workbench),
+        "route_catalog_digest": catalog.catalog_digest,
+    }
+    capabilities = _capabilities(generation, catalog.catalog_digest)
+    fixtures = {
+        "capabilities": capabilities,
+        "activation_binding": activation_binding,
+    }
+    target: dict[str, object] = fixtures[fixture_name]
+    for segment in path[:-1]:
+        nested = target[segment]
+        assert isinstance(nested, dict)
+        target = nested
+    assert target[path[-1]] != replacement
+    target[path[-1]] = replacement
+
+    persisted_fixture_before_verify = canonical_json_bytes(activation_binding)
+    capabilities_before_verify = canonical_json_bytes(capabilities)
+    workbench_before_verify = canonical_json_bytes(workbench)
+    read_generations: list[int] = []
+    activation_handoffs: list[str] = []
+    launcher_handoffs: list[object] = []
+
+    class ReadOnlyActivationStore:
+        def read(self, observed_generation: int) -> SimpleNamespace:
+            read_generations.append(observed_generation)
+            return SimpleNamespace(**activation_binding)
+
+        def activate(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+            activation_handoffs.append("activate")
+            raise AssertionError("verification must not activate a replacement owner")
+
+        def publish(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+            activation_handoffs.append("publish")
+            raise AssertionError("verification must not publish a replacement owner")
+
+    store = ReadOnlyActivationStore()
+    authority_roots: list[Path] = []
+
+    def activation_store_factory(authority_root: Path) -> ReadOnlyActivationStore:
+        authority_roots.append(authority_root)
+        return store
+
+    def capabilities_probe(
+        observed_runtime_home: Path, observed_discovery: object
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        assert observed_runtime_home == tmp_path
+        assert observed_discovery is discovery
+        return capabilities, workbench
+
+    def forbidden_launcher_handoff(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        launcher_handoffs.append(mismatch_axis)
+        raise AssertionError("verification must not hand off to a replacement launcher")
+
+    monkeypatch.setattr(hermes_mcp, "ProviderReadyActivationStore", activation_store_factory)
+    monkeypatch.setattr(hermes_mcp, "_capabilities_probe", capabilities_probe)
+    monkeypatch.setattr(hermes_mcp, "ensure_codex_supervisor", forbidden_launcher_handoff)
+    discovery: Any = SimpleNamespace(
+        runtime_generation=generation,
+        dispatcher_generation=generation,
+        capability_digest=DIGEST,
+        supervisor_version=f"aar-supervisor/{PACKAGE_VERSION}",
+        process_identity=PROCESS_IDENTITY,
+    )
+
+    with pytest.raises(
+        hermes_mcp.HermesMcpLauncherError,
+        match="startup binding",
+    ):
+        hermes_mcp.verify_hermes_ready(
+            tmp_path,
+            discovery,
+            route_catalog_digest=catalog.catalog_digest,
+            default_route_profile="route-primary",
+        )
+
+    assert authority_roots == [tmp_path / "authority"]
+    assert read_generations == [generation]
+    assert activation_handoffs == []
+    assert launcher_handoffs == []
+    assert canonical_json_bytes(activation_binding) == persisted_fixture_before_verify
+    assert canonical_json_bytes(capabilities) == capabilities_before_verify
+    assert canonical_json_bytes(workbench) == workbench_before_verify
+
+
 def test_verify_hermes_ready_rejects_generation_without_activation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
