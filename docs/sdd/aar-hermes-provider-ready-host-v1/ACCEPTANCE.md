@@ -3,14 +3,14 @@
 Status: **FROZEN BEFORE REMAINING IMPLEMENTATION**
 
 This plan is the release claim budget for GitHub issues #2, #3, and #4 plus the standalone Hermes
-host/session-grant milestone. A green subset does not imply release, installed-host, or live-cutover
+host/session-grant milestone. A green subset does not imply release, installed-host, or fresh-Hermes
 acceptance.
 
 ## Scope guard
 
 AAR core and the provider-ready/caller-work contracts remain host-neutral: any compatible agent
 harness may install and operate them. `aar-hermes-mcp` and `aar-hermes-authority` are one optional
-host adapter used for the local acceptance/cutover in this milestone; they are not the provider,
+host adapter used for isolated local acceptance in this milestone; they are not the provider,
 package core, or required path for other agent hosts.
 
 In scope:
@@ -20,16 +20,17 @@ In scope:
   host-owned inputs;
 - one complete documented path from release assets to a fresh absent v6 runtime, provider-ready
   startup, Hermes attachment, explicit authority, real caller-delegated provider execution, restart,
-  durable reconciliation, and live cutover;
+  durable reconciliation, and isolated fresh-home Hermes acceptance;
 - current `0.6.0a1` status/compatibility/install documentation and anti-drift tests;
 - the standalone Hermes launcher, private authority protocol, current memory-grant admission, package,
-  generated assets, release, persistent clean install, and local Hermes cutover.
+  generated assets, release, persistent clean install, and fresh isolated Hermes first-binding.
 
 Out of scope:
 
 - any new public MCP tool/method/schema, durable session-grant store, activation schema, provider
   credential path, external-effect executor, automatic grant policy, old-root migration/adoption,
-  generic daemon/service installer, PyPI publication, or official plugin-directory claim;
+  generic daemon/service installer, PyPI publication, official plugin-directory claim, live cutover,
+  or mutation of an existing Hermes integration pointer;
 - modification, promotion, archival, removal, cleanup, or replacement of any old runtime root.
 
 Reopen trigger: only an executable contradiction showing that one required acceptance row cannot be
@@ -60,7 +61,7 @@ mechanism.
 | AC-17 | Exact candidate receives a fresh independent Claude CLI `claude-opus-5`, effort `high`, read-only PASS bound to candidate/manifest/evidence hashes. | Review | model probe must report canonical `claude-opus-5`; safe/plan mode with Read/Glob/Grep only; structured PASS/BLOCKED report; main-agent hash and finding verification. |
 | AC-18 | PR head equals reviewed candidate, remote CI is green, and the external release receipt is the sole official source-identity authority: merge/tag target, source commit/tree, wheel/sdist/candidate-receipt digests and downloaded assets all bind the exact released bytes; issues #2/#3/#4 close traceably. | Release | PR/check/merge readback; annotated tag target; GitHub prerelease; release-receipt positive; one-axis tag-target, source, wheel, sdist, candidate-receipt and asset-readback mismatch negatives; downloaded wheel/sdist/candidate/release receipt byte readback; issue state/comments. |
 | AC-19 | A new persistent canonical v6 root—not `/tmp` and not any old root—passes G0, real IPython, caller-delegated provider, restart, durable RLM, and provenance checks. | T3/T4 | exact release-asset install receipt; process/generation; native calls before/after restart; old-root before/after identity unchanged. |
-| AC-20 | Hermes cutover changes only the intended MCP integration pointer, then fresh native readback and one explicit mutation succeed; retained v0.5 rollback remains usable and untouched. | T4 | sanitized before/after config digest and pointer fields; Hermes restart/readback; current generation; mutation receipt; rollback command/root readability; no rollback execution unless needed. |
+| AC-20 | An isolated fresh Hermes home binds for the first time to the new clean-install v6 root; native readback and one explicit bounded mutation succeed while every existing Hermes configuration and old runtime root remain byte-identical. | T3 | isolated-home/profile install receipt; first-binding command and arguments; fresh native capabilities/current-generation readback; explicit mutation receipt; before/after identity for existing Hermes configuration and old roots; no pointer switch or rollback operation. |
 
 ## Ordered gates and stop rules
 
@@ -70,7 +71,7 @@ mechanism.
 3. **Public/generated gate:** AC-02 and AC-15 regenerate in dependency order and cross-join exact bytes.
 4. **Whole-source gate:** AC-16 full repository tests/lint/build/hygiene on stabilized bytes.
 5. **Candidate freeze:** commit exact source; build immutable review manifest and evidence index; no
-   release/install/cutover actions yet.
+   release/install/fresh-host acceptance actions yet.
 6. **Claude independent review:** one batch-complete full review wave. Limits:
    `maxFullReviewWaves=1`, `maxSameCauseAttempts=2`, `maxPrimaryReviewers=1`,
    `maxNarrowAuditors=0`. A material finding blocks release. If repaired, one finding-scoped
@@ -79,19 +80,20 @@ mechanism.
 7. **PR/CI/release:** only an exact reviewed PASS candidate may be pushed, merged, tagged, or released.
 8. **Installed pickup:** clean-install the exact release artifact once into a new persistent root and
    execute AC-13/14/19. `/tmp` qualification is never persistent acceptance evidence.
-9. **Cutover:** only after installed pickup passes; preserve rollback evidence and perform AC-20.
+9. **Fresh Hermes acceptance:** only after installed pickup passes; use an isolated fresh Hermes home,
+   prove first-binding/readback/mutation, and prove existing Hermes configuration and old roots unchanged.
 
 Fail closed and stop advancement on public MCP/schema drift, implicit grant issuance, current-grant
 bypass, fabricated provider receipt/usage, hidden/private install input, required old-root mutation,
 indeterminate control presented as success, candidate hash drift after review, red/unknown required CI,
-or inability to prove exact released/installed/live identity.
+or inability to prove exact released/installed/fresh-Hermes identity.
 
 ## Claude review brief requirements
 
 The review bundle will exclude credentials, `.env`, private runtime data, personal identifiers, and
 live receipts. It will contain exact candidate/manifest/evidence hashes, changed-file inventory,
 issues #2/#3/#4 acceptance mapping, authority and lifecycle invariants, test commands/counts/raw-result
-paths, known limits, rollback/cutover gates, and a structured decision schema requiring:
+paths, known limits, clean-install/fresh-binding gates, and a structured decision schema requiring:
 
 - `decision`: `PASS` or `BLOCKED`;
 - exact candidate and manifest hashes;
@@ -99,5 +101,5 @@ paths, known limits, rollback/cutover gates, and a structured decision schema re
   required regression;
 - verification gaps and concise rationale.
 
-Claude is a read-only reviewer, not implementation, release, deployment, or cutover authority. Main
+Claude is a read-only reviewer, not implementation, release, deployment, or host-activation authority. Main
 session independently verifies its model identity, hashes, findings, and final release gates.

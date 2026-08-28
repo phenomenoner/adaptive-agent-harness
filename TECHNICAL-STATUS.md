@@ -95,9 +95,10 @@ See [Host Compatibility](HOST-COMPATIBILITY.md) for install and readback details
 The 20-row provider-ready host matrix is frozen in
 [`docs/sdd/aar-hermes-provider-ready-host-v1/ACCEPTANCE.md`](docs/sdd/aar-hermes-provider-ready-host-v1/ACCEPTANCE.md).
 The in-tree status records the frozen claim budget and exact public surface; it does not claim that
-post-freeze CI, independent review, release, persistent install, or live cutover occurred. Those facts
-must appear in `adaptive-agent-runtime-v0.6.0a1-release-receipt.json` and be checked against the exact
-tag and downloaded assets.
+post-freeze CI, independent review, release, persistent clean install, or isolated fresh-home Hermes
+acceptance occurred. Those facts must appear in
+`adaptive-agent-runtime-v0.6.0a1-release-receipt.json` and be checked against the exact tag and
+downloaded assets. Live cutover and mutation of an existing runtime root are outside this release.
 
 A local unit result, generated profile, package scan, temporary installation, or host catalog row
 cannot establish the whole release receipt. Each claim keeps its own evidence altitude.

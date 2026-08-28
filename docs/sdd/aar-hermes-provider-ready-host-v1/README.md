@@ -22,7 +22,7 @@ In scope:
 - a host-authority CLI whose invocation is the explicit approval event;
 - runtime-generation, process-identity, credential, capability, deadline, policy, budget, TTL,
   principal, session, and grant fences;
-- restart and rollback behavior for the local Hermes integration.
+- restart behavior and existing-root/configuration non-mutation for the local Hermes integration.
 
 Non-goals:
 
@@ -136,7 +136,8 @@ source declaration remains unverified rather than acquiring authority from the a
 it.
 
 Official source identity is established only by the post-freeze external
-`aar.release-receipt.v1`. Before installed release acceptance or live cutover, that receipt MUST bind
+`aar.release-receipt.v1`. Before installed release acceptance or isolated fresh-home Hermes
+acceptance, that receipt MUST bind
 the exact tag and tag target, source commit/tree, wheel and sdist names/digests, published candidate
 receipt digest, CI head/conclusion, and downloaded asset readback. Any tag-target, source, artifact,
 or candidate-receipt mismatch fails closed. The runtime does not contact GitHub, hold release
@@ -154,8 +155,9 @@ offline. No embedded wheel attestation is authoritative in v1.
 
 `v0.6.0a0` and its runtime home remain immutable. This feature ships as package/release
 `0.6.0a1` / `v0.6.0a1`; its exact wheel digest and persistent install root are frozen only after the
-reviewed release artifact exists. Rollback restores the prior Hermes MCP command/runtime-home pointer;
-it never mutates, adopts, archives, removes, or promotes an old root.
+reviewed release artifact exists. Final Hermes acceptance uses an isolated fresh home and a first
+binding to that new root; it never switches an existing integration pointer or mutates, adopts,
+archives, removes, or promotes an old root.
 
 ## Failure semantics
 
@@ -191,11 +193,12 @@ silently retried.
   Hermes provider call.
 - `HERMES-HOST-008` (T3): after supervisor restart, generation advances, prior grant is denied, a new
   explicit grant works, and durable RLM state reconciles.
-- `HERMES-HOST-009` (T4): after Hermes config cutover/restart, a fresh native `aar_capabilities`
-  readback reports the new package, attached supervisor, provider-ready model route, and successor
-  generation; one explicitly granted mutation succeeds.
-- `HERMES-HOST-010` (T4): the pre-cutover Hermes integration pointer, command, arguments, environment
-  keys, and config digest are retained as rollback evidence; fresh readback proves only the intended
-  pointer changed, and the untouched v0.5 runtime can be restored without modifying either root.
+- `HERMES-HOST-009` (T3): an isolated fresh Hermes home installs the exact wheel-bundled profile and
+  binds for the first time to the new clean-install root; native `aar_capabilities` readback reports
+  the exact package, attached supervisor, provider-ready model route, and current generation, then one
+  explicitly granted mutation succeeds.
+- `HERMES-HOST-010` (T3): before/after identity proves existing Hermes configuration and every old
+  runtime root remain byte-identical; no live pointer switch, old-root adoption, or rollback operation
+  is part of this release.
 - `HERMES-HOST-011` (T1): a post-send lost or mismatched grant-control response is reported
   `INDETERMINATE` with the original grant ID and is never silently retried.

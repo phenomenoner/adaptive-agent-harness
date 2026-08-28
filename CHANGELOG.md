@@ -35,7 +35,8 @@ establish official Plugin Directory publication, which requires separate externa
   retained lock artifact, preventing concurrent local owners without thread-recursive mutex behavior;
 - a post-send lost or mismatched authority response is indeterminate and is never silently retried;
 - this release remains clean-install-only: it does not adopt, promote, archive, remove, or mutate an
-  existing runtime root, and live Hermes cutover requires separate fresh native acceptance evidence.
+  existing runtime root; final Hermes acceptance uses an isolated fresh home bound for the first time
+  to the new clean-install root, without switching any live integration pointer.
 
 ## [0.6.0a0](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a0) — 2026-08-26
 

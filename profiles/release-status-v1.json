@@ -91,7 +91,10 @@
     "install_candidate_source_identity": "caller_declared_not_git_verified",
     "official_source_identity_authority": "external_release_receipt_tag_target",
     "hermes_host_adapter": "optional_standalone",
-    "runtime_root_policy": "clean_install_only"
+    "runtime_root_policy": "clean_install_only",
+    "hermes_acceptance_mode": "fresh_isolated_home_first_binding",
+    "existing_runtime_root_mutation": "forbidden",
+    "live_cutover": "out_of_scope"
   },
   "external_limits": {
     "pypi_publication": "not_established_by_this_snapshot",

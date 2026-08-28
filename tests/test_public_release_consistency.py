@@ -55,6 +55,13 @@ CURRENT_INSTALL_GUIDES = (
     "profiles/codex/plugins/adaptive-agent-runtime/README.md",
 )
 
+CLEAN_INSTALL_SCOPE_SURFACES = (
+    "CHANGELOG.md",
+    "TECHNICAL-STATUS.md",
+    "docs/sdd/aar-hermes-provider-ready-host-v1/ACCEPTANCE.md",
+    "docs/sdd/aar-hermes-provider-ready-host-v1/README.md",
+)
+
 OPERATION_SKILL_COPIES = (
     "skills/aar-operations/SKILL.md",
     "profiles/codex/plugins/adaptive-agent-runtime/skills/aar-operations/SKILL.md",
@@ -399,6 +406,9 @@ def test_release_status_preserves_behavior_and_external_boundaries() -> None:
     assert behavior["provider_ready_session_grants"] == "explicit_memory_only_generation_bound"
     assert behavior["hermes_host_adapter"] == "optional_standalone"
     assert behavior["runtime_root_policy"] == "clean_install_only"
+    assert behavior["hermes_acceptance_mode"] == "fresh_isolated_home_first_binding"
+    assert behavior["existing_runtime_root_mutation"] == "forbidden"
+    assert behavior["live_cutover"] == "out_of_scope"
     assert status["external_limits"] == {
         "pypi_publication": "not_established_by_this_snapshot",
         "official_plugin_directory": "not_established_by_this_snapshot",
@@ -406,3 +416,29 @@ def test_release_status_preserves_behavior_and_external_boundaries() -> None:
         "provider_signed_attestation": "not_established_by_this_snapshot",
         "general_production_deployment": "not_established_by_this_snapshot",
     }
+
+
+@pytest.mark.parametrize("path", CLEAN_INSTALL_SCOPE_SURFACES)
+def test_current_release_scope_does_not_reintroduce_live_cutover(path: str) -> None:
+    text = _surface(path).casefold()
+    assert "clean install" in text or "clean-install" in text
+    for stale_required_claim in (
+        "live hermes cutover requires",
+        "or live cutover occurred",
+        "and live cutover;",
+        "and local hermes cutover",
+        "installed release acceptance or live cutover",
+        "after hermes config cutover",
+        "pre-cutover hermes integration pointer",
+        "**cutover:**",
+    ):
+        assert stale_required_claim not in text
+    assert any(
+        boundary in text
+        for boundary in (
+            "without switching any live integration pointer",
+            "outside this release",
+            "out of scope",
+            "no live pointer switch",
+        )
+    )
