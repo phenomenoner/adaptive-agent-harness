@@ -29,6 +29,17 @@ class DispatcherClosed(DispatcherError):
     """The dispatcher has stopped accepting new dispatch requests."""
 
 
+class DispatcherDrainTimeout(DispatcherError):
+    """One or more worker callbacks remained live after bounded shutdown."""
+
+    def __init__(self, worker_names: tuple[str, ...]) -> None:
+        self.worker_names = worker_names
+        joined = ", ".join(worker_names)
+        super().__init__(
+            f"{len(worker_names)} dispatcher worker(s) still running after drain timeout: {joined}"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class AttemptFence:
     """The complete owner fence supplied to one claimed attempt."""
@@ -105,12 +116,10 @@ class DispatchHost(Protocol):
     """Host authority needed by a single-runtime durable dispatcher."""
 
     @property
-    def registry(self) -> DispatchRegistry:
-        ...
+    def registry(self) -> DispatchRegistry: ...
 
     @property
-    def runtime_generation(self) -> int:
-        ...
+    def runtime_generation(self) -> int: ...
 
     def run_claimed_rlm(
         self,
@@ -264,9 +273,11 @@ class DurableDispatcher:
         """Stop claiming, wake workers, and join them for a bounded interval.
 
         Closing does not cancel active handler calls and does not synthesize a
-        successful or failed result for work whose outcome is uncertain.  A
-        worker that is still running after the timeout remains a daemon and
-        can only commit through the registry's normal lease/fence checks.
+        successful or failed result for work whose outcome is uncertain.  If
+        any worker remains live after the timeout, fail closed so the owner
+        cannot tear down stores that the callback may still use.  The caller
+        may retry after the handler returns; any late commit still passes
+        through the registry's normal lease/fence checks.
         """
 
         if drain_timeout_s < 0:
@@ -290,6 +301,10 @@ class DurableDispatcher:
 
         with self._condition:
             self._condition.notify_all()
+
+        alive = tuple(worker.name for worker in workers if worker.is_alive())
+        if alive:
+            raise DispatcherDrainTimeout(alive)
 
     def _ensure_open_for_submit(self) -> None:
         if self._closed:
@@ -520,6 +535,7 @@ __all__ = [
     "DispatchHost",
     "DispatchRegistry",
     "DispatcherClosed",
+    "DispatcherDrainTimeout",
     "DispatcherError",
     "DurableDispatcher",
 ]

@@ -183,7 +183,9 @@ class ReferenceHost:
             raise ValueError(f"unsupported programmable backend: {programmable_backend}")
         self._now_ms = now_ms
         self._recovery_lock = threading.Lock()
-        self._lifecycle_lock = threading.Lock()
+        self._lifecycle_lock = threading.RLock()
+        self._closing = False
+        self._durable_admission_depth = 0
         self._runtime_resources_closed = False
         self._closed = False
         self._durable_dispatch_enabled = enable_durable_dispatch
@@ -387,8 +389,10 @@ class ReferenceHost:
         """Enable claims after a supervisor has published its exact Ready receipt."""
 
         with self._lifecycle_lock:
-            if self._runtime_resources_closed or self._closed:
+            if self._closing:
                 raise ReferenceHostError("reference host is closing")
+            if self._runtime_resources_closed or self._closed:
+                raise ReferenceHostError("reference host runtime resources are closed")
             if self.dispatcher is not None:
                 return self.dispatcher
             self.recover_durable()
@@ -610,7 +614,24 @@ class ReferenceHost:
         self.rlm.ensure(record.operation, spec)
         return record
 
+    def _ensure_durable_admission_open_locked(self) -> None:
+        if self._closing or self._runtime_resources_closed or self._closed:
+            raise ReferenceHostError("reference host is closing")
+
     def submit_rlm_workbench(
+        self,
+        envelope: RequestEnvelope,
+        value: RlmWorkbenchExecuteInput | dict[str, Any],
+    ) -> OperationRecord:
+        with self._lifecycle_lock:
+            self._ensure_durable_admission_open_locked()
+            self._durable_admission_depth += 1
+            try:
+                return self._submit_rlm_workbench_open(envelope, value)
+            finally:
+                self._durable_admission_depth -= 1
+
+    def _submit_rlm_workbench_open(
         self,
         envelope: RequestEnvelope,
         value: RlmWorkbenchExecuteInput | dict[str, Any],
@@ -640,6 +661,25 @@ class ReferenceHost:
         return record
 
     def submit_rlm_durable(
+        self,
+        envelope: RequestEnvelope,
+        spec: RlmJobSpec,
+        *,
+        before_dispatch: Callable[[OperationRef], None] | None = None,
+    ) -> OperationRecord:
+        with self._lifecycle_lock:
+            self._ensure_durable_admission_open_locked()
+            self._durable_admission_depth += 1
+            try:
+                return self._submit_rlm_durable_open(
+                    envelope,
+                    spec,
+                    before_dispatch=before_dispatch,
+                )
+            finally:
+                self._durable_admission_depth -= 1
+
+    def _submit_rlm_durable_open(
         self,
         envelope: RequestEnvelope,
         spec: RlmJobSpec,
@@ -691,6 +731,20 @@ class ReferenceHost:
         return self.dispatcher.wait(operation, timeout_s=timeout_s)
 
     def submit_program_workspace_durable(
+        self,
+        envelope: RequestEnvelope,
+        handle: ProgrammableWorkspaceHandle,
+        spec: WorkspaceProgramSpec,
+    ) -> OperationRecord:
+        with self._lifecycle_lock:
+            self._ensure_durable_admission_open_locked()
+            self._durable_admission_depth += 1
+            try:
+                return self._submit_program_workspace_durable_open(envelope, handle, spec)
+            finally:
+                self._durable_admission_depth -= 1
+
+    def _submit_program_workspace_durable_open(
         self,
         envelope: RequestEnvelope,
         handle: ProgrammableWorkspaceHandle,
@@ -2281,25 +2335,28 @@ class ReferenceHost:
         with self._lifecycle_lock:
             if self._runtime_resources_closed:
                 return
+            if self._durable_admission_depth:
+                raise ReferenceHostError("cannot close during durable admission")
+            self._closing = True
+            if self.dispatcher is not None:
+                self.dispatcher.close()
+            if self.rlm_workbench is not None:
+                self.rlm_workbench.close()
+            if self.caller_work is not None:
+                self.caller_work.close()
+            self.program_workspace.shutdown()
+            self.adaptive_assets.close()
+            self.rlm.close()
+            self.brokers.close()
+            self.subagents.close()
+            self.artifacts.close()
+            self.workspace.close()
             self._runtime_resources_closed = True
-        if self.dispatcher is not None:
-            self.dispatcher.close()
-        if self.rlm_workbench is not None:
-            self.rlm_workbench.close()
-        if self.caller_work is not None:
-            self.caller_work.close()
-        self.program_workspace.shutdown()
-        self.adaptive_assets.close()
-        self.rlm.close()
-        self.brokers.close()
-        self.subagents.close()
-        self.artifacts.close()
-        self.workspace.close()
 
     def close(self) -> None:
         with self._lifecycle_lock:
             if self._closed:
                 return
+            self.drain_runtime_resources()
+            self.registry.close()
             self._closed = True
-        self.drain_runtime_resources()
-        self.registry.close()

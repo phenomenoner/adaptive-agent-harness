@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import shutil
 import sqlite3
+import threading
 import traceback
 from pathlib import Path
 
@@ -34,6 +35,7 @@ from aar.providers.gateway import (
 )
 from aar.rlm_models import RlmJobSpec, RlmResult
 from aar.runtime.model_broker import (
+    ModelBrokerError,
     ModelExecutionJournal,
     ModelProviderFailure,
     ModelProviderOutcomeUnknown,
@@ -58,7 +60,9 @@ def _context() -> BrokerContext:
     )
 
 
-def _create_legacy_model_journal(database: Path) -> tuple[
+def _create_legacy_model_journal(
+    database: Path,
+) -> tuple[
     OperationRef,
     ModelRouteBinding,
     ModelRequest,
@@ -208,10 +212,13 @@ def test_model_journal_migration_preserves_legacy_bytes_and_rollback_copy(
             ).fetchall()
         }
         assert "model_schema_migrations" not in tables
-        assert legacy_reader.execute(
-            "SELECT binding_json FROM model_route_bindings WHERE operation_id = ?",
-            (operation.value,),
-        ).fetchone() == before_binding
+        assert (
+            legacy_reader.execute(
+                "SELECT binding_json FROM model_route_bindings WHERE operation_id = ?",
+                (operation.value,),
+            ).fetchone()
+            == before_binding
+        )
 
 
 def test_interrupted_model_journal_migration_rolls_back_and_reopen_converges(
@@ -599,9 +606,9 @@ def test_route_catalog_round_trips_canonical_json() -> None:
     )
     catalog = ModelRouteCatalog.issue((profile,))
 
-    assert ModelRouteCatalog.model_validate_json(
-        canonical_json_bytes(catalog), strict=True
-    ) == catalog
+    assert (
+        ModelRouteCatalog.model_validate_json(canonical_json_bytes(catalog), strict=True) == catalog
+    )
 
 
 def test_route_binding_rejects_profile_digest_drift() -> None:
@@ -842,6 +849,123 @@ def test_public_mcp_builder_preserves_model_registry_injection(tmp_path: Path) -
         assert application.host.default_model_route_profile == profile.profile_id
     finally:
         application.close()
+
+
+def test_model_registry_failed_child_close_is_retryable_and_fail_closed() -> None:
+    class CountingBroker(ReferenceModelBroker):
+        def __init__(self, *, fail_first_close: bool = False) -> None:
+            super().__init__()
+            self.close_calls = 0
+            self.fail_first_close = fail_first_close
+
+        def close(self) -> None:
+            self.close_calls += 1
+            if self.fail_first_close and self.close_calls == 1:
+                raise RuntimeError("model broker close failed")
+            super().close()
+
+    first_profile = ModelRouteProfile(
+        profile_id="close-first-v1",
+        provider_driver="reference-fake-driver-v1",
+        provider="reference",
+        model="close-first",
+        max_output_tokens=32,
+    )
+    retry_profile = ModelRouteProfile(
+        profile_id="close-retry-v1",
+        provider_driver="reference-fake-driver-v1",
+        provider="reference",
+        model="close-retry",
+        max_output_tokens=32,
+    )
+    first_broker = CountingBroker()
+    retry_broker = CountingBroker(fail_first_close=True)
+    registry = StaticModelBrokerRegistry(
+        ModelRouteCatalog.issue((first_profile, retry_profile)),
+        brokers={
+            first_profile.profile_id: first_broker,
+            retry_profile.profile_id: retry_broker,
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="model broker close failed"):
+        registry.close()
+    assert first_broker.close_calls == 1
+    assert first_broker._closed is True
+    assert retry_broker.close_calls == 1
+    assert retry_broker._closed is False
+    with pytest.raises(ModelBrokerError, match="registry is closed"):
+        registry.bind(first_profile.profile_id)
+
+    registry.close()
+    assert first_broker.close_calls == 1
+    assert retry_broker.close_calls == 2
+    assert retry_broker._closed is True
+
+
+def test_model_registry_concurrent_close_is_single_flight() -> None:
+    close_started = threading.Event()
+    release_close = threading.Event()
+
+    class BlockingBroker(ReferenceModelBroker):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_calls = 0
+
+        def close(self) -> None:
+            self.close_calls += 1
+            close_started.set()
+            assert release_close.wait(timeout=5)
+            if self.close_calls == 1:
+                raise RuntimeError("first concurrent close failed")
+            super().close()
+
+    profile = ModelRouteProfile(
+        profile_id="close-concurrent-v1",
+        provider_driver="reference-fake-driver-v1",
+        provider="reference",
+        model="close-concurrent",
+        max_output_tokens=32,
+    )
+    broker = BlockingBroker()
+    registry = StaticModelBrokerRegistry(
+        ModelRouteCatalog.issue((profile,)),
+        brokers={profile.profile_id: broker},
+    )
+    errors: list[BaseException] = []
+    second_entered = threading.Event()
+
+    def close_registry(*, signal_entry: bool = False) -> None:
+        if signal_entry:
+            second_entered.set()
+        try:
+            registry.close()
+        except BaseException as error:
+            errors.append(error)
+
+    first = threading.Thread(target=close_registry)
+    second = threading.Thread(target=close_registry, kwargs={"signal_entry": True})
+    first.start()
+    assert close_started.wait(timeout=5)
+    second.start()
+    assert second_entered.wait(timeout=5)
+    assert second.is_alive()
+    assert broker.close_calls == 1
+
+    release_close.set()
+    first.join(timeout=5)
+    second.join(timeout=5)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert len(errors) == 1
+    assert isinstance(errors[0], RuntimeError)
+    assert str(errors[0]) == "first concurrent close failed"
+    assert broker.close_calls == 2
+    assert broker._closed is True
+
+    registry.close()
+    assert broker.close_calls == 2
 
 
 def test_supervisor_startup_preserves_model_registry_ownership(tmp_path: Path) -> None:
@@ -1563,9 +1687,7 @@ def test_gateway_certain_failure_is_scrubbed_and_never_replayed(tmp_path: Path) 
             nonlocal send_calls
             del call, request, binding
             send_calls += 1
-            raise RuntimeError(
-                "provider rejected credential=" + credential.decode("ascii")
-            )
+            raise RuntimeError("provider rejected credential=" + credential.decode("ascii"))
 
         def lookup(self, call, binding, credential):
             nonlocal lookup_calls
@@ -1681,9 +1803,7 @@ def test_core_scrubs_unsanitized_driver_failure_before_durable_outer_evidence(
             del request, context, binding
             error_type = ModelProviderFailure if already_taxonomized else RuntimeError
             try:
-                raise RuntimeError(
-                    "third-party cause secret=" + credential_canary.decode("ascii")
-                )
+                raise RuntimeError("third-party cause secret=" + credential_canary.decode("ascii"))
             except RuntimeError as error:
                 raise error_type(
                     "third-party driver leaked secret=" + credential_canary.decode("ascii")
@@ -1940,9 +2060,7 @@ def test_after_send_loss_recovers_by_lookup_without_blind_replay(
         ).reconcile_unresolved(current_capability_digest=second.capabilities.digest)
         quarantined = expected_reason is not None
         assert report.unresolved is quarantined
-        assert report.calls[0].action == (
-            "quarantine" if quarantined else "receipt_recovered"
-        )
+        assert report.calls[0].action == ("quarantine" if quarantined else "receipt_recovered")
         if expected_reason is not None:
             assert report.calls[0].reason_code == expected_reason
         response = second.model_response(operation, ordinal=0)
@@ -2007,9 +2125,7 @@ def test_lookup_failure_is_scrubbed_quarantined_and_never_retried(tmp_path: Path
             nonlocal lookup_calls
             del call, binding
             lookup_calls += 1
-            raise RuntimeError(
-                "lookup rejected credential=" + credential.decode("ascii")
-            )
+            raise RuntimeError("lookup rejected credential=" + credential.decode("ascii"))
 
         def close(self) -> None:
             pass
@@ -2065,9 +2181,7 @@ def test_lookup_failure_is_scrubbed_quarantined_and_never_retried(tmp_path: Path
             envelope.model_copy(update={"runtime_generation": second.runtime_generation}),
             operation,
         )
-        report = bound.reconcile_unresolved(
-            current_capability_digest=second.capabilities.digest
-        )
+        report = bound.reconcile_unresolved(current_capability_digest=second.capabilities.digest)
         assert report.unresolved
         assert report.calls[0].action == "quarantine"
         assert report.calls[0].reason_code == "model_receipt_lookup_failed"
@@ -2075,9 +2189,7 @@ def test_lookup_failure_is_scrubbed_quarantined_and_never_retried(tmp_path: Path
         assert send_calls == 1
         assert lookup_calls == 1
 
-        repeated = bound.reconcile_unresolved(
-            current_capability_digest=second.capabilities.digest
-        )
+        repeated = bound.reconcile_unresolved(current_capability_digest=second.capabilities.digest)
         assert repeated.unresolved
         assert repeated.calls == ()
         assert send_calls == 1
@@ -2206,9 +2318,7 @@ def test_crash_after_terminal_receipt_recovers_locally_without_provider_lookup(
         default_model_route_profile=profile.profile_id,
     )
     try:
-        rebound = envelope.model_copy(
-            update={"runtime_generation": second.runtime_generation}
-        )
+        rebound = envelope.model_copy(update={"runtime_generation": second.runtime_generation})
         report = second.brokers.bind(rebound, accepted.operation).reconcile_unresolved(
             current_capability_digest=second.capabilities.digest
         )

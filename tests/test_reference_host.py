@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from threading import Event, Thread
 
 import pytest
 
 from aar.canonical import canonical_sha256
 from aar.rlm_models import RlmJobSpec
 from aar.runtime.brokers import BrokerContext
+from aar.runtime.dispatcher import DispatcherDrainTimeout
 from aar.runtime.models import WorkspaceExecuteSpec
 from aar.runtime.reference_host import (
     BudgetDenied,
@@ -16,6 +18,7 @@ from aar.runtime.reference_host import (
     GrantDenied,
     InputDigestMismatch,
     ReferenceHost,
+    ReferenceHostError,
     SimulatedProcessLoss,
     WorkspaceBindingDenied,
 )
@@ -174,9 +177,7 @@ def test_stale_workspace_revision_fails_closed(host: ReferenceHost, clock: Manua
     assert failed.failure.code == "WORKSPACE_REVISION_CONFLICT"
 
 
-def test_stale_workspace_generation_fails_closed(
-    host: ReferenceHost, clock: ManualClock
-) -> None:
+def test_stale_workspace_generation_fails_closed(host: ReferenceHost, clock: ManualClock) -> None:
     handle, _spec, _envelope = prepare(host, clock)
     stale_spec = WorkspaceExecuteSpec(
         workspace=handle.workspace,
@@ -247,9 +248,7 @@ def test_transport_loss_after_workspace_commit_requires_reconciliation(
     host: ReferenceHost, clock: ManualClock
 ) -> None:
     handle, spec, envelope = prepare(host, clock)
-    uncertain = host.execute(
-        envelope, spec, failpoint="transport_loss_after_workspace_commit"
-    )
+    uncertain = host.execute(envelope, spec, failpoint="transport_loss_after_workspace_commit")
     assert uncertain.state is OperationState.INDETERMINATE
     assert uncertain.reconciliation_required
     assert host.workspace.current_handle(handle.workspace).revision == 1
@@ -281,9 +280,7 @@ def test_restart_recovers_committed_receipt_without_reexecution(
     database = tmp_path / "restart.sqlite3"
     first = ReferenceHost(database, now_ms=clock)
     handle, spec, envelope = prepare(first, clock)
-    uncertain = first.execute(
-        envelope, spec, failpoint="transport_loss_after_workspace_commit"
-    )
+    uncertain = first.execute(envelope, spec, failpoint="transport_loss_after_workspace_commit")
     first.close()
 
     second = ReferenceHost(database, now_ms=clock)
@@ -353,9 +350,7 @@ def test_fake_brokers_are_deterministic_and_effects_are_proposal_only(
     assert host.models.request("question", context) == host.models.request("question", context)
     child = host.subagents.submit("bounded task", context)
     assert host.subagents.result(child).value == "completed:bounded task"
-    proposal = host.effects.propose(
-        "write.file", canonical_sha256({"path": "output.txt"}), context
-    )
+    proposal = host.effects.propose("write.file", canonical_sha256({"path": "output.txt"}), context)
     assert proposal.kind == "effect_proposal"
     assert proposal.value == "proposal_only"
     assert not hasattr(host.effects, "execute")
@@ -412,6 +407,193 @@ def test_durable_dispatch_can_start_only_after_owner_ready_gate(
     finally:
         host.close()
     host.close()
+
+
+def test_close_preserves_runtime_stores_when_dispatcher_drain_times_out(
+    tmp_path: Path, clock: ManualClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = ReferenceHost(
+        tmp_path / "close-fence.sqlite3",
+        now_ms=clock,
+        programmable_backend="plain",
+        enable_durable_dispatch=False,
+    )
+    dispatcher = host.start_durable_dispatch()
+    real_close = dispatcher.close
+    close_calls = 0
+
+    def close_with_one_timeout(drain_timeout_s: float = 5) -> None:
+        nonlocal close_calls
+        close_calls += 1
+        if close_calls == 1:
+            raise DispatcherDrainTimeout(("test-dispatcher-worker",))
+        real_close(drain_timeout_s)
+
+    monkeypatch.setattr(dispatcher, "close", close_with_one_timeout)
+
+    with pytest.raises(DispatcherDrainTimeout, match="still running"):
+        host.close()
+
+    assert host._runtime_resources_closed is False
+    assert host._closing is True
+    assert host._closed is False
+    assert host.ready().runtime_generation == host.runtime_generation
+
+    host.close()
+    assert host._runtime_resources_closed is True
+    assert host._closed is True
+    assert close_calls == 2
+    host.close()
+    assert close_calls == 2
+
+
+def test_closing_host_rejects_durable_admission_before_registry_mutation(
+    tmp_path: Path, clock: ManualClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = ReferenceHost(
+        tmp_path / "closing-admission.sqlite3",
+        now_ms=clock,
+        programmable_backend="plain",
+        enable_durable_dispatch=False,
+    )
+    host.start_durable_dispatch()
+    spec = RlmJobSpec(query="must not persist", strategy="baseline", max_steps=1)
+    envelope = host.request_rlm_envelope(
+        request_id="request-closing-admission",
+        idempotency_key="idempotency-closing-admission",
+        principal=PrincipalRef(value="principal-closing-admission"),
+        session=SessionRef(value="session-closing-admission"),
+        spec=spec,
+        deadline_unix_ms=clock.now + 10_000,
+        budget=Budget(
+            wall_time_ms=10_000,
+            model_requests=1,
+            input_tokens=128,
+            output_tokens=64,
+        ),
+    )
+    accept_calls = 0
+
+    def fail_if_accepted(*_args: object, **_kwargs: object) -> None:
+        nonlocal accept_calls
+        accept_calls += 1
+        raise AssertionError("closing host must reject before registry.accept")
+
+    monkeypatch.setattr(host.registry, "accept", fail_if_accepted)
+    host._closing = True
+    try:
+        with pytest.raises(ReferenceHostError, match="closing"):
+            host.start_durable_dispatch()
+        with pytest.raises(ReferenceHostError, match="closing"):
+            host.submit_rlm_durable(envelope, spec)
+        with pytest.raises(ReferenceHostError, match="closing"):
+            host.submit_program_workspace_durable(envelope, None, None)  # type: ignore[arg-type]
+        with pytest.raises(ReferenceHostError, match="closing"):
+            host.submit_rlm_workbench(envelope, {})
+        assert accept_calls == 0
+    finally:
+        host._closing = False
+        host.close()
+
+
+def test_close_waits_for_admission_to_reach_dispatch_boundary(
+    tmp_path: Path, clock: ManualClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = ReferenceHost(
+        tmp_path / "admission-close-barrier.sqlite3",
+        now_ms=clock,
+        programmable_backend="plain",
+        enable_durable_dispatch=False,
+    )
+    host.start_durable_dispatch()
+    spec = RlmJobSpec(query="linearize admission", strategy="baseline", max_steps=1)
+    envelope = host.request_rlm_envelope(
+        request_id="request-admission-close-barrier",
+        idempotency_key="idempotency-admission-close-barrier",
+        principal=PrincipalRef(value="principal-admission-close-barrier"),
+        session=SessionRef(value="session-admission-close-barrier"),
+        spec=spec,
+        deadline_unix_ms=clock.now + 10_000,
+        budget=Budget(
+            wall_time_ms=10_000,
+            model_requests=1,
+            input_tokens=128,
+            output_tokens=64,
+        ),
+    )
+    real_accept = host.registry.accept
+    real_drain = host.drain_runtime_resources
+    real_registry_close = host.registry.close
+    close_attempted = Event()
+    close_was_blocked = False
+    errors: list[BaseException] = []
+
+    def close() -> None:
+        close_attempted.set()
+        try:
+            host.close()
+        except BaseException as error:
+            errors.append(error)
+
+    close_thread = Thread(target=close)
+
+    def blocked_accept(*args: object, **kwargs: object) -> object:
+        nonlocal close_was_blocked
+        close_thread.start()
+        assert close_attempted.wait(2)
+        close_was_blocked = close_thread.is_alive()
+        return real_accept(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(host, "drain_runtime_resources", lambda: None)
+    monkeypatch.setattr(host.registry, "close", lambda: None)
+    monkeypatch.setattr(host.registry, "accept", blocked_accept)
+
+    submitted = host.submit_rlm_durable(envelope, spec)
+    close_thread.join(5)
+
+    assert close_was_blocked is True
+    assert not close_thread.is_alive()
+    assert errors == []
+    assert submitted.state is OperationState.ACCEPTED
+    assert host._closed is True
+
+    monkeypatch.setattr(host, "drain_runtime_resources", real_drain)
+    monkeypatch.setattr(host.registry, "close", real_registry_close)
+    host._closed = False
+    host.close()
+
+
+def test_reentrant_close_during_admission_fails_the_operation_without_closing_host(
+    host: ReferenceHost, clock: ManualClock
+) -> None:
+    host.start_durable_dispatch()
+    spec = RlmJobSpec(query="reject reentrant close", strategy="baseline", max_steps=1)
+    envelope = host.request_rlm_envelope(
+        request_id="request-reentrant-close",
+        idempotency_key="idempotency-reentrant-close",
+        principal=PrincipalRef(value="principal-reentrant-close"),
+        session=SessionRef(value="session-reentrant-close"),
+        spec=spec,
+        deadline_unix_ms=clock.now + 10_000,
+        budget=Budget(
+            wall_time_ms=10_000,
+            model_requests=1,
+            input_tokens=128,
+            output_tokens=64,
+        ),
+    )
+
+    failed = host.submit_rlm_durable(
+        envelope,
+        spec,
+        before_dispatch=lambda _operation: host.close(),
+    )
+
+    assert failed.state is OperationState.FAILED
+    assert failed.failure is not None
+    assert failed.failure.code == "DISPATCH_PREREQUISITE_FAILED"
+    assert host._closing is False
+    assert host._closed is False
 
 
 def test_durable_rlm_binding_failure_is_terminal_and_idempotently_observable(

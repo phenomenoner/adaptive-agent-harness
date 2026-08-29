@@ -298,10 +298,8 @@ class AarMcpApplication:
     runtime_ownership: RuntimeOwnershipLock
 
     def close(self) -> None:
-        try:
-            self.host.close()
-        finally:
-            self.runtime_ownership.close()
+        self.host.close()
+        self.runtime_ownership.close()
 
 
 def _receipt_artifact(host: ReferenceHost, record) -> tuple[ArtifactReference, ...]:
@@ -844,9 +842,7 @@ def _assert_current_claim_adapter(host: ReferenceHost, document: dict[str, Any])
         raise ReferenceHostError("caller-work repository is unavailable")
     ticket = host.caller_work.get(str(document["ticket_id"]))
     request = ticket.root["request"]
-    rows = {
-        row["method"]: row for row in _workbench_capability(host).root["methods"]
-    }
+    rows = {row["method"]: row for row in _workbench_capability(host).root["methods"]}
     row = rows.get(request["method"])
     if (
         row is None
