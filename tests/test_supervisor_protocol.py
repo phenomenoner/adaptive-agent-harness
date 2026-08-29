@@ -17,6 +17,8 @@ from aar.runtime.supervisor_protocol import (
     PrivateFrame,
     SupervisorAttachAck,
     SupervisorAttachPayload,
+    SupervisorGrantIssueRequest,
+    SupervisorGrantRevokeRequest,
     SupervisorLifecycleReceipt,
     SupervisorProtocolError,
     extract_mcp_authority,
@@ -246,3 +248,41 @@ def test_base64_payload_is_canonical() -> None:
     document["payload_digest"] += "0" * 64
     with pytest.raises(ValidationError, match="base64"):
         PrivateFrame.model_validate(document, strict=True)
+
+
+def test_grant_control_requests_are_strict_and_frameable() -> None:
+    issue = SupervisorGrantIssueRequest(
+        principal_id="principal-local",
+        session_id="session-local",
+        capability="rlm.workbench.execute",
+        ttl_ms=60_000,
+        grant_id="grant-explicit",
+    )
+    frame = PrivateFrame.issue(
+        kind="grant_issue",
+        request_id="request-grant-issue",
+        trace_id="trace-grant-issue",
+        runtime_generation=2,
+        dispatcher_generation=2,
+        authority_digest=DIGEST,
+        deadline_unix_ms=4_102_444_800_000,
+        attachment_digest=DIGEST,
+        payload=issue.model_dump_json().encode(),
+    )
+    restored = PrivateFrame.model_validate_json(frame.model_dump_json(), strict=True)
+    assert restored.kind == "grant_issue"
+    assert (
+        SupervisorGrantIssueRequest.model_validate_json(restored.decoded_payload(), strict=True)
+        == issue
+    )
+    assert SupervisorGrantRevokeRequest(grant_id=issue.grant_id).grant_id == issue.grant_id
+
+    wrong_type = issue.model_dump(mode="python")
+    wrong_type["ttl_ms"] = True
+    with pytest.raises(ValidationError, match="ttl_ms"):
+        SupervisorGrantIssueRequest.model_validate(wrong_type, strict=True)
+
+    extra = issue.model_dump(mode="python")
+    extra["policy_approved"] = True
+    with pytest.raises(ValidationError, match="policy_approved"):
+        SupervisorGrantIssueRequest.model_validate(extra, strict=True)

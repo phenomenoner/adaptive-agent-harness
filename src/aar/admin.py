@@ -8,20 +8,28 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from aar.provider_ready_operator_inputs import (
+    issue_candidate_receipt_from_path,
+    issue_initial_host_activation_intent,
+)
 from aar.runtime.installer import (
     InstallerError,
     InstallResult,
     PublicationIndeterminate,
     install_clean_runtime,
+    verify_published_install,
 )
 from aar.runtime.operator import (
     OperatorError,
     activation_status,
     emit_canonical,
+    load_activation_profile,
     verify_activation_profile,
 )
 
 _READ_ONLY_COMMANDS = {
+    ("runtime", "candidate"),
+    ("activation", "intent"),
     ("activation", "status"),
     ("activation", "verify"),
 }
@@ -46,9 +54,17 @@ def build_parser() -> argparse.ArgumentParser:
     install.add_argument("--intent", type=_path, required=True)
     install.add_argument("--candidate-receipt", type=_path, required=True)
     install.add_argument("--wheel", type=_path, required=True)
+    candidate = runtime_commands.add_parser("candidate")
+    candidate.add_argument("--wheel", type=_path, required=True)
+    candidate.add_argument("--source-commit", required=True)
 
     activation = domains.add_parser("activation")
     activation_commands = activation.add_subparsers(dest="command", required=True)
+    intent = activation_commands.add_parser("intent")
+    _add_runtime_home(intent)
+    intent.add_argument("--candidate-receipt", type=_path, required=True)
+    intent.add_argument("--route-catalog", type=_path, required=True)
+    intent.add_argument("--template", type=_path, required=True)
     verify = activation_commands.add_parser("verify")
     _add_runtime_home(verify)
     verify.add_argument("--profile", type=_path, required=True)
@@ -59,11 +75,39 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _run_read_only(args: argparse.Namespace) -> int:
     command = (args.domain, args.command)
+    if command == ("runtime", "candidate"):
+        emit_canonical(
+            issue_candidate_receipt_from_path(
+                args.wheel,
+                source_commit=args.source_commit,
+            )
+        )
+        return 0
+    if command == ("activation", "intent"):
+        emit_canonical(
+            issue_initial_host_activation_intent(
+                args.runtime_home,
+                candidate_receipt_path=args.candidate_receipt,
+                route_catalog_path=args.route_catalog,
+                template_path=args.template,
+            )
+        )
+        return 0
     if command == ("activation", "status"):
         emit_canonical(activation_status(args.runtime_home))
         return 0
     if command == ("activation", "verify"):
-        emit_canonical(verify_activation_profile(args.runtime_home, args.profile))
+        supplied_profile = load_activation_profile(args.profile)
+        installed = verify_published_install(args.runtime_home, allow_runtime_state=True)
+        emit_canonical(
+            verify_activation_profile(
+                args.runtime_home,
+                supplied_profile=supplied_profile,
+                installed_profile=installed.profile,
+                installed_authority=installed.authority,
+                installed_candidate=installed.receipt.candidate,
+            )
+        )
         return 0
     raise AssertionError(f"unhandled read-only command: {command!r}")
 

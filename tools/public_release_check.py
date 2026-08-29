@@ -108,14 +108,9 @@ def github_slug(heading: str) -> str:
     heading = re.sub(r"<[^>]+>", "", heading)
     heading = re.sub(r"!\[([^]]*)\]\([^)]+\)", r"\1", heading)
     heading = re.sub(r"\[([^]]+)\]\([^)]+\)", r"\1", heading)
-    heading = (
-        heading.replace("`", "")
-        .replace("*", "")
-        .replace("_", "")
-        .replace("~", "")
-        .strip()
-        .lower()
-    )
+    for marker in ("`", "*", "_", "~"):
+        heading = heading.replace(marker, "")
+    heading = heading.strip().lower()
     output: list[str] = []
     for character in heading:
         category = unicodedata.category(character)
@@ -126,9 +121,7 @@ def github_slug(heading: str) -> str:
     return "".join(output)
 
 
-def release_identity_failures(
-    root: Path, translation_names: set[str]
-) -> list[dict[str, str]]:
+def release_identity_failures(root: Path, translation_names: set[str]) -> list[dict[str, str]]:
     """Bind the current public docs to the package version without rewriting history."""
     failures: list[dict[str, str]] = []
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
@@ -136,24 +129,27 @@ def release_identity_failures(
     tag = f"v{version}"
     required_markers = {
         root / "README.md": (
-            f"releases/tag/{tag}",
+            f"**Release-contract target:** `{version}` / `{tag}`",
             f"@{tag}",
-            f"**`{version}`**",
+            "does not establish that",
         ),
         root / "CHANGELOG.md": (
-            f"## [{version}]",
-            f"releases/tag/{tag}",
+            f"## {version} —",
+            "release-contract target",
+            "does not establish",
         ),
         root / "docs" / f"RELEASE-{tag}.md": (
             f"# Adaptive Agent Harness {tag}",
-            f"@{tag}",
+            f"Target source reference: `phenomenoner/adaptive-agent-harness@{tag}`",
+            "target tag, GitHub prerelease",
+            "source file does not claim that publication occurred",
         ),
     }
     for name in sorted(translation_names):
         required_markers[root / "docs" / "i18n" / name] = (
-            f"releases/tag/{tag}",
+            f"**`{version}` release-contract target**",
             f"@{tag}",
-            f"**`{version}`**",
+            "source text does not establish publication",
         )
     for path, markers in required_markers.items():
         relative = path.relative_to(root).as_posix()

@@ -1,9 +1,9 @@
 # Codex host profile
 
-Release package: `0.6.0a0`; bundled operation skill: `0.10.0`. The
-source repository's immutable release snapshot is `profiles/release-status-v1.json`; exact
-post-freeze evidence is bound by
-`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. This profile does not establish official
+Release package: `0.6.0a1`; bundled operation skill: `0.11.0`. The
+source repository's release contract is `profiles/release-status-v1.json`; it does not establish
+that the target tag, GitHub prerelease, or `adaptive-agent-runtime-v0.6.0a1-release-receipt.json` exists. Publication and exact
+post-freeze evidence require external readback. This profile does not establish official
 Plugin Directory publication, which requires separate external authority.
 Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so
 `aar-codex-mcp` and its declared IPython, NumPy, and pandas dependencies are available, then run

@@ -116,14 +116,14 @@ def _execute_arguments(capabilities: dict[str, Any], *, suffix: str) -> dict[str
     return fixture
 
 
-def _configured_backends() -> dict[str, dict[str, Any]]:
+def _configured_backends(*, adapter_generation: int = 2) -> dict[str, dict[str, Any]]:
     return {
         method: {
             "backend_kind": "caller_driver",
             "configured": True,
             "reference_only": False,
             "adapter_id": "mcp-caller-driver",
-            "adapter_generation": 1,
+            "adapter_generation": adapter_generation,
             "evidence_tier": "caller_observed",
         }
         for method in METHODS
@@ -497,10 +497,15 @@ def test_broker_caller_work_tools_forward_into_the_g4_lifecycle(tmp_path: Path) 
                         )
                         connection.commit()
                     pending = repository.create_ticket(ticket).root
+                    current = next(
+                        row
+                        for row in application.host.workbench_capability().root["methods"]
+                        if row["method"] == pending["request"]["method"]
+                    )
                     claim_arguments = {
                         **_caller_common(legacy, authority, pending, suffix=f"{ticket_id}-claim"),
-                        "adapter_id": "mcp-caller-driver",
-                        "adapter_generation": 1,
+                        "adapter_id": current["adapter_id"],
+                        "adapter_generation": current["adapter_generation"],
                         "claim_lease_ms": 5_000,
                     }
                     first = _structured(
@@ -662,8 +667,8 @@ def test_broker_caller_work_tools_forward_into_the_g4_lifecycle(tmp_path: Path) 
                     expected_revision=started_unknown["revision"],
                     physical_attempt_id=physical["physical_attempt_id"],
                     candidate_receipt_digest=None,
-                    reconciler_id="mcp-caller-driver",
-                    reconciler_generation=1,
+                    reconciler_id=started_unknown["claimant"]["adapter_id"],
+                    reconciler_generation=started_unknown["claimant"]["adapter_generation"],
                     reconciliation_action="lookup",
                 )
                 reconciled = _structured(
@@ -678,8 +683,10 @@ def test_broker_caller_work_tools_forward_into_the_g4_lifecycle(tmp_path: Path) 
                             ),
                             "physical_attempt_id": physical["physical_attempt_id"],
                             "candidate_receipt_digest": None,
-                            "reconciler_id": "mcp-caller-driver",
-                            "reconciler_generation": 1,
+                            "reconciler_id": started_unknown["claimant"]["adapter_id"],
+                            "reconciler_generation": started_unknown["claimant"][
+                                "adapter_generation"
+                            ],
                             "reconcile_fence": reconcile_fence,
                             "reconciliation_action": "lookup",
                         },

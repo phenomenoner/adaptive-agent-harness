@@ -7,7 +7,7 @@ from pathlib import Path
 
 from aar.canonical import canonical_sha256
 from aar.mcp.assets import asset_documents, verify_assets
-from aar.mcp.server import FIXTURE_SET_DIGEST, SCHEMA_BUNDLE_DIGEST
+from aar.mcp.server import FIXTURE_SET_DIGEST, OPERATION_SKILL_VERSION, SCHEMA_BUNDLE_DIGEST
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_TOOLS = (
@@ -138,7 +138,7 @@ def test_skill_metadata_binds_exact_skill_and_tool_bytes() -> None:
 
     assert metadata["skill_digest"] == (f"sha256:{hashlib.sha256(skill_bytes).hexdigest()}")
     assert metadata["tool_surface_digest"] == tool_manifest["tool_surface_digest"]
-    assert metadata["skill_version"] == "0.10.0"
+    assert metadata["skill_version"] == OPERATION_SKILL_VERSION
     skill_text = skill_bytes.decode("utf-8").lower()
     assert "tool use or analysis" in skill_text
     assert "software planning, development, testing, and troubleshooting" in skill_text

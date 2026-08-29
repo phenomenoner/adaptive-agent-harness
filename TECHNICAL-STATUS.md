@@ -1,45 +1,52 @@
 # Technical Status
 
-**Release snapshot:** `v0.4.0a6`
-**Package:** `adaptive-agent-runtime==0.4.0a6`
-**MCP surfaces:** local `aar.mcp-tools.v7` with 30 tools; remote public profile with 11 tools
-**Operation skill:** `aar-operations` `0.9.6`
+**Release-contract target:** `v0.6.0a1`
+**Package:** `adaptive-agent-runtime==0.6.0a1`
+**MCP surface:** `aar.mcp-tools.v8`, 38 tools, including the frozen 30-tool v7 compatibility projection
+**Operation skill:** `aar-operations` `0.11.0`
 
-The immutable machine-readable release snapshot for this page and the other public release surfaces
-is [`profiles/release-status-v1.json`](profiles/release-status-v1.json). It records stable contract
-facts and names `adaptive-agent-runtime-v0.4.0a6-release-receipt.json` as the external authority for
-exact commit, tree, wheel, CI, install, host, review, tag, and asset-readback evidence. The preceding
-`v0.4.0a5` candidate is **blocked, unreleased, and historical**.
+The machine-readable release contract for this page and the other current public surfaces is
+[`profiles/release-status-v1.json`](profiles/release-status-v1.json). Exact commit, tree, wheel,
+sdist, CI, clean-install, activation, native-host, provider, review, tag, and downloaded-asset evidence
+is established after source freeze only by external readback and
+`adaptive-agent-runtime-v0.6.0a1-release-receipt.json`, rather than being embedded in the objects it
+hashes. This source snapshot does not establish that the target tag, GitHub prerelease, or receipt
+exists. `v0.6.0a0`, `v0.5.0a0`, and `v0.4.0a6` are predecessor
+release snapshots; their release notes and receipts are historical authorities for those versions,
+not current install guidance.
 
-Adaptive Agent Harness (AAR) is an executable, contract-first runtime for bounded agent operations.
-It provides durable operation state, programmable workspaces, brokered RLM jobs, immutable adaptive
-assets, and receipt-backed model routing through a host-owned provider gateway.
+Adaptive Agent Harness (AAR) is a standalone, host-neutral runtime for bounded agent operations. It
+provides durable operation state, programmable workspaces, brokered RLM jobs, immutable adaptive
+assets, and receipt-backed caller work without becoming a provider credential store or a full agent
+host.
 
 > AAR computes and proposes. The host authorizes and delivers.
 
-AAR does not own provider credentials, external-effect authorization, activation, deployment, or
-final delivery.
+## Release-contract behavior
 
-## Release behavior
+`v0.6.0a1` keeps the public 38-tool MCP v8 names and schemas unchanged while adding an optional
+standalone Hermes adapter and explicit trusted-local session-grant authority:
 
-The `0.4.0a6` release closes the reviewed lifecycle seams with these contracts:
+- `aar-hermes-mcp` starts or reuses one exact provider-ready supervisor, verifies package, process,
+  protocol, generation, capability, activation, and route bindings, then attaches stdio;
+- `aar-hermes-authority issue` and `revoke` use the authenticated owner-only private supervisor
+  channel; they do not add a public MCP method or durable grant store;
+- every provider-ready public mutation requires a current, explicitly issued, memory-only,
+  generation-bound session grant before its first durable write;
+- install, startup, Ready, attach, capability reads, reference context, and ordinary requests never
+  issue a grant automatically;
+- restart clears all in-memory grants while preserving durable activation and operation state;
+- `host-caller-driver-v1` uses the durable caller protocol: claim, mark-send-started, a physical call
+  owned by the host, and an exact response/usage receipt commit;
+- a sent request without an authenticated terminal receipt is `indeterminate` and must not be blindly
+  retried;
+- AAR receives no provider credential and performs no host-owned physical provider request.
 
-- spawned supervisor and IPython children are admitted with one exact native process object and
-  terminalized through that object, including same-handle wait and at-most-once receipts;
-- each continuity database admits one active runtime through the existing process lock acquired
-  before host construction and released automatically on process exit;
-- supervisor endpoint, credential, and shutdown-request paths are generation-unique while
-  `discovery.json` is an atomically advanced stable pointer carrying the publication ID; normal
-  lifecycle retirement is **non-destructive** and retains generation-specific control artifacts as
-  forensic state rather than deleting a possible successor;
-- the subprocess Codex configuration adapter reports `NO_ATOMIC_AUTHORITY` and returns an ordered
-  manual/provider-authority-required plan before the first forward mutation;
-- automatic Codex installation, rollback, and best-effort compensation are not claimed;
-- the canonical operation skill and generated Codex/Hermes copies are `0.9.6`.
-
-The provider-backed RLM boundary remains host-owned. A main agent chooses one model and optional
-reasoning effort per job; the host performs each physical call; AAR persists bounded tickets,
-receipts, and continuation state without provider credentials.
+The public operator path is credential-free. It derives an exact
+`aar.install-candidate-receipt.v1` from a verified wheel and source identity, then issues a
+self-digested, target-bound `aar.host-activation-intent.v1` from explicit host-owned inputs. Neither
+command installs, activates, migrates, or mutates an existing runtime root. This release contract is
+**clean-install-only**: install into a fresh absent root and retain predecessor roots unchanged.
 
 ## Current capabilities
 
@@ -47,78 +54,72 @@ receipts, and continuation state without provider credentials.
 
 - strict Pydantic contracts with generated JSON Schemas;
 - deterministic canonical JSON and content digests;
-- direct Python APIs and a local-stdio MCP server;
-- structured tool results with identities, generations, revisions, deadlines, grants, budgets, and
-  idempotency keys;
-- a canonical host-neutral operation skill copied into generated host profiles.
+- direct Python APIs and local-stdio MCP;
+- 38 MCP v8 tools with exact generated/list/serialization parity;
+- frozen 30-tool MCP v7 compatibility bytes;
+- identities, generations, revisions, deadlines, grants, budgets, and idempotency keys carried in
+  structured requests and receipts.
 
-### Durable operation lifecycle
+### Durable operations and programmable workspaces
 
-- accepted intent is persisted before execution;
-- attempts, leases, events, cancellations, receipts, and recovery decisions survive frontend loss;
+- accepted intent is durable before dispatch;
+- attempts, events, cancellation, receipts, and recovery survive frontend loss;
 - stale generations and late writers fail closed;
 - uncertain state-changing outcomes remain `indeterminate` until reconciled;
-- one durable supervisor owns the runtime while replaceable MCP frontends attach through an
-  owner-private authenticated transport.
+- plain-Python and supervised IPython workspaces use generation and revision checks;
+- JSON-subset checkpoints and content-addressed artifacts preserve explicit portability boundaries.
 
-### Programmable workspaces and RLM
+### Brokered RLM and caller work
 
-- plain-Python and supervised IPython backends with generation and revision checks;
-- JSON-subset checkpoint manifests with explicit exclusions;
-- bounded persisted RLM jobs, typed broker contracts, retained child handles, and explicit result
-  retrieval;
-- immutable content-addressed assets and dependency-closed import/export;
+- bounded persisted RLM jobs with cumulative deadline, model-call, token, child, and artifact budgets;
+- typed model, child, artifact, evidence, and external-effect broker contracts;
+- exact pre-spend claim and send-start linearization points;
+- requested-versus-effective route receipts, provider-reported usage, retry ordinals, and fallback
+  chains;
 - proposal-only external effects and host-owned materialization.
 
-### Public plugin and caller-delegated RLM
-
-The separate OAuth-authenticated Streamable HTTP profile exposes six tenant-private structured
-workspace tools and five caller-delegated RLM tools. Each job has one host-selected executor, model,
-and optional reasoning effort, exact pre-spend claim tickets, compare-and-set result commits, and
-durable idempotency/restart/cancellation semantics. AAR does not receive provider credentials or
-execute the public model call.
-
-## Host support
+## Host compatibility summary
 
 | Host surface | Release surface | Boundary |
 |---|---|---|
-| Direct Python | contract models, reference host, supervisor/frontend APIs | embedding host preserves identity and receipt semantics |
-| Generic MCP | local stdio, 30 public tools | transport is not authority proof |
-| ChatGPT / Codex public submission profile | remote OAuth profile, 11 curated tools, scoped skill | not production deployment, OpenAI approval, or publication |
-| Codex | generated plugin/profile, setup helper, canonical operation skill | Codex owns approvals, credentials, and tool policy |
-| Hermes | generated profile, ordinary MCP registration, durable supervisor integration | Hermes owns MCP Sampling and physical provider requests |
+| Direct Python | contract models, supervisor/frontend APIs, reference host | embedding host preserves identity and receipt semantics |
+| Generic MCP | local stdio, 38-tool v8 surface | transport visibility is not runtime or authority proof |
+| Codex Desktop | generated plugin/profile, `aar-codex-mcp`, setup helper | Codex owns approvals, credentials, and configuration authority |
+| Hermes | generated profile plus optional `aar-hermes-mcp` and private authority CLI | Hermes is one host adapter; AAR core and caller work remain host-neutral |
+| ChatGPT/Codex public plugin | separate OAuth profile with 11 curated tools | submission material is not Plugin Directory publication |
 
-See [Host Compatibility](HOST-COMPATIBILITY.md) for commands and evidence boundaries.
+See [Host Compatibility](HOST-COMPATIBILITY.md) for install and readback details.
 
-## Verification state
+## Verification authority
 
-The **63-row** lifecycle repair matrix and its Windows behavioral suite are completed pre-freeze
-evidence. Exact commit/tree, supported-Python CI, wheel and sidecar, isolated install, fresh native
-pickup, caller-delegated Luna/max drill, independent review, tag target, and downloaded-asset
-readback are post-freeze facts. They are deliberately stored in
-`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`, outside the Git tree and wheel they hash.
-The evidence altitudes are T1 for the matrix, T2 for real component seams, and T3 for fresh-host and
-release scenarios. A local unit result, generated profile, or package scan alone does not establish
-the external receipt claim. The previous `v0.4.0a5` counts and reports are historical blocked
-evidence only.
+The 20-row provider-ready host matrix is frozen in
+[`docs/sdd/aar-hermes-provider-ready-host-v1/ACCEPTANCE.md`](docs/sdd/aar-hermes-provider-ready-host-v1/ACCEPTANCE.md).
+The in-tree status records the frozen claim budget and exact public surface; it does not claim that
+post-freeze CI, independent review, release, persistent clean install, or isolated fresh-home Hermes
+acceptance occurred. Those facts must appear in
+`adaptive-agent-runtime-v0.6.0a1-release-receipt.json` and be checked against the exact tag and
+downloaded assets. Live cutover and mutation of an existing runtime root are outside this release.
+
+A local unit result, generated profile, package scan, temporary installation, or host catalog row
+cannot establish the whole release receipt. Each claim keeps its own evidence altitude.
 
 ## Publication and authority limits
 
-This GitHub release snapshot does not establish official Plugin Directory deployment, reviewer
-access, OpenAI review/approval/publication, or provider-signed attestation. Those require separate
-external authority. The local setup route cannot authorize them and reports `NO_ATOMIC_AUTHORITY`
-when the host provider lacks an opaque revision/CAS contract.
+This source release contract does not establish publication of the target tag, GitHub prerelease,
+or receipt. It also does not establish PyPI publication, general production deployment, official
+Plugin Directory availability, reviewer access, OpenAI review or approval, or provider-signed
+attestation. Those require separate external authority. The subprocess Codex configuration route
+continues to report `NO_ATOMIC_AUTHORITY` and returns a manual plan before any forward mutation.
 
 ## Known limitations
 
 - public alpha interfaces may change before a stable release;
-- no security sandbox is provided for arbitrary programmable execution;
+- programmable Python/IPython execution is not a security sandbox;
 - package installation does not create an operating-system service or configure a host;
-- MCP Sampling remains a deprecated compatibility path for hosts that support it;
 - unresolved post-send provider outcomes may remain `indeterminate`;
-- exactly-once provider execution is claimed only when a provider or owner receipt proves it;
+- exactly-once provider execution is claimed only when an authoritative receipt proves it;
 - no managed AHC adapter is included;
-- generated host profiles preserve the public contract but do not grant authority.
+- generated profiles and capability catalogs never grant mutation authority.
 
-See [Development Roadmap](DEVELOPMENT-PLAN.md), [Architecture](ARCHITECTURE.md), [Testing](docs/TESTING.md),
-and the [Changelog](CHANGELOG.md).
+See [Release notes](docs/RELEASE-v0.6.0a1.md), [Architecture](ARCHITECTURE.md),
+[Testing](docs/TESTING.md), and the [Changelog](CHANGELOG.md).

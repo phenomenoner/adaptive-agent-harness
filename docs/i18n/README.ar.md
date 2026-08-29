@@ -1,6 +1,6 @@
 <div align="center">
 
-> **`0.6.0a0`** public alpha · [`phenomenoner/adaptive-agent-harness@v0.6.0a0`](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a0)
+> **`0.6.0a1` release-contract target** · target tag `v0.6.0a1` · source text does not establish publication; read the canonical English [release notes](../RELEASE-v0.6.0a1.md) before using the tag.
 
 # Adaptive Agent Harness
 
@@ -10,7 +10,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release](https://img.shields.io/badge/release-v0.6.0a0-orange)](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a0)
+[![Release contract](https://img.shields.io/badge/release--contract-v0.6.0a1-blue)](../RELEASE-v0.6.0a1.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#حالة-المشروع)
 
@@ -149,7 +149,7 @@ flowchart LR
 
 ### عقود قابلة للنقل
 
-- 30 أداة MCP على سطح v7 الحالي؛
+- 38 أداة MCP على سطح v8 الحالي؛
 - مخططات ذات إصدارات وassets مرتبطة ببصمات digest؛
 - إرشادات عمليات مضمنة لملفات تعريف Codex وHermes؛
 - وسطاء مرجعيون حتميون للتطوير واختبار المطابقة؛
@@ -191,8 +191,9 @@ flowchart LR
 ### التثبيت من أحدث وسم عام
 
 ```bash
+# Use only after external GitHub readback confirms the target tag exists.
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a0"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a1"
 ```
 
 ### إعداد Codex App
@@ -259,15 +260,15 @@ Plain Python / IPython workers and host-authorized brokers
 
 ## حالة المشروع
 
-الإصدار العام الحالي من الألفا: **`0.6.0a0`**.
+الإصدار العام الحالي من الألفا: **`0.6.0a1`**.
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.6.0a0` receipt-backed model routing, current verification, and exact release
-> boundaries, read the canonical English [release notes](../RELEASE-v0.6.0a0.md) and
+> context. For `v0.6.0a1` receipt-backed model routing, current verification, and exact publication
+> boundaries, read the canonical English [release notes](../RELEASE-v0.6.0a1.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
 
-Current `v0.6.0a0` public release evidence:
+`v0.6.0a1` release-contract evidence represented by this source:
 
 - تغطية Python من 3.11 إلى 3.14؛
 - 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);

@@ -1,7 +1,14 @@
 {
   "aar": {
-    "args": [],
-    "command": "aar-mcp",
+    "args": [
+      "--runtime-home",
+      "${AAR_RUNTIME_HOME}",
+      "--route-catalog",
+      "${AAR_ROUTE_CATALOG}",
+      "--default-route-profile",
+      "${AAR_DEFAULT_ROUTE_PROFILE}"
+    ],
+    "command": "aar-hermes-mcp",
     "connect_timeout": 30,
     "timeout": 60
   }

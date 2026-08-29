@@ -51,6 +51,18 @@ native AAR response.
    host. The deterministic reference host publishes fake grants in `reference_grants`; other hosts
    may use a different authority mechanism. Never invent or reuse a grant across a host boundary.
 
+For a clean-installed provider-ready Hermes runtime, `aar-hermes-mcp` starts or reuses the exact
+installed owner and attaches stdio, but it deliberately issues no grant. Static `reference_grants`
+and `aar_reference_context` cannot authorize any provider-ready mutation. Before each authorized
+mutation batch, the host/operator must explicitly run `aar-hermes-authority issue` with the exact
+runtime home, principal, session, capability, bounded TTL, and preferably a caller-recorded grant ID.
+Copy only the returned immutable grant ID and budget ceilings into the matching MCP context; the CLI
+output is not activation or delivery authority. Refresh `aar_capabilities` after every supervisor
+restart, because all prior grant IDs are invalid even when the runtime home is unchanged. Use
+`aar-hermes-authority revoke` when a still-live grant should end early. Exit status 3 means the
+control outcome is indeterminate: preserve the reported grant ID, do not reuse it, and obtain a new
+explicit approval rather than treating transport loss as rejection or success.
+
 For continuity claims, require `supervisor.mode == "attached-supervisor"`,
 `supervisor.frontend_ephemeral == true`, and non-null supervisor protocol, protocol digest, process
 identity digest, and dispatcher generation. An `embedded-reference-host` projection is an explicit
@@ -242,7 +254,9 @@ surface, use its `aar-public-runtime` skill and `start -> claim -> host executes
 agent fixes one executor/model/optional-effort route at job start, every claim ticket inherits it,
 and a different route requires a separate job. AAR never receives provider credentials or performs
 that public model call. Public claim/commit/cancel retries reuse the original idempotency key;
-fresh terminal keys conflict, and retained command markers are digest-only and bounded per job.
+fresh terminal keys conflict, and retained command markers are digest-only and bounded per job. A
+standalone host route with `provider_driver == "host-caller-driver-v1"` uses this same caller-
+delegated lifecycle: direct service-owned model execution is a fail-closed contract violation.
 
 1. Call `aar_rlm_execute` with one declared strategy (`baseline` or `evidence_synthesis`), an
    explicit `max_steps`, the current `rlm.execute` grant, and only the broker grants required by

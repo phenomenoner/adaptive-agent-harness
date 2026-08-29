@@ -12,6 +12,7 @@ from aar.runtime.dispatcher import (
     AttemptFence,
     DispatchClaim,
     DispatcherClosed,
+    DispatcherDrainTimeout,
     DurableDispatcher,
 )
 from aar.runtime.models import OperationRecord
@@ -317,9 +318,7 @@ def test_non_rlm_kind_is_routed_to_generic_host_runner() -> None:
 
         assert completed.state is OperationState.SUCCEEDED
         assert host.kind_calls == ["workspace.program.execute"]
-        assert registry.dispatch_requests == [
-            (operation, "workspace.program.execute")
-        ]
+        assert registry.dispatch_requests == [(operation, "workspace.program.execute")]
     finally:
         dispatcher.close()
 
@@ -395,6 +394,28 @@ def test_close_rejects_new_submit_and_does_not_claim_again() -> None:
         dispatcher.notify(operation)
 
     assert registry.dispatch_requests == []
+    assert all(not worker.is_alive() for worker in dispatcher._workers)
+
+
+def test_close_fails_closed_until_an_active_handler_has_drained() -> None:
+    operation = OperationRef(value="op-close-live-handler")
+    registry = FakeRegistry([operation])
+    host = FakeHost(registry, block_until_release=True)
+    dispatcher = DurableDispatcher(host, concurrency=1, idle_poll_ms=5)
+    dispatcher.start()
+    dispatcher.notify(operation)
+    assert host.entered.wait(1)
+
+    with pytest.raises(DispatcherDrainTimeout, match="still running"):
+        dispatcher.close(drain_timeout_s=0.01)
+
+    assert dispatcher.closed
+    assert any(worker.is_alive() for worker in dispatcher._workers)
+    with pytest.raises(DispatcherClosed, match="closed"):
+        dispatcher.notify(operation)
+
+    host.release.set()
+    dispatcher.close(drain_timeout_s=1)
     assert all(not worker.is_alive() for worker in dispatcher._workers)
 
 

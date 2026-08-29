@@ -12,6 +12,7 @@ from aar.compat.assets import (
     SKILL_FILES,
     verify_profiles,
 )
+from aar.mcp.server import OPERATION_SKILL_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -51,7 +52,7 @@ def test_profile_contract_binds_runtime_configs_and_skill() -> None:
     )
     assert contract["package"]["python_requires"] == ">=3.11,<3.15"
     assert contract["operation_skill"]["digest"] == metadata["skill_digest"]
-    assert contract["operation_skill"]["version"] == "0.10.0"
+    assert contract["operation_skill"]["version"] == OPERATION_SKILL_VERSION
     for host in ("codex", "hermes"):
         profile = contract["profiles"][host]
         content = (ROOT / profile["bundle"] / profile["config_file"]).read_bytes()
@@ -93,7 +94,7 @@ def test_codex_profile_uses_package_exported_host_launcher() -> None:
 
 def test_hermes_distribution_tracks_current_profile_release() -> None:
     distribution = (ROOT / HERMES_ROOT / "distribution.yaml").read_text(encoding="utf-8")
-    assert "version: 0.6.0a0\n" in distribution
+    assert "version: 0.6.0a1\n" in distribution
 
 
 def test_hermes_runtime_config_and_review_map_are_equivalent() -> None:
@@ -103,3 +104,28 @@ def test_hermes_runtime_config_and_review_map_are_equivalent() -> None:
     assert f"command: {review_map['command']}" in config
     assert f"connect_timeout: {review_map['connect_timeout']}" in config
     assert f"timeout: {review_map['timeout']}" in config
+
+
+def test_hermes_profile_requires_explicit_provider_ready_runtime_binding() -> None:
+    root = ROOT / HERMES_ROOT
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    review_map = json.loads((root / "mcp.json").read_text(encoding="utf-8"))["aar"]
+    expected_args = [
+        "--runtime-home",
+        "${AAR_RUNTIME_HOME}",
+        "--route-catalog",
+        "${AAR_ROUTE_CATALOG}",
+        "--default-route-profile",
+        "${AAR_DEFAULT_ROUTE_PROFILE}",
+    ]
+    assert review_map["command"] == "aar-hermes-mcp"
+    assert review_map["args"] == expected_args
+    assert project["project"]["scripts"][review_map["command"]] == "aar.compat.hermes_mcp:main"
+
+    config = (root / "config.yaml").read_text(encoding="utf-8")
+    for value in expected_args:
+        assert value in config
+    distribution = (root / "distribution.yaml").read_text(encoding="utf-8")
+    for name in ("AAR_RUNTIME_HOME", "AAR_ROUTE_CATALOG", "AAR_DEFAULT_ROUTE_PROFILE"):
+        assert f"  - name: {name}\n" in distribution
+        assert f"${{{name}}}" in json.dumps(review_map)

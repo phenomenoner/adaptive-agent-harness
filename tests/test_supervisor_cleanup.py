@@ -13,6 +13,7 @@ from aar.compat.codex_mcp import SHUTDOWN_REQUEST_SCHEMA_VERSION
 from aar.mcp.server import build_server
 from aar.runtime import process_identity as process_identity_module
 from aar.runtime import supervisor as supervisor_module
+from aar.runtime.dispatcher import DispatcherDrainTimeout
 from aar.runtime.ownership import RuntimeOwnershipConflict
 from aar.runtime.process_identity import (
     ProcessIdentityObservation,
@@ -65,6 +66,60 @@ def test_supervisor_reuses_database_runtime_lock_before_host_mutation(
         assert successor.application.host.runtime_generation == generation + 1
     finally:
         anyio.run(successor._shutdown)
+
+
+def test_supervisor_drain_timeout_preserves_application_ownership_and_control_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runtime_home = tmp_path / "runtime"
+    service = SupervisorService(
+        runtime_home,
+        programmable_backend="plain",
+        transport="tcp",
+    )
+    application = build_server(
+        service.database_path,
+        programmable_backend="plain",
+        enable_durable_dispatch=False,
+    )
+    service.application = application
+    cleanup_calls = 0
+    application_close_calls = 0
+    real_drain = application.host.drain_runtime_resources
+    real_application_close = application.close
+
+    def fail_drain() -> None:
+        raise DispatcherDrainTimeout(("test-supervisor-worker",))
+
+    def record_cleanup() -> None:
+        nonlocal cleanup_calls
+        cleanup_calls += 1
+
+    def record_application_close() -> None:
+        nonlocal application_close_calls
+        application_close_calls += 1
+
+    monkeypatch.setattr(application.host, "drain_runtime_resources", fail_drain)
+    monkeypatch.setattr(service, "_remove_owned_private_files", record_cleanup)
+    monkeypatch.setattr(application, "close", record_application_close)
+
+    with pytest.raises(DispatcherDrainTimeout, match="still running"):
+        anyio.run(service._shutdown)
+
+    assert cleanup_calls == 0
+    assert application_close_calls == 0
+    assert service.application is application
+    with pytest.raises(RuntimeOwnershipConflict, match="already has a live owner"):
+        build_server(
+            service.database_path,
+            programmable_backend="plain",
+            enable_durable_dispatch=False,
+        )
+
+    monkeypatch.setattr(application.host, "drain_runtime_resources", real_drain)
+    monkeypatch.setattr(application, "close", real_application_close)
+    application.close()
+    service.application = None
 
 
 def _identity(pid: int, *, start_time: int = 11, boot_id: str = "boot-a") -> ProcessStartIdentity:
@@ -452,9 +507,7 @@ def _launcher_cleanup_case(
         monkeypatch,
         target=target,
         publish_successor=publish_successor,
-        retire_predecessor=lambda: codex_mcp._remove_stale_private_files(
-            runtime_home, predecessor
-        ),
+        retire_predecessor=lambda: codex_mcp._remove_stale_private_files(runtime_home, predecessor),
     )
     assert files["discovery"].read_bytes() == canonical_json_bytes(successor)
 

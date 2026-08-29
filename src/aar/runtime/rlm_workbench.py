@@ -30,6 +30,7 @@ from aar.rlm_workbench_models import (
     RlmWorkbenchSnapshot,
     WorkspaceBrokerFrame,
     _contract_documents,
+    derive_cumulative_deadline_unix_ms,
 )
 from aar.runtime.caller_work import CallerWorkConflict, CallerWorkRepository
 from aar.runtime.dispatcher import AttemptFence
@@ -1006,9 +1007,11 @@ class RlmWorkbenchCoordinator:
         context_digest = canonical_sha256(context)
         route_digest = canonical_sha256(spec.root["model"]["route_binding"])
         now = self._now_ms()
-        cumulative_deadline = min(
-            int(context["deadline_unix_ms"]),
-            now + int(spec.root["budgets"]["total_wall_time_ms"]),
+        operation_record = self._registry.get(operation)
+        cumulative_deadline = derive_cumulative_deadline_unix_ms(
+            intent_persisted_at_unix_ms=operation_record.created_at_unix_ms,
+            context_deadline_unix_ms=int(context["deadline_unix_ms"]),
+            total_wall_time_ms=int(spec.root["budgets"]["total_wall_time_ms"]),
         )
         with self._factory.transaction(write=True) as connection:
             row = connection.execute(

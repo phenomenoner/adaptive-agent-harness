@@ -28,13 +28,14 @@ from aar.runtime.registry import OperationRegistry
 from aar.runtime.supervisor_protocol import PrivateFrame, SupervisorLifecycleReceipt
 
 ROOT = Path(__file__).resolve().parents[1]
+SUPERVISOR_READY_TIMEOUT_SECONDS = 120
 
 
 def _wait_discovery(
     runtime_home: Path, process: subprocess.Popen[str]
 ) -> SupervisorDiscoveryRecord:
     path = runtime_home / "supervisor" / "discovery.json"
-    deadline = time.monotonic() + 20
+    deadline = time.monotonic() + SUPERVISOR_READY_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         if process.poll() is not None:
             _stdout, stderr = process.communicate(timeout=1)

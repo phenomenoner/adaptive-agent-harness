@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 
@@ -90,7 +91,7 @@ def test_canonical_json_rejects_float_and_sorts_keys() -> None:
 def test_schema_bundle_digest_is_self_consistent() -> None:
     bundle = schema_bundle()
     digest = bundle.pop("bundle_digest")
-    assert PACKAGE_VERSION == "0.6.0a0"
+    assert PACKAGE_VERSION == "0.6.0a1"
     assert bundle["package_version"] == FROZEN_COMPATIBILITY_PACKAGE_VERSION == "0.5.0a0"
     assert digest == canonical_sha256(bundle)
 
@@ -135,3 +136,119 @@ def test_non_ahc_asset_fixture_has_no_ahc_only_required_fields() -> None:
 
 def test_core_has_no_host_specific_imports() -> None:
     assert forbidden_imports(ROOT / "src" / "aar") == []
+
+
+def test_every_mutating_mcp_handler_reaches_current_authority_admission() -> None:
+    source = (ROOT / "src" / "aar" / "mcp" / "server.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    functions = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    mutating: dict[str, set[str]] = {}
+    for node in functions.values():
+        for decorator in node.decorator_list:
+            if not isinstance(decorator, ast.Call) or ast.unparse(decorator.func) != "server.tool":
+                continue
+            keywords = {item.arg: item.value for item in decorator.keywords}
+            annotation = keywords.get("annotations")
+            if annotation is None or not ast.unparse(annotation).startswith("MUTATING"):
+                continue
+            name = keywords["name"]
+            assert isinstance(name, ast.Constant) and isinstance(name.value, str)
+            mutating[name.value] = {
+                symbol.id for symbol in ast.walk(node) if isinstance(symbol, ast.Name)
+            }
+
+    caller_tools = {
+        "aar_broker_work_claim",
+        "aar_broker_work_mark_send_started",
+        "aar_broker_work_cancel_before_send",
+        "aar_broker_work_commit",
+        "aar_broker_work_reconcile",
+    }
+    caller_methods = {
+        "aar_broker_work_cancel_before_send": "cancel_before_send",
+        "aar_broker_work_claim": "claim",
+        "aar_broker_work_commit": "commit",
+        "aar_broker_work_mark_send_started": "mark_send_started",
+        "aar_broker_work_reconcile": "reconcile",
+    }
+    caller_capabilities = {
+        "cancel_before_send": "broker.caller.cancel",
+        "claim": "broker.caller.claim",
+        "commit": "broker.caller.commit",
+        "mark_send_started": "broker.caller.send",
+        "reconcile": "broker.caller.reconcile",
+    }
+    authority_assignment = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name)
+            and target.id == "CALLER_WORK_METHOD_CAPABILITIES"
+            for target in node.targets
+        )
+    )
+    assert ast.literal_eval(authority_assignment.value) == caller_capabilities
+    for tool_name, method_name in caller_methods.items():
+        calls = [
+            call
+            for call in ast.walk(functions[tool_name])
+            if isinstance(call, ast.Call)
+            and call.args
+            and isinstance(call.args[0], ast.Name)
+            and call.args[0].id == "_run_caller_work_command"
+        ]
+        assert len(calls) == 1
+        assert ast.literal_eval(calls[0].args[3]) == method_name
+    expected = {
+        "aar_workspace_create",
+        "aar_workspace_execute",
+        "aar_program_workspace_create",
+        "aar_program_workspace_execute",
+        "aar_program_workspace_interrupt",
+        "aar_program_workspace_checkpoint",
+        "aar_program_workspace_restore",
+        "aar_program_workspace_close",
+        "aar_asset_import",
+        "aar_rlm_execute",
+        "aar_operation_cancel",
+        "aar_operation_reconcile",
+        "aar_rlm_workbench_execute",
+        *caller_tools,
+    }
+    assert set(mutating) == expected
+    direct_admission = {"_envelope", "_rlm_envelope", "_validate_mutation_context"}
+    for name, calls in mutating.items():
+        if name in caller_tools:
+            assert "_run_caller_work_command" in calls
+        else:
+            assert direct_admission & calls, name
+
+    caller_helper_calls = {
+        ast.unparse(call.func)
+        for call in ast.walk(functions["_run_caller_work_command"])
+        if isinstance(call, ast.Call)
+    }
+    assert "_assert_workbench_operation_binding" in caller_helper_calls
+    assert "_assert_current_claim_adapter" in caller_helper_calls
+    caller_helper_source = ast.unparse(functions["_run_caller_work_command"])
+    assert caller_helper_source.index("_assert_current_claim_adapter") < caller_helper_source.index(
+        "getattr"
+    )
+    claim_adapter_source = ast.unparse(functions["_assert_current_claim_adapter"])
+    for required_guard in (
+        "row['contract_id'] != request['contract_id']",
+        "not row['configured']",
+        "row['reference_only']",
+        "row['backend_kind'] != 'caller_driver'",
+        "row['adapter_id'] != document['adapter_id']",
+        "row['adapter_generation'] != document['adapter_generation']",
+        "row['adapter_generation'] != host.runtime_generation",
+    ):
+        assert required_guard in claim_adapter_source
+    binding_source = ast.unparse(functions["_assert_workbench_operation_binding"])
+    assert "host.provider_ready_startup.resolve_session_grants" in binding_source

@@ -175,10 +175,13 @@ class StaticModelBrokerRegistry:
         self._catalog = catalog
         self._profiles = {item.profile_id: item for item in catalog.profiles}
         self._brokers = dict(brokers)
+        self._close_lock = threading.Lock()
+        self._closing = False
         self._closed = False
+        self._closed_broker_ids: set[int] = set()
 
     def bind(self, profile_id: str) -> ModelRouteBinding:
-        if self._closed:
+        if self._closing or self._closed:
             raise ModelBrokerError("model broker registry is closed")
         try:
             profile = self._profiles[profile_id]
@@ -187,7 +190,7 @@ class StaticModelBrokerRegistry:
         return ModelRouteBinding.issue(self._catalog, profile)
 
     def resolve(self, binding: ModelRouteBinding) -> ModelBroker:
-        if self._closed:
+        if self._closing or self._closed:
             raise ModelBrokerError("model broker registry is closed")
         if binding.catalog_digest != self._catalog.catalog_digest:
             raise ModelRouteBindingStale("model route catalog digest changed")
@@ -238,9 +241,7 @@ class StaticModelBrokerRegistry:
                 "model provider receipt lookup is unavailable"
             )
         except ModelReceiptLookupFailed:
-            sanitized_error = ModelReceiptLookupFailed(
-                "model provider receipt lookup failed"
-            )
+            sanitized_error = ModelReceiptLookupFailed("model provider receipt lookup failed")
         except ModelRouteDrift:
             sanitized_error = ModelRouteDrift("model provider route receipt drifted")
         if sanitized_error is not None:
@@ -253,15 +254,17 @@ class StaticModelBrokerRegistry:
         return self._catalog
 
     def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
-        seen: set[int] = set()
-        for broker in self._brokers.values():
-            if id(broker) in seen:
-                continue
-            seen.add(id(broker))
-            broker.close()
+        with self._close_lock:
+            if self._closed:
+                return
+            self._closing = True
+            for broker in self._brokers.values():
+                broker_id = id(broker)
+                if broker_id in self._closed_broker_ids:
+                    continue
+                broker.close()
+                self._closed_broker_ids.add(broker_id)
+            self._closed = True
 
 
 class ModelExecutionJournal:
@@ -385,9 +388,7 @@ class ModelExecutionJournal:
                 name = str(row[1])
                 columns = tuple(
                     str(column[2])
-                    for column in connection.execute(
-                        f"PRAGMA index_info({name})"
-                    ).fetchall()
+                    for column in connection.execute(f"PRAGMA index_info({name})").fetchall()
                 )
                 indexes.append(
                     (
@@ -456,13 +457,9 @@ class ModelExecutionJournal:
             (operation.value,),
         ).fetchone()
         if row is not None:
-            existing = ModelRouteBinding.model_validate_json(
-                str(row["binding_json"]), strict=True
-            )
+            existing = ModelRouteBinding.model_validate_json(str(row["binding_json"]), strict=True)
             if existing != binding or str(row["binding_json"]) != binding_json:
-                raise ModelRouteBindingStale(
-                    "operation already binds different model route bytes"
-                )
+                raise ModelRouteBindingStale("operation already binds different model route bytes")
             return existing
         connection.execute(
             """
@@ -783,9 +780,7 @@ class ModelExecutionJournal:
                 (operation.value, context.idempotency_key),
             )
             if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
-                raise ModelCallIndeterminate(
-                    "model execution changed before result commit"
-                )
+                raise ModelCallIndeterminate("model execution changed before result commit")
         return response
 
     def _after_terminal_receipt(self) -> None:

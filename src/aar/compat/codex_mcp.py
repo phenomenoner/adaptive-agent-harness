@@ -193,6 +193,7 @@ def _spawn_supervisor(
     *,
     programmable_backend: str,
     log_path: Path,
+    supervisor_args: tuple[str, ...] = (),
 ) -> ExactChild:
     command = exact_module_command(
         "aar.runtime.supervisor",
@@ -201,6 +202,7 @@ def _spawn_supervisor(
             os.fspath(runtime_home),
             "--programmable-backend",
             programmable_backend,
+            *supervisor_args,
         ],
         isolated=False,
     )
@@ -272,6 +274,7 @@ def ensure_codex_supervisor(
     *,
     programmable_backend: str = "ipython",
     startup_timeout_sec: float = DEFAULT_STARTUP_TIMEOUT_SEC,
+    supervisor_args: tuple[str, ...] = (),
 ) -> SupervisorDiscoveryRecord:
     """Reuse one exact live owner or start it under a bounded cross-process lock."""
     if not 0 < startup_timeout_sec <= MAX_STARTUP_TIMEOUT_SEC:
@@ -305,6 +308,7 @@ def ensure_codex_supervisor(
             runtime_home,
             programmable_backend=programmable_backend,
             log_path=log_path,
+            supervisor_args=supervisor_args,
         )
         try:
             deadline = time.monotonic() + startup_timeout_sec

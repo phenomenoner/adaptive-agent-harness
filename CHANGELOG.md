@@ -2,6 +2,42 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
+## 0.6.0a1 — 2026-08-26 release-contract target
+
+`v0.6.0a1` adds a standalone Hermes host adapter and authenticated trusted-local authority path while
+keeping the frozen public MCP tool/schema surface unchanged. Its in-tree release contract is
+[`profiles/release-status-v1.json`](profiles/release-status-v1.json). This source does not establish
+that the target tag, GitHub prerelease, or `adaptive-agent-runtime-v0.6.0a1-release-receipt.json`
+exists; publication and exact post-freeze evidence require external readback. It also does not
+establish official Plugin Directory publication, which requires separate external authority.
+
+### Added
+
+- add `aar-hermes-mcp` for exact provider-ready supervisor startup/reuse and live package, process,
+  protocol, generation, capability, activation, and route readback;
+- add explicit `aar-hermes-authority issue/revoke` commands for generation-bound, memory-only session
+  grants without startup, attach, reference-context, or ordinary-request auto-issuance;
+- add `host-caller-driver-v1` for real host-owned provider calls through the existing durable
+  caller-work claim/mark-send/commit protocol; direct service-owned sends fail closed;
+- ship the Hermes profile on `aar-hermes-mcp` with explicit operator-owned absolute runtime-home,
+  route-catalog, and default-route-profile bindings rather than ambient working-directory state.
+
+### Security and verification boundary
+
+- every provider-ready public mutation requires a current exact session grant before its first durable
+  write; static reference grants and `aar_reference_context` cannot authorize provider-ready writes;
+  caller-work claim additionally requires the ticket method's exact current executable adapter
+  identity and generation before reserving a send;
+- `aar-admin activation verify` joins the supplied profile to the exact installed candidate,
+  activation history, current authority, and registry without mutation; a valid foreign profile or
+  incomplete installed authority fails closed;
+- Windows single-runtime ownership uses one process-owned, first-instance named-pipe handle with no
+  retained lock artifact, preventing concurrent local owners without thread-recursive mutex behavior;
+- a post-send lost or mismatched authority response is indeterminate and is never silently retried;
+- this release remains clean-install-only: it does not adopt, promote, archive, remove, or mutate an
+  existing runtime root; final Hermes acceptance uses an isolated fresh home bound for the first time
+  to the new clean-install root, without switching any live integration pointer.
+
 ## [0.6.0a0](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a0) — 2026-08-26
 
 `v0.6.0a0` adds a clean-install-only provider-ready bootstrap and activation path without changing

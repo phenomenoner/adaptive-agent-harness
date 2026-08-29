@@ -30,13 +30,9 @@ class TenantRuntime:
     session: SessionRef
 
     def close(self) -> None:
-        try:
-            self.rlm.close()
-        finally:
-            try:
-                self.host.close()
-            finally:
-                self.ownership.close()
+        self.host.close()
+        self.rlm.close()
+        self.ownership.close()
 
 
 @dataclass(slots=True)
@@ -44,6 +40,7 @@ class _TenantEntry:
     runtime: TenantRuntime
     leases: int
     last_used: int
+    closing: bool = False
 
 
 @dataclass(slots=True)
@@ -94,6 +91,8 @@ class TenantRuntimePool:
                 raise RuntimeError("tenant runtime pool is closed")
             existing = self._runtimes.get(identity.tenant_key)
             if existing is not None:
+                if existing.closing:
+                    raise TenantCapacityExceeded("tenant runtime is closing")
                 existing.leases += 1
                 existing.last_used = self._next_use()
                 return TenantRuntimeLease(self, identity.tenant_key, existing.runtime)
@@ -109,8 +108,9 @@ class TenantRuntimePool:
                     idle,
                     key=lambda item: (item[1].last_used, item[0]),
                 )
-                del self._runtimes[evicted_key]
+                evicted_entry.closing = True
                 evicted_entry.runtime.close()
+                del self._runtimes[evicted_key]
             tenant_directory = (self.data_root / "tenants" / identity.tenant_key).resolve()
             if not tenant_directory.is_relative_to(self.data_root):  # pragma: no cover
                 raise ValueError("tenant runtime path escaped the configured data root")
@@ -176,18 +176,26 @@ class TenantRuntimePool:
 
     def close(self) -> None:
         with self._lock:
-            if self._closed:
+            if self._closed and not self._runtimes:
                 return
             self._closed = True
-            runtimes = tuple(entry.runtime for entry in self._runtimes.values())
-            self._runtimes.clear()
+            for entry in self._runtimes.values():
+                entry.closing = True
+            runtimes = tuple(
+                (tenant_key, entry.runtime) for tenant_key, entry in self._runtimes.items()
+            )
         first_error: BaseException | None = None
-        for runtime in runtimes:
+        for tenant_key, runtime in runtimes:
             try:
                 runtime.close()
             except BaseException as error:  # pragma: no cover - best-effort drain
                 if first_error is None:
                     first_error = error
+            else:
+                with self._lock:
+                    current = self._runtimes.get(tenant_key)
+                    if current is not None and current.runtime is runtime:
+                        del self._runtimes[tenant_key]
         if first_error is not None:
             raise first_error
 

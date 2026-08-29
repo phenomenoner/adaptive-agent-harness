@@ -19,6 +19,7 @@ from aar.versions import PACKAGE_VERSION
 PROFILE_CONTRACT_VERSION = "aar.host-profiles.v1"
 PROFILE_VERSION = PACKAGE_VERSION
 CODEX_PROFILE_VERSION = "0.5.0-a0+codex.20260820194429"
+RELEASE_RECEIPT_ASSET = f"adaptive-agent-runtime-v{PACKAGE_VERSION}-release-receipt.json"
 SKILL_FILES = ("SKILL.md", "agents/openai.yaml", "metadata.json")
 OPTIONAL_SKILL_FILES = ("SKILL.md", "agents/openai.yaml")
 CODEX_ROOT = Path("profiles/codex/plugins/adaptive-agent-runtime")
@@ -51,8 +52,15 @@ def _codex_mcp() -> dict[str, Any]:
 def _hermes_mcp() -> dict[str, Any]:
     return {
         "aar": {
-            "args": [],
-            "command": "aar-mcp",
+            "args": [
+                "--runtime-home",
+                "${AAR_RUNTIME_HOME}",
+                "--route-catalog",
+                "${AAR_ROUTE_CATALOG}",
+                "--default-route-profile",
+                "${AAR_DEFAULT_ROUTE_PROFILE}",
+            ],
+            "command": "aar-hermes-mcp",
             "connect_timeout": 30,
             "timeout": 60,
         }
@@ -63,8 +71,14 @@ def _hermes_config() -> bytes:
     return (
         b"mcp_servers:\n"
         b"  aar:\n"
-        b"    command: aar-mcp\n"
-        b"    args: []\n"
+        b"    command: aar-hermes-mcp\n"
+        b"    args:\n"
+        b"      - --runtime-home\n"
+        b"      - ${AAR_RUNTIME_HOME}\n"
+        b"      - --route-catalog\n"
+        b"      - ${AAR_ROUTE_CATALOG}\n"
+        b"      - --default-route-profile\n"
+        b"      - ${AAR_DEFAULT_ROUTE_PROFILE}\n"
         b"    connect_timeout: 30\n"
         b"    timeout: 60\n"
     )
@@ -161,6 +175,16 @@ def host_documents(root: Path) -> dict[Path, bytes]:
         "description: Bounded AAR workspace, RLM, and immutable asset operations over local MCP.\n"
         "hermes_requires: '>=0.19.0'\n"
         "author: phenomenoner\n"
+        "env_requires:\n"
+        "  - name: AAR_RUNTIME_HOME\n"
+        "    description: Absolute path to the installed provider-ready AAR runtime home.\n"
+        "    required: true\n"
+        "  - name: AAR_ROUTE_CATALOG\n"
+        "    description: Absolute path to the host-owned model route catalog JSON.\n"
+        "    required: true\n"
+        "  - name: AAR_DEFAULT_ROUTE_PROFILE\n"
+        "    description: Default route profile ID allowed by the installed AAR authority.\n"
+        "    required: true\n"
         "distribution_owned:\n"
         "  - config.yaml\n"
         "  - mcp.json\n"
@@ -170,9 +194,9 @@ def host_documents(root: Path) -> dict[Path, bytes]:
     codex_readme = f"""# Codex host profile
 
 Release package: `{PACKAGE_VERSION}`; bundled operation skill: `{OPERATION_SKILL_VERSION}`. The
-source repository's immutable release snapshot is `profiles/release-status-v1.json`; exact
-post-freeze evidence is bound by
-`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. This profile does not establish official
+source repository's release contract is `profiles/release-status-v1.json`; it does not establish
+that the target tag, GitHub prerelease, or `{RELEASE_RECEIPT_ASSET}` exists. Publication and exact
+post-freeze evidence require external readback. This profile does not establish official
 Plugin Directory publication, which requires separate external authority.
 Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so
 `aar-codex-mcp` and its declared IPython, NumPy, and pandas dependencies are available, then run
@@ -202,14 +226,19 @@ selected, digest-verified source artifacts and an already available external Cod
     hermes_readme = f"""# Hermes host profile
 
 Release package: `{PACKAGE_VERSION}`; bundled operation skill: `{OPERATION_SKILL_VERSION}`. The
-source repository's immutable release snapshot is `profiles/release-status-v1.json`; exact
-post-freeze evidence is bound by
-`adaptive-agent-runtime-v0.4.0a6-release-receipt.json`. This profile does not establish official
+source repository's release contract is `profiles/release-status-v1.json`; it does not establish
+that the target tag, GitHub prerelease, or `{RELEASE_RECEIPT_ASSET}` exists. Publication and exact
+post-freeze evidence require external readback. This profile does not establish official
 Plugin Directory publication, which requires separate external authority.
-Install the exact `adaptive-agent-runtime` wheel with `uv tool install --force <wheel>` so `aar-mcp`
-and its declared IPython, NumPy, and pandas dependencies are on the Hermes host PATH, then install
-this directory with `hermes profile install <directory> --name <profile>`. The runtime reads
-`config.yaml.mcp_servers`; `mcp.json` is the equivalent reviewable server map.
+Use a new isolated Hermes home plus new UV tool and bin directories. Install the exact
+`adaptive-agent-runtime` wheel with `uv tool install <wheel>` so `aar-hermes-mcp` and its declared
+IPython, NumPy, and pandas dependencies are available only to that fresh home, then install this
+directory with `hermes profile install <directory> --name <profile>`. Set the three required profile
+values to the reviewed absolute new runtime home, host-owned route catalog, and allowed default
+route profile. The runtime reads `config.yaml.mcp_servers`; `mcp.json` is the equivalent reviewable
+server map. Unset placeholders remain literal and the launcher fails closed. This release does not
+upgrade, replace, reconfigure, cut over, or roll back an existing Hermes home or runtime root;
+switching any live integration pointer is outside this release.
 
 The profile provides ordinary MCP operations and host-owned RLM model calls. It contains no provider
 credentials and does not authorize billable inference. A Hermes client may own the physical call and
@@ -220,7 +249,8 @@ discovery pointer is advanced atomically. Normal lifecycle cleanup is deliberate
 so generation-specific control artifacts remain forensic state. The subprocess Codex setup route is
 not Hermes authority and reports `NO_ATOMIC_AUTHORITY`
 when no provider revision/CAS contract exists; follow the ordered manual plan through the host's
-configuration owner. After an upgrade, restart Hermes if required and create a fresh task/session
+configuration owner. After the fresh clean installation, restart that isolated Hermes instance if
+required and create a fresh task/session
 before relying on capability discovery. See `$aar-operations` for the full operation workflow.
 """.encode()
 

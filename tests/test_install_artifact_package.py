@@ -21,9 +21,11 @@ from aar.runtime._install_artifacts import (
     FROZEN_MIGRATION_V6_SHA256,
     frozen_migration_v6_bytes,
     inspect_wheel_bytes,
+    issue_install_candidate_receipt,
     verify_installed_distribution_members,
 )
 from aar.runtime._install_fs import InstallerError
+from aar.versions import PACKAGE_VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "tests" / "fixtures" / "provider-ready"
@@ -52,6 +54,11 @@ def _wheel_files() -> dict[str, bytes]:
     for fixture in manifest_value["fixtures"]:
         files[FIXTURE_PREFIX + fixture["path"]] = (FIXTURE_ROOT / fixture["path"]).read_bytes()
     files[PACKAGE_FACTORY_WHEEL_MEMBER] = (ROOT / "src" / PACKAGE_FACTORY_WHEEL_MEMBER).read_bytes()
+    files[f"adaptive_agent_runtime-{PACKAGE_VERSION}.dist-info/METADATA"] = (
+        "Metadata-Version: 2.4\n"
+        "Name: adaptive-agent-runtime\n"
+        f"Version: {PACKAGE_VERSION}\n"
+    ).encode()
     return files
 
 
@@ -73,7 +80,7 @@ def _receipt(wheel: bytes, files: dict[str, bytes]) -> InstallCandidateReceipt:
         }
     )
     candidate = ProviderReadyCandidate(
-        package_version="0.6.0a0",
+        package_version=PACKAGE_VERSION,
         source_commit="0" * 40,
         wheel_digest=_prefixed_sha256(wheel),
         contract_manifest_digest=contract_digest,
@@ -120,6 +127,20 @@ def _replace_member(wheel: bytes, name: str, content: bytes) -> bytes:
         for info in source.infolist():
             destination.writestr(info, content if info.filename == name else source.read(info))
     return output.getvalue()
+
+
+def test_public_candidate_receipt_issuer_matches_manual_frozen_projection() -> None:
+    files = _wheel_files()
+    wheel = _wheel_bytes(files)
+
+    issued = issue_install_candidate_receipt(
+        wheel,
+        package_version=PACKAGE_VERSION,
+        source_commit="0" * 40,
+    )
+
+    assert issued == _receipt(wheel, files)
+    assert inspect_wheel_bytes(wheel, issued).digest == issued.wheel_digest
 
 
 def test_positive_wheel_uses_exact_declared_fixture_bytes_and_documents() -> None:

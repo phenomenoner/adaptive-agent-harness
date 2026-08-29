@@ -42,6 +42,8 @@ from aar.runtime.supervisor_protocol import (
     PrivateFrame,
     SupervisorAttachAck,
     SupervisorAttachPayload,
+    SupervisorGrantIssueRequest,
+    SupervisorGrantRevokeRequest,
     SupervisorLifecycleReceipt,
     SupervisorProtocolError,
     extract_mcp_binding,
@@ -66,6 +68,10 @@ class SupervisorError(RuntimeError):
 
 class SupervisorAttachRejected(SupervisorError):
     pass
+
+
+class _GrantControlResponseLost(SupervisorError):
+    """A grant changed in memory but its exact response was not delivered."""
 
 
 def _is_reparse_or_symlink(path: Path) -> bool:
@@ -331,15 +337,31 @@ class SupervisorService:
     async def _handle_client(self, stream: SocketStream) -> None:
         lines = _SocketLines(stream)
         connection_authority = BOOTSTRAP_AUTHORITY_DIGEST
+        frame: PrivateFrame | None = None
         try:
             self._verify_peer(stream)
-            connection_authority = await self._authenticate(lines)
-            await self._run_mcp_session(lines, connection_authority)
+            await self._authenticate_credential(lines)
+            frame = await lines.receive_frame()
+            connection_authority = frame.authority_digest
+            if frame.kind == "attach":
+                connection_authority = await self._accept_attach(lines, frame)
+                await self._run_mcp_session(lines, connection_authority)
+            elif frame.kind in {"grant_issue", "grant_revoke"}:
+                await self._run_grant_control(lines, frame)
+            else:
+                raise SupervisorAttachRejected("unsupported initial private frame kind")
         except (anyio.EndOfStream, anyio.ClosedResourceError):
+            return
+        except _GrantControlResponseLost:
             return
         except BaseException as error:
             with contextlib.suppress(BaseException):
-                await self._send_error(lines, type(error).__name__, connection_authority)
+                await self._send_error(
+                    lines,
+                    type(error).__name__,
+                    connection_authority,
+                    request_frame=frame,
+                )
         finally:
             await stream.aclose()
 
@@ -357,15 +379,16 @@ class SupervisorService:
         if uid != os.geteuid():
             raise SupervisorAttachRejected("Unix peer UID does not own the supervisor")
 
-    async def _authenticate(self, lines: _SocketLines) -> str:
+    async def _authenticate_credential(self, lines: _SocketLines) -> None:
         assert self._credential is not None
-        discovery = self.ready
         auth = await lines.receive(max_bytes=512)
         if not auth.startswith(b"AUTH ") or not hmac.compare_digest(
             auth.removeprefix(b"AUTH "), self._credential.hex().encode("ascii")
         ):
             raise SupervisorAttachRejected("attachment credential rejected")
-        frame = await lines.receive_frame()
+
+    async def _accept_attach(self, lines: _SocketLines, frame: PrivateFrame) -> str:
+        discovery = self.ready
         self._validate_frame(frame, expected_kind="attach")
         payload = SupervisorAttachPayload.model_validate_json(frame.decoded_payload(), strict=True)
         if (
@@ -405,6 +428,50 @@ class SupervisorService:
             )
         )
         return payload.authority_digest
+
+    async def _run_grant_control(self, lines: _SocketLines, frame: PrivateFrame) -> None:
+        startup = self.provider_ready_startup
+        if startup is None:
+            raise SupervisorAttachRejected("provider-ready grant authority is unavailable")
+        discovery = self.ready
+        self._validate_frame(frame, expected_kind=frame.kind)
+        now_unix_ms = int(time.time() * 1000)
+        if frame.kind == "grant_issue":
+            request = SupervisorGrantIssueRequest.model_validate_json(
+                frame.decoded_payload(), strict=True
+            )
+            grant = startup.coordinator.issue_session_grant(
+                principal_id=request.principal_id,
+                session_id=request.session_id,
+                capability=request.capability,
+                issued_at_unix_ms=now_unix_ms,
+                policy_approved=True,
+                ttl_ms=request.ttl_ms,
+                grant_id=request.grant_id,
+            )
+            response_kind: Literal["grant_issued", "grant_revoked"] = "grant_issued"
+        else:
+            request = SupervisorGrantRevokeRequest.model_validate_json(
+                frame.decoded_payload(), strict=True
+            )
+            grant = startup.coordinator.revoke_session_grant(request.grant_id)
+            response_kind = "grant_revoked"
+        try:
+            await lines.send_frame(
+                PrivateFrame.issue(
+                    kind=response_kind,
+                    request_id=frame.request_id,
+                    trace_id=frame.trace_id,
+                    runtime_generation=discovery.runtime_generation,
+                    dispatcher_generation=discovery.dispatcher_generation,
+                    authority_digest=frame.authority_digest,
+                    deadline_unix_ms=frame.deadline_unix_ms,
+                    attachment_digest=discovery.attachment_credential_digest,
+                    payload=canonical_json_bytes(grant),
+                )
+            )
+        except BaseException as error:
+            raise _GrantControlResponseLost from error
 
     async def _run_mcp_session(self, lines: _SocketLines, connection_authority: str) -> None:
         assert self.application is not None
@@ -495,22 +562,37 @@ class SupervisorService:
             raise SupervisorAttachRejected("private frame deadline expired")
 
     async def _send_error(
-        self, lines: _SocketLines, reason: str, connection_authority: str
+        self,
+        lines: _SocketLines,
+        reason: str,
+        connection_authority: str,
+        *,
+        request_frame: PrivateFrame | None,
     ) -> None:
         discovery = self.discovery
         if discovery is None:
             return
-        now = int(time.time() * 1000)
         payload = canonical_json_bytes({"error": reason})
+        if request_frame is None:
+            now = int(time.time() * 1000)
+            request_id = f"error-{_bytes_digest(payload)[7:31]}"
+            trace_id = f"trace-{_bytes_digest(payload)[7:39]}"
+            authority_digest = connection_authority
+            deadline_unix_ms = now + 60_000
+        else:
+            request_id = request_frame.request_id
+            trace_id = request_frame.trace_id
+            authority_digest = request_frame.authority_digest
+            deadline_unix_ms = request_frame.deadline_unix_ms
         await lines.send_frame(
             PrivateFrame.issue(
                 kind="error",
-                request_id=f"error-{_bytes_digest(payload)[7:31]}",
-                trace_id=f"trace-{_bytes_digest(payload)[7:39]}",
+                request_id=request_id,
+                trace_id=trace_id,
                 runtime_generation=discovery.runtime_generation,
                 dispatcher_generation=discovery.dispatcher_generation,
-                authority_digest=connection_authority,
-                deadline_unix_ms=now + 60_000,
+                authority_digest=authority_digest,
+                deadline_unix_ms=deadline_unix_ms,
                 attachment_digest=discovery.attachment_credential_digest,
                 payload=payload,
             )
@@ -681,7 +763,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--programmable-backend", choices=("plain", "ipython"), default="ipython")
     parser.add_argument("--transport", choices=("unix", "tcp"))
     parser.add_argument("--dispatcher-concurrency", type=int, default=2)
+    parser.add_argument("--provider-ready-route-catalog", type=Path)
+    parser.add_argument("--default-route-profile")
     args = parser.parse_args(argv)
+    if (args.provider_ready_route_catalog is None) != (args.default_route_profile is None):
+        parser.error(
+            "--provider-ready-route-catalog and --default-route-profile must be provided together"
+        )
+    startup = None
+    model_broker_registry = None
+    default_model_route_profile = None
+    if args.provider_ready_route_catalog is not None:
+        from aar.runtime.hermes_host import build_hermes_provider_ready_host
+
+        startup, model_broker_registry, default_profile = build_hermes_provider_ready_host(
+            args.runtime_home,
+            args.provider_ready_route_catalog,
+            args.default_route_profile,
+        )
+        default_model_route_profile = default_profile.profile_id
     stop = threading.Event()
 
     def request_stop(_signum, _frame) -> None:
@@ -695,6 +795,9 @@ def main(argv: list[str] | None = None) -> int:
         programmable_backend=args.programmable_backend,
         transport=args.transport,
         dispatcher_concurrency=args.dispatcher_concurrency,
+        model_broker_registry=model_broker_registry,
+        default_model_route_profile=default_model_route_profile,
+        provider_ready_startup=startup,
     )
     try:
         anyio.run(service.run, stop)

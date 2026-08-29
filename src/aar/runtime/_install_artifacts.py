@@ -18,9 +18,10 @@ from pydantic import ValidationError
 
 from aar.canonical import canonical_sha256
 from aar.provider_ready_install_models import InstallCandidateReceipt
-from aar.provider_ready_models import HostActivationIntent
+from aar.provider_ready_models import HostActivationIntent, ProviderReadyCandidate
 from aar.provider_ready_package_factory import (
     PackageFactoryBindingError,
+    factory_entries_from_member_digests,
     validate_package_factory_bindings,
 )
 from aar.runtime._install_fs import FileIdentity, InstallerError, _require_absolute_file_path
@@ -52,6 +53,14 @@ class WheelInspection:
     size_bytes: int
     members: Mapping[str, bytes]
     member_digests: Mapping[str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateWheelInspection:
+    wheel: WheelInspection
+    package_version: str
+    contract_manifest_digest: str
+    skill_digest: str
 
 
 def _digest_bytes(data: bytes) -> str:
@@ -264,8 +273,8 @@ def frozen_migration_v6_bytes() -> bytes:
     return data
 
 
-def inspect_wheel_bytes(raw: bytes, receipt: InstallCandidateReceipt) -> WheelInspection:
-    """Hash and inspect one retained wheel byte string, including fixed assets."""
+def inspect_candidate_wheel_bytes(raw: bytes) -> CandidateWheelInspection:
+    """Validate one unbound wheel and derive its credential-free candidate evidence."""
 
     digest = _digest_bytes(raw)
     members: dict[str, bytes] = {}
@@ -297,6 +306,33 @@ def inspect_wheel_bytes(raw: bytes, receipt: InstallCandidateReceipt) -> WheelIn
     finally:
         archive.close()
 
+    metadata_members = [
+        name for name in members if name.endswith(".dist-info/METADATA")
+    ]
+    if len(metadata_members) != 1:
+        raise InstallerError(
+            "FRESH_INSTALL_WHEEL_INVALID", "wheel must contain exactly one dist-info METADATA"
+        )
+    try:
+        metadata_text = members[metadata_members[0]].decode("utf-8", "strict")
+    except UnicodeDecodeError as error:
+        raise InstallerError(
+            "FRESH_INSTALL_WHEEL_INVALID", "wheel METADATA is not strict UTF-8"
+        ) from error
+    names = [line[6:].strip() for line in metadata_text.splitlines() if line.startswith("Name: ")]
+    versions = [
+        line[9:].strip() for line in metadata_text.splitlines() if line.startswith("Version: ")
+    ]
+    if (
+        names != ["adaptive-agent-runtime"]
+        or len(versions) != 1
+        or not versions[0]
+    ):
+        raise InstallerError(
+            "FRESH_INSTALL_WHEEL_INVALID", "wheel METADATA name/version is not exact"
+        )
+    package_version = versions[0]
+
     if (
         _FIXED_SCHEMA_MEMBER not in members
         or _FIXED_MANIFEST_MEMBER not in members
@@ -318,19 +354,65 @@ def inspect_wheel_bytes(raw: bytes, receipt: InstallCandidateReceipt) -> WheelIn
             "FRESH_INSTALL_WHEEL_INVALID", "provider-ready fixture members are not exact"
         )
     _verify_fixture_members(members, manifest)
-    expected_contract_digest = canonical_sha256(
+    contract_manifest_digest = canonical_sha256(
         {
             "schema_bundle_digest": bundle["bundle_digest"],
             "fixture_set_digest": manifest["fixture_set_digest"],
         }
     )
-    if expected_contract_digest != receipt.contract_manifest_digest:
+    return CandidateWheelInspection(
+        wheel=WheelInspection(digest, len(raw), members, member_digests),
+        package_version=package_version,
+        contract_manifest_digest=contract_manifest_digest,
+        skill_digest=member_digests[_FIXED_SKILL_MEMBER],
+    )
+
+
+def issue_install_candidate_receipt(
+    raw: bytes,
+    *,
+    source_commit: str,
+    package_version: str | None = None,
+) -> InstallCandidateReceipt:
+    """Issue the exact installer receipt from one fully validated wheel."""
+
+    inspection = inspect_candidate_wheel_bytes(raw)
+    if package_version is not None and package_version != inspection.package_version:
+        raise InstallerError(
+            "FRESH_INSTALL_WHEEL_INVALID", "requested package version differs from wheel METADATA"
+        )
+    candidate = ProviderReadyCandidate(
+        package_version=inspection.package_version,
+        source_commit=source_commit,
+        wheel_digest=inspection.wheel.digest,
+        contract_manifest_digest=inspection.contract_manifest_digest,
+        skill_digest=inspection.skill_digest,
+    )
+    try:
+        entries = factory_entries_from_member_digests(inspection.wheel.member_digests)
+    except PackageFactoryBindingError as error:
+        raise InstallerError("FRESH_INSTALL_WHEEL_INVALID", str(error)) from error
+    return InstallCandidateReceipt.issue(
+        candidate=candidate,
+        wheel_size_bytes=inspection.wheel.size_bytes,
+        wheel_digest=candidate.wheel_digest,
+        contract_manifest_digest=candidate.contract_manifest_digest,
+        skill_digest=candidate.skill_digest,
+        factory_entries=entries,
+    )
+
+
+def inspect_wheel_bytes(raw: bytes, receipt: InstallCandidateReceipt) -> WheelInspection:
+    """Hash and inspect one retained wheel byte string against an issued receipt."""
+
+    inspection = inspect_candidate_wheel_bytes(raw)
+    if inspection.contract_manifest_digest != receipt.contract_manifest_digest:
         raise InstallerError(
             "FRESH_INSTALL_RECEIPT_WHEEL_MISMATCH", "contract asset digest mismatch"
         )
-    if member_digests[_FIXED_SKILL_MEMBER] != receipt.skill_digest:
+    if inspection.skill_digest != receipt.skill_digest:
         raise InstallerError("FRESH_INSTALL_RECEIPT_WHEEL_MISMATCH", "skill asset digest mismatch")
-    return WheelInspection(digest, len(raw), members, member_digests)
+    return inspection.wheel
 
 
 def _source_checkout_member_path(package_root: Path, wheel_member: str) -> Path | None:
