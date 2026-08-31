@@ -1,0 +1,75 @@
+{
+  "$id": "aar.caller-driver-ready.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Canonical newline-framed readiness for one local caller relay.",
+  "properties": {
+    "adapter_generation": {
+      "maximum": 9223372036854775807,
+      "minimum": 1,
+      "title": "Adapter Generation",
+      "type": "integer"
+    },
+    "adapter_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$",
+      "title": "Adapter Id",
+      "type": "string"
+    },
+    "base_url": {
+      "maxLength": 255,
+      "minLength": 14,
+      "pattern": "^http://(?:localhost|127(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}|\\[::1\\]):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])/?$",
+      "title": "Base Url",
+      "type": "string"
+    },
+    "event": {
+      "const": "ready",
+      "title": "Event",
+      "type": "string"
+    },
+    "launch_nonce": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$",
+      "title": "Launch Nonce",
+      "type": "string"
+    },
+    "physical_attempt_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$",
+      "title": "Physical Attempt Id",
+      "type": "string"
+    },
+    "request_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Request Digest",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "aar.caller-driver-ready.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "ticket_digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Ticket Digest",
+      "type": "string"
+    },
+    "ticket_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$",
+      "title": "Ticket Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "event",
+    "launch_nonce",
+    "adapter_id",
+    "adapter_generation",
+    "ticket_id",
+    "ticket_digest",
+    "request_digest",
+    "physical_attempt_id",
+    "base_url"
+  ],
+  "title": "CallerDriverReadyEnvelope",
+  "type": "object"
+}

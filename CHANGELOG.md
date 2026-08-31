@@ -2,6 +2,22 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
+## Unreleased
+
+### Added
+
+- add the strict `aar.caller-driver-ready.v1` loopback-relay readiness envelope and a synchronous
+  one-shot reference guard for the host-owned `ready -> mark-send-started -> physical send` boundary;
+- add a real subprocess, zero-provider conformance regression that rejects the legacy
+  `{ready, host, port}` handshake, binding drift, malformed mark receipts, and replay after the
+  may-have-sent boundary.
+
+### Verification boundary
+
+- this source change does not retroactively alter `v0.6.0a1` release evidence and does not qualify a
+  provider, route, host adapter, credential resolver, SDK retry policy, installed wheel, or live
+  runtime; those require separately bound evidence.
+
 ## 0.6.0a1 — 2026-08-26 release-contract target
 
 `v0.6.0a1` adds a standalone Hermes host adapter and authenticated trusted-local authority path while

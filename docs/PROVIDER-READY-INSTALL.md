@@ -93,10 +93,15 @@ grants.
 
 ## Host provider ownership
 
-For `host-caller-driver-v1`, the installing host claims a durable caller-work ticket, commits
+For `host-caller-driver-v1`, the installing host claims a durable caller-work ticket, completes every
+fallible local preparation step while the ticket is still `send_reserved`, commits
 `mark-send-started` immediately before its physical provider call, and commits or reconciles the
-exact provider response and usage receipt. AAR never receives provider credentials and its
-service-owned model broker fails closed if asked to execute a caller-owned route.
+exact provider response and usage receipt. Current source includes the provider-neutral
+`aar.caller-driver-ready.v1` envelope and `aar.integrations.caller_driver.CallerDriverSendGuard` as a
+reference pre-send conformance seam; see [`integration/caller-driver/README.md`](../integration/caller-driver/README.md).
+AAR never receives provider credentials and its service-owned model broker fails closed if asked to
+execute a caller-owned route. This unreleased helper does not retroactively qualify the exact
+`v0.6.0a1` release candidate or any host/provider path.
 
 Before a caller-work mutation, read the operation's first `intent_persisted` event and derive the
 exact cumulative deadline as `min(original context deadline, intent_persisted.at_unix_ms + requested
