@@ -91,7 +91,7 @@ def test_canonical_json_rejects_float_and_sorts_keys() -> None:
 def test_schema_bundle_digest_is_self_consistent() -> None:
     bundle = schema_bundle()
     digest = bundle.pop("bundle_digest")
-    assert PACKAGE_VERSION == "0.6.0a1"
+    assert PACKAGE_VERSION == "0.6.0a2"
     assert bundle["package_version"] == FROZEN_COMPATIBILITY_PACKAGE_VERSION == "0.5.0a0"
     assert digest == canonical_sha256(bundle)
 

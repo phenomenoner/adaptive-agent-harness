@@ -1,7 +1,7 @@
 # Technical Status
 
-**Release-contract target:** `v0.6.0a1`
-**Package:** `adaptive-agent-runtime==0.6.0a1`
+**Release-contract target:** `v0.6.0a2`
+**Package:** `adaptive-agent-runtime==0.6.0a2`
 **MCP surface:** `aar.mcp-tools.v8`, 38 tools, including the frozen 30-tool v7 compatibility projection
 **Operation skill:** `aar-operations` `0.11.0`
 
@@ -9,7 +9,7 @@ The machine-readable release contract for this page and the other current public
 [`profiles/release-status-v1.json`](profiles/release-status-v1.json). Exact commit, tree, wheel,
 sdist, CI, clean-install, activation, native-host, provider, review, tag, and downloaded-asset evidence
 is established after source freeze only by external readback and
-`adaptive-agent-runtime-v0.6.0a1-release-receipt.json`, rather than being embedded in the objects it
+`adaptive-agent-runtime-v0.6.0a2-release-receipt.json`, rather than being embedded in the objects it
 hashes. This source snapshot does not establish that the target tag, GitHub prerelease, or receipt
 exists. `v0.6.0a0`, `v0.5.0a0`, and `v0.4.0a6` are predecessor
 release snapshots; their release notes and receipts are historical authorities for those versions,
@@ -24,7 +24,7 @@ host.
 
 ## Release-contract behavior
 
-`v0.6.0a1` keeps the public 38-tool MCP v8 names and schemas unchanged while adding an optional
+`v0.6.0a2` keeps the public 38-tool MCP v8 names and schemas unchanged while adding an optional
 standalone Hermes adapter and explicit trusted-local session-grant authority:
 
 - `aar-hermes-mcp` starts or reuses one exact provider-ready supervisor, verifies package, process,
@@ -97,7 +97,7 @@ The 20-row provider-ready host matrix is frozen in
 The in-tree status records the frozen claim budget and exact public surface; it does not claim that
 post-freeze CI, independent review, release, persistent clean install, or isolated fresh-home Hermes
 acceptance occurred. Those facts must appear in
-`adaptive-agent-runtime-v0.6.0a1-release-receipt.json` and be checked against the exact tag and
+`adaptive-agent-runtime-v0.6.0a2-release-receipt.json` and be checked against the exact tag and
 downloaded assets. Live cutover and mutation of an existing runtime root are outside this release.
 
 A local unit result, generated profile, package scan, temporary installation, or host catalog row
@@ -121,5 +121,5 @@ continues to report `NO_ATOMIC_AUTHORITY` and returns a manual plan before any f
 - no managed AHC adapter is included;
 - generated profiles and capability catalogs never grant mutation authority.
 
-See [Release notes](docs/RELEASE-v0.6.0a1.md), [Architecture](ARCHITECTURE.md),
+See [Release notes](docs/RELEASE-v0.6.0a2.md), [Architecture](ARCHITECTURE.md),
 [Testing](docs/TESTING.md), and the [Changelog](CHANGELOG.md).

@@ -154,7 +154,7 @@ offline. No embedded wheel attestation is authoritative in v1.
   external effects, activation choice, and final delivery.
 
 `v0.6.0a0` and its runtime home remain immutable. This feature ships as package/release
-`0.6.0a1` / `v0.6.0a1`; its exact wheel digest and persistent install root are frozen only after the
+`0.6.0a2` / `v0.6.0a2`; its exact wheel digest and persistent install root are frozen only after the
 reviewed release artifact exists. Final Hermes acceptance uses an isolated fresh home and a first
 binding to that new root; it never switches an existing integration pointer or mutates, adopts,
 archives, removes, or promotes an old root.
@@ -187,7 +187,7 @@ silently retried.
 - `HERMES-HOST-006` (T2): launcher reuses one exact matching owner and rejects any mismatch in package,
   startup mode, process identity, protocol, generation, capability digest, activation grant set, route
   catalog, or default profile without replacing or handing off the live owner.
-- `HERMES-HOST-007` (T3): exact `v0.6.0a1` wheel clean-installs a fresh v6 root, verifies activation,
+- `HERMES-HOST-007` (T3): exact `v0.6.0a2` wheel clean-installs a fresh v6 root, verifies activation,
   starts provider-ready Ready generation 1, executes real IPython, and completes a durable
   caller-delegated RLM operation through claim/mark-send-started/exact-receipt commit using the real
   Hermes provider call.

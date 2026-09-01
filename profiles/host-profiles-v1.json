@@ -21,7 +21,7 @@
     "command": "aar-mcp",
     "name": "adaptive-agent-runtime",
     "python_requires": ">=3.11,<3.15",
-    "version": "0.6.0a1"
+    "version": "0.6.0a2"
   },
   "profiles": {
     "codex": {

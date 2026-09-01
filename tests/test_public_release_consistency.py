@@ -290,7 +290,7 @@ def test_readme_hero_does_not_claim_target_release_already_exists() -> None:
     hero = "\n".join(_surface("README.md").splitlines()[:20])
     assert "release-contract target" in hero
     assert "source text does not establish publication" in hero
-    assert "releases/tag/v0.6.0a1" not in hero
+    assert "releases/tag/v0.6.0a2" not in hero
 
 
 @pytest.mark.parametrize(
@@ -365,7 +365,7 @@ def test_translated_quick_starts_preserve_current_release_boundary(path: str) ->
     assert "0.6.0a0" not in text
     assert "release-contract target" in text[:1000]
     assert "source text does not establish publication" in text[:1000]
-    assert "releases/tag/v0.6.0a1" not in text
+    assert "releases/tag/v0.6.0a2" not in text
     assert "Use only after external GitHub readback confirms the target tag exists." in text
     assert "release-contract evidence represented by this source" in text
     _assert_current_tool_surface(text, surface=path)

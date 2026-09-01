@@ -1,10 +1,10 @@
 # Adaptive Agent Runtime public plugin
 
-**Repository status:** the `0.6.0a1` release contract includes the remote MCP server, public skill
+**Repository status:** the `0.6.0a2` release contract includes the remote MCP server, public skill
 source, deterministic plugin builder, container recipe, and local verification scenarios. Its
 in-tree contract is [`profiles/release-status-v1.json`](../profiles/release-status-v1.json). This
 source does not establish that the target tag, GitHub prerelease, or
-`adaptive-agent-runtime-v0.6.0a1-release-receipt.json` exists; publication and exact source,
+`adaptive-agent-runtime-v0.6.0a2-release-receipt.json` exists; publication and exact source,
 artifact, CI, install, host, review, tag, and asset-readback evidence require external readback. It
 also does not establish a production endpoint, reviewer account, OpenAI approval, or official
 Plugin Directory publication; those require separate external authority.
@@ -165,7 +165,7 @@ verified adapter.
 Build from the repository root:
 
 ```bash
-  docker build -f deploy/public/Dockerfile -t adaptive-agent-runtime:0.6.0a1 .
+  docker build -f deploy/public/Dockerfile -t adaptive-agent-runtime:0.6.0a2 .
 ```
 
 The default image runs as UID/GID `10001`, owns `/var/lib/aar` with mode `0700`, exposes port
@@ -191,7 +191,7 @@ well-known and health routes. Keep the service data volume private and persisten
 Before starting, read back non-secret configuration:
 
 ```bash
-  docker run --rm --env-file deploy.env adaptive-agent-runtime:0.6.0a1 --check-config
+  docker run --rm --env-file deploy.env adaptive-agent-runtime:0.6.0a2 --check-config
 ```
 
 The readback reports only whether a domain-challenge token is configured; it never prints the token.

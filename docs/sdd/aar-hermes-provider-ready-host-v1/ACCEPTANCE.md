@@ -1,4 +1,4 @@
-# AAR v0.6.0a1 Hermes host — frozen acceptance plan
+# AAR v0.6.0a2 Hermes host — frozen acceptance plan
 
 Status: **FROZEN BEFORE REMAINING IMPLEMENTATION**
 
@@ -21,7 +21,7 @@ In scope:
 - one complete documented path from release assets to a fresh absent v6 runtime, provider-ready
   startup, Hermes attachment, explicit authority, real caller-delegated provider execution, restart,
   durable reconciliation, and isolated fresh-home Hermes acceptance;
-- current `0.6.0a1` status/compatibility/install documentation and anti-drift tests;
+- current `0.6.0a2` status/compatibility/install documentation and anti-drift tests;
 - the standalone Hermes launcher, private authority protocol, current memory-grant admission, package,
   generated assets, release, persistent clean install, and fresh isolated Hermes first-binding.
 
@@ -42,7 +42,7 @@ mechanism.
 
 | ID | Claim / old defect that must fail | Tier | Required evidence before release |
 |---|---|---:|---|
-| AC-01 | Package identity is exactly `0.6.0a1`; `aar-hermes-mcp`, `aar-hermes-authority`, and required operator commands install from the wheel. | T0/T2 | metadata/version tests; build wheel/sdist; isolated non-editable install; every entry point `--help` and representative call. |
+| AC-01 | Package identity is exactly `0.6.0a2`; `aar-hermes-mcp`, `aar-hermes-authority`, and required operator commands install from the wheel. | T0/T2 | metadata/version tests; build wheel/sdist; isolated non-editable install; every entry point `--help` and representative call. |
 | AC-02 | Frozen public MCP v8 names, descriptions, input/output schemas, tool count, and compatibility bytes do not drift. | T0/T2 | canonical MCP/host generate+verify; cross-surface digest join; real SDK list/serialization; public compatibility tests. |
 | AC-03 | Every public provider-ready mutation, including all five caller-work successors, rejects absent/static/wrong/stale/foreign/expired/over-budget grants before its first durable write. | T1/T2 | complete mutating-handler inventory; common-seam tests; provider-ready integration negatives; static `aar_reference_context` denial; pre/post durable-state equality. |
 | AC-04 | Install, startup, Ready, attach, capabilities, reference context, and ordinary requests never auto-issue a session grant. | T1/T3 | zero-grant lifecycle assertions across install/start/attach and generation-1 native probe. |
@@ -56,7 +56,7 @@ mechanism.
 | AC-12 / #2 | An external operator can issue a self-digested target-bound `aar.host-activation-intent.v1` only from explicit host-owned inputs; the command does not install or activate. | T1/T2 | public CLI positive fixture; missing/unknown/contradictory host-input negatives; target/route/policy/candidate digest assertions; target remains absent. |
 | AC-13 / #2 | Release asset → absent root → install → activation verify → provider-ready supervisor → Hermes attach is one documented reproducible sequence. | T3 | isolated exact-wheel rehearsal in a fresh persistent root; canonical receipts and Ready/capabilities readback; no implicit service or hidden input. |
 | AC-14 / #3 | Shipped Hermes CLI reaches configured provider-ready capability rows and explicit generation-bound mutation authority. | T3 | native MCP `aar_capabilities` and `aar_rlm_workbench_capabilities` show exact configured caller route/method evidence; explicitly granted mutation succeeds. |
-| AC-15 / #4 | Current README/status/compatibility/install/release surfaces name `0.6.0a1`, 38 tools, current authority and route boundaries; `0.4.0a6` pages are explicitly historical rather than current guidance. | T0 | current-release consistency test driven from package metadata/tool manifest; link/path inventory; stale-current-version negative fixture; localized README parity check. |
+| AC-15 / #4 | Current README/status/compatibility/install/release surfaces name `0.6.0a2`, 38 tools, current authority and route boundaries; `0.4.0a6` pages are explicitly historical rather than current guidance. | T0 | current-release consistency test driven from package metadata/tool manifest; link/path inventory; stale-current-version negative fixture; localized README parity check. |
 | AC-16 | Exact candidate passes repository lint, full tests, packaging, generated/public/spec/lock/hygiene gates with no credential/private-path leakage. | T0–T2 | final-byte gate ledger with raw result paths, exact counts, skips and warnings; clean diff check and scoped secret/path scan. |
 | AC-17 | Exact candidate receives a fresh independent Claude CLI `claude-opus-5`, effort `high`, read-only PASS bound to candidate/manifest/evidence hashes. | Review | model probe must report canonical `claude-opus-5`; safe/plan mode with Read/Glob/Grep only; structured PASS/BLOCKED report; main-agent hash and finding verification. |
 | AC-18 | PR head equals reviewed candidate, remote CI is green, and the external release receipt is the sole official source-identity authority: merge/tag target, source commit/tree, wheel/sdist/candidate-receipt digests and downloaded assets all bind the exact released bytes; issues #2/#3/#4 close traceably. | Release | PR/check/merge readback; annotated tag target; GitHub prerelease; release-receipt positive; one-axis tag-target, source, wheel, sdist, candidate-receipt and asset-readback mismatch negatives; downloaded wheel/sdist/candidate/release receipt byte readback; issue state/comments. |
