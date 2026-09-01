@@ -2,21 +2,32 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
-## Unreleased
+## 0.6.0a2 — 2026-09-01 release-contract target
+
+`v0.6.0a2` releases the caller-driver conformance guard merged after `v0.6.0a1`. Its in-tree
+release contract is [`profiles/release-status-v1.json`](profiles/release-status-v1.json). This source
+does not establish that the target tag, GitHub prerelease,
+`adaptive-agent-runtime-v0.6.0a2-release-receipt.json`, installed runtime pickup, provider
+qualification, or formal evaluation exists; those require separately bound external readback.
 
 ### Added
 
 - add the strict `aar.caller-driver-ready.v1` loopback-relay readiness envelope and a synchronous
   one-shot reference guard for the host-owned `ready -> mark-send-started -> physical send` boundary;
+- make the guard's one-shot phase transition process-thread-safe so concurrent callers cannot both
+  cross `prepared -> mark_in_progress` and reach the physical-send callback;
 - add a real subprocess, zero-provider conformance regression that rejects the legacy
   `{ready, host, port}` handshake, binding drift, malformed mark receipts, and replay after the
   may-have-sent boundary.
 
-### Verification boundary
+### Security and verification boundary
 
-- this source change does not retroactively alter `v0.6.0a1` release evidence and does not qualify a
-  provider, route, host adapter, credential resolver, SDK retry policy, installed wheel, or live
-  runtime; those require separately bound evidence.
+- all fallible local readiness, binding, and client-construction work remains before
+  `mark_send_started`; after that durable may-have-sent boundary the guard permits one physical send
+  and never retries or reconstructs an uncertain result;
+- this release contract does not retroactively alter `v0.6.0a1` evidence and does not by itself
+  qualify a provider, route, host adapter, credential resolver, SDK retry policy, installed wheel,
+  live runtime, or evaluator composition.
 
 ## 0.6.0a1 — 2026-08-26 release-contract target
 

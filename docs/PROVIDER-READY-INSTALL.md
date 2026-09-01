@@ -33,7 +33,7 @@ credentials in the catalog.
 
 ```text
 aar-admin runtime candidate \
-  --wheel /absolute/path/adaptive_agent_runtime-0.6.0a1-py3-none-any.whl \
+  --wheel /absolute/path/adaptive_agent_runtime-0.6.0a2-py3-none-any.whl \
   --source-commit <40-lowercase-hex-release-commit> \
   > /absolute/path/install-candidate-receipt.json
 ```
@@ -67,7 +67,7 @@ aar-admin runtime install \
   --runtime-home /absolute/new/runtime-root \
   --intent /absolute/path/host-activation-intent.json \
   --candidate-receipt /absolute/path/install-candidate-receipt.json \
-  --wheel /absolute/path/adaptive_agent_runtime-0.6.0a1-py3-none-any.whl
+  --wheel /absolute/path/adaptive_agent_runtime-0.6.0a2-py3-none-any.whl
 ```
 
 The installer stages below the retained parent directory and publishes with no-replace semantics.
@@ -101,7 +101,7 @@ exact provider response and usage receipt. Current source includes the provider-
 reference pre-send conformance seam; see [`integration/caller-driver/README.md`](../integration/caller-driver/README.md).
 AAR never receives provider credentials and its service-owned model broker fails closed if asked to
 execute a caller-owned route. This unreleased helper does not retroactively qualify the exact
-`v0.6.0a1` release candidate or any host/provider path.
+`v0.6.0a2` release candidate or any host/provider path.
 
 Before a caller-work mutation, read the operation's first `intent_persisted` event and derive the
 exact cumulative deadline as `min(original context deadline, intent_persisted.at_unix_ms + requested

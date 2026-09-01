@@ -1276,7 +1276,7 @@ def test_mcp_uses_only_current_memory_session_grants_in_provider_mode(
     assert all(payload["operation"] is None for payload in denied_payloads)
     assert "phase" in accepted, accepted
     assert accepted["phase"] == "preparing_workspace"
-    assert capabilities["package_version"] == "0.6.0a1"
+    assert capabilities["package_version"] == "0.6.0a2"
     assert "provider_ready" not in capabilities
     assert startup.grant_set.runtime_generation == capabilities["ready"]["runtime_generation"]
     with sqlite3.connect(database) as connection:

@@ -1,8 +1,8 @@
 # Hermes host profile
 
-Release package: `0.6.0a1`; bundled operation skill: `0.11.0`. The
+Release package: `0.6.0a2`; bundled operation skill: `0.11.0`. The
 source repository's release contract is `profiles/release-status-v1.json`; it does not establish
-that the target tag, GitHub prerelease, or `adaptive-agent-runtime-v0.6.0a1-release-receipt.json` exists. Publication and exact
+that the target tag, GitHub prerelease, or `adaptive-agent-runtime-v0.6.0a2-release-receipt.json` exists. Publication and exact
 post-freeze evidence require external readback. This profile does not establish official
 Plugin Directory publication, which requires separate external authority.
 Use a new isolated Hermes home plus new UV tool and bin directories. Install the exact

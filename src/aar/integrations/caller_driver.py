@@ -8,6 +8,7 @@ already-reserved AAR caller-work ticket, then keeps the host's
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable, Mapping
 from typing import Any, Generic, Literal, TypeVar
 
@@ -184,6 +185,7 @@ class CallerDriverSendGuard(Generic[_ResultT]):
         self._reserved_ticket = reserved_ticket
         self._ready = ready
         self._phase: CallerDriverGuardPhase = "prepared"
+        self._phase_lock = threading.Lock()
 
     @classmethod
     def prepare(
@@ -215,7 +217,8 @@ class CallerDriverSendGuard(Generic[_ResultT]):
 
     @property
     def phase(self) -> CallerDriverGuardPhase:
-        return self._phase
+        with self._phase_lock:
+            return self._phase
 
     @property
     def ready(self) -> CallerDriverReadyEnvelope:
@@ -232,29 +235,35 @@ class CallerDriverSendGuard(Generic[_ResultT]):
     ) -> _ResultT:
         """Mark the durable boundary, then invoke exactly one physical send callback."""
 
-        if self._phase != "prepared":
-            raise CallerDriverReplayBlocked(
-                f"caller-driver send guard cannot run from phase {self._phase}"
-            )
-        self._phase = "mark_in_progress"
+        with self._phase_lock:
+            if self._phase != "prepared":
+                raise CallerDriverReplayBlocked(
+                    f"caller-driver send guard cannot run from phase {self._phase}"
+                )
+            self._phase = "mark_in_progress"
         try:
             marked_value = mark_send_started(self._reserved_ticket, self._ready)
         except Exception:
-            self._phase = "mark_unconfirmed"
+            with self._phase_lock:
+                self._phase = "mark_unconfirmed"
             raise
         try:
             marked = _caller_work_ticket(marked_value)
             _require_send_started_successor(self._reserved_ticket, marked)
         except CallerDriverMarkReceiptError:
-            self._phase = "mark_unconfirmed"
+            with self._phase_lock:
+                self._phase = "mark_unconfirmed"
             raise
-        self._phase = "send_started"
+        with self._phase_lock:
+            self._phase = "send_started"
         try:
             result = physical_send(self._ready, marked)
         except Exception:
-            self._phase = "outcome_unknown"
+            with self._phase_lock:
+                self._phase = "outcome_unknown"
             raise CallerDriverSendOutcomeUnknown(
                 "physical request may have been sent; reconcile and do not replay"
             ) from None
-        self._phase = "send_observed"
+        with self._phase_lock:
+            self._phase = "send_observed"
         return result

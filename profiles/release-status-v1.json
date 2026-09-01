@@ -4,8 +4,8 @@
     "scope": "release_contract_snapshot",
     "publication_status": "not_established_by_source",
     "publication_authority": "external_readback_only",
-    "version": "0.6.0a1",
-    "tag": "v0.6.0a1",
+    "version": "0.6.0a2",
+    "tag": "v0.6.0a2",
     "operation_skill_version": "0.11.0",
     "codex_profile_version": "0.5.0-a0+codex.20260820194429",
     "mcp_surface": "aar.mcp-tools.v8",
@@ -17,7 +17,7 @@
     "reason": "Embedding commit, tree, enclosing distribution, CI, installed-host, provider, review, or release-asset identities in the objects they attest would be self-referential.",
     "receipt": {
       "schema_id": "aar.release-receipt.v1",
-      "asset_name": "adaptive-agent-runtime-v0.6.0a1-release-receipt.json",
+      "asset_name": "adaptive-agent-runtime-v0.6.0a2-release-receipt.json",
       "required_fields": [
         "source.commit",
         "source.tree",
@@ -59,7 +59,7 @@
       }
     },
     "post_freeze": {
-      "authority": "adaptive-agent-runtime-v0.6.0a1-release-receipt.json",
+      "authority": "adaptive-agent-runtime-v0.6.0a2-release-receipt.json",
       "required_fields_source": "evidence_binding.receipt.required_fields"
     }
   },
@@ -68,7 +68,7 @@
     "CHANGELOG.md",
     "TECHNICAL-STATUS.md",
     "HOST-COMPATIBILITY.md",
-    "docs/RELEASE-v0.6.0a1.md",
+    "docs/RELEASE-v0.6.0a2.md",
     "profiles/codex/plugins/adaptive-agent-runtime/README.md",
     "profiles/hermes/adaptive-agent-runtime/README.md",
     "docs/CODEX-INSTALL.md",
@@ -104,6 +104,7 @@
     "general_production_deployment": "not_established_by_this_snapshot"
   },
   "historical": {
+    "0.6.0a1": "published_predecessor",
     "0.6.0a0": "published_predecessor",
     "0.5.0a0": "published_predecessor",
     "0.4.0a6": "published_historical",

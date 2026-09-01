@@ -1,23 +1,23 @@
 # Install AAR for Codex App
 
-This page is the Codex installation entrypoint for the **`0.6.0a1` release contract**. The in-tree
+This page is the Codex installation entrypoint for the **`0.6.0a2` release contract**. The in-tree
 contract is [`profiles/release-status-v1.json`](../profiles/release-status-v1.json). This source does
 not establish that the target tag, GitHub prerelease, or
-`adaptive-agent-runtime-v0.6.0a1-release-receipt.json` exists; publication and exact source, wheel,
+`adaptive-agent-runtime-v0.6.0a2-release-receipt.json` exists; publication and exact source, wheel,
 CI, install, host, review, tag, and asset-readback evidence require external readback. Earlier release
 pages and receipts are historical authorities for their exact versions, not current install guidance.
 
 After GitHub readback confirms the target tag exists, the pinned-source installation path is:
 
 ```powershell
-uv tool install --force "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a1"
+uv tool install --force "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a2"
 aar-codex-setup
 ```
 
 Maintainers who already have an immutable wheel may instead use:
 
 ```powershell
-uv tool install --force D:\path\to\adaptive_agent_runtime-0.6.0a1-py3-none-any.whl
+uv tool install --force D:\path\to\adaptive_agent_runtime-0.6.0a2-py3-none-any.whl
 aar-codex-setup
 ```
 
@@ -66,7 +66,7 @@ the receipt is not setup success; recover the exact owner and rerun setup.
 
 When the receipt reports `restart_required: true`, restart Codex Desktop, open a **fresh task**, load
 the deferred capability tool if needed, and call native `aar_capabilities` once. Verify package
-`0.6.0a1`, operation skill `0.11.0`, the current Codex profile cachebuster, attached-supervisor mode, and
+`0.6.0a2`, operation skill `0.11.0`, the current Codex profile cachebuster, attached-supervisor mode, and
 the current runtime generation. A stale task catalog, config text, CLI probe, or same-task transport
 error is not runtime proof.
 
@@ -90,7 +90,7 @@ wheel has passed its preflight. It does not grant provider mutation authority.
 Release maintainers additionally run Ruff, focused regressions, the full repository suite, Python
 3.11–3.14 compatibility, exact-wheel readback, fresh Codex scenarios, and the caller-delegated
 provider drill. The 20-row provider-ready host matrix is the frozen claim budget; post-freeze results
-belong in `adaptive-agent-runtime-v0.6.0a1-release-receipt.json`. Local installation does not establish
+belong in `adaptive-agent-runtime-v0.6.0a2-release-receipt.json`. Local installation does not establish
 official Plugin Directory deployment or publication.
 
 The setup command does not grant provider credentials, external effects, activation, publication,

@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -110,6 +111,71 @@ def test_reference_relay_and_guard_cross_exact_subprocess_boundary() -> None:
 
     assert guard.send_once(mark_send_started=mark, physical_send=send) == "provider-result"
     assert events == ["mark", "send"]
+    assert guard.phase == "send_observed"
+
+
+def test_concurrent_send_once_cannot_cross_the_one_shot_boundary_twice() -> None:
+    reserved = _ticket("valid-ticket-send-reserved.json")
+    started = _ticket("valid-ticket-send-started.json")
+    guard = CallerDriverSendGuard.prepare(
+        reserved_ticket=reserved,
+        ready_line=_relay_line(reserved),
+        expected_launch_nonce=LAUNCH_NONCE,
+    )
+
+    class CoordinatedPreparedPhase:
+        """Make the old unlocked check deterministically admit both threads."""
+
+        def __init__(self) -> None:
+            self._calls = 0
+            self._calls_lock = threading.Lock()
+            self._both_checked = threading.Event()
+
+        def __ne__(self, other: object) -> bool:
+            assert other == "prepared"
+            with self._calls_lock:
+                self._calls += 1
+                if self._calls == 2:
+                    self._both_checked.set()
+            self._both_checked.wait(timeout=0.1)
+            return False
+
+    guard._phase = CoordinatedPreparedPhase()  # type: ignore[assignment]
+    start = threading.Barrier(3)
+    counts = {"mark": 0, "send": 0}
+    counts_lock = threading.Lock()
+    results: list[str] = []
+    errors: list[Exception] = []
+
+    def mark(_ticket: CallerWorkTicket, _ready: CallerDriverReadyEnvelope) -> CallerWorkTicket:
+        with counts_lock:
+            counts["mark"] += 1
+        return started
+
+    def send(_ready: CallerDriverReadyEnvelope, _ticket: CallerWorkTicket) -> str:
+        with counts_lock:
+            counts["send"] += 1
+        return "ok"
+
+    def invoke() -> None:
+        start.wait()
+        try:
+            results.append(guard.send_once(mark_send_started=mark, physical_send=send))
+        except Exception as error:
+            errors.append(error)
+
+    threads = [threading.Thread(target=invoke) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    start.wait()
+    for thread in threads:
+        thread.join(timeout=2)
+
+    assert not any(thread.is_alive() for thread in threads)
+    assert counts == {"mark": 1, "send": 1}
+    assert results == ["ok"]
+    assert len(errors) == 1
+    assert isinstance(errors[0], CallerDriverReplayBlocked)
     assert guard.phase == "send_observed"
 
 

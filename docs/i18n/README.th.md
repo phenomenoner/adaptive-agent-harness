@@ -1,6 +1,6 @@
 <div align="center">
 
-> **`0.6.0a1` release-contract target** · target tag `v0.6.0a1` · source text does not establish publication; read the canonical English [release notes](../RELEASE-v0.6.0a1.md) before using the tag.
+> **`0.6.0a2` release-contract target** · target tag `v0.6.0a2` · source text does not establish publication; read the canonical English [release notes](../RELEASE-v0.6.0a2.md) before using the tag.
 
 # Adaptive Agent Harness
 
@@ -10,7 +10,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release contract](https://img.shields.io/badge/release--contract-v0.6.0a1-blue)](../RELEASE-v0.6.0a1.md)
+[![Release contract](https://img.shields.io/badge/release--contract-v0.6.0a2-blue)](../RELEASE-v0.6.0a2.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#สถานะโครงการ)
 
@@ -193,7 +193,7 @@ Adaptive Agent Harness เหมาะอย่างยิ่งกับ:
 ```bash
 # Use only after external GitHub readback confirms the target tag exists.
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a1"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a2"
 ```
 
 ### ตั้งค่า Codex App
@@ -260,20 +260,20 @@ Plain Python / IPython workers and host-authorized brokers
 
 ## สถานะโครงการ
 
-อัลฟาสาธารณะปัจจุบัน: **`0.6.0a1`**
+อัลฟาสาธารณะปัจจุบัน: **`0.6.0a2`**
 
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.6.0a1` receipt-backed model routing, current verification, and exact publication
-> boundaries, read the canonical English [release notes](../RELEASE-v0.6.0a1.md) and
+> context. For `v0.6.0a2` receipt-backed model routing, current verification, and exact publication
+> boundaries, read the canonical English [release notes](../RELEASE-v0.6.0a2.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
-`v0.6.0a1` release-contract evidence represented by this source:
+`v0.6.0a2` release-contract evidence represented by this source:
 
 - รองรับ Python 3.11 ถึง 3.14;
 - 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - schema SQLite แบบเพิ่มต่อเนื่องจนถึง v5;
-- full repository run: **743 passed, 5 platform-gated skips, 1 existing MCP Sampling deprecation warning**;
+- current full-repository verification is recorded in the canonical English release note and external release receipt;
 - การตรวจสอบ supervisor/frontend แบบ exact-wheel ที่สะอาดบน Linux/WSL;
 - สถานการณ์ supervisor ที่คงทน การแทนที่ frontend การสูญเสียกระบวนการ writer ที่ล้าสมัย การนำใบเสร็จ (receipt) กลับมาใช้ซ้ำ และ successor ของ RLM ที่ผูกกับ policy
 
