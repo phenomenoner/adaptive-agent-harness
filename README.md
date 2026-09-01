@@ -306,9 +306,9 @@ not establish that the target tag, GitHub prerelease, or named external receipt 
 is established only by independent GitHub readback and the post-freeze external receipt. See the
 [release notes](docs/RELEASE-v0.6.0a2.md) for the target contents and boundaries.
 
-The previous published release snapshot is `0.6.0a0`, with stable source reference
-`phenomenoner/adaptive-agent-harness@v0.6.0a0` and the corresponding
-[GitHub release page](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a0).
+The previous published release snapshot is `0.6.0a1`, with stable source reference
+`phenomenoner/adaptive-agent-harness@v0.6.0a1` and the corresponding
+[GitHub release page](https://github.com/phenomenoner/adaptive-agent-harness/releases/tag/v0.6.0a1).
 The in-tree machine-readable release contract is
 [`profiles/release-status-v1.json`](profiles/release-status-v1.json). Exact commit, tree, wheel,
 supported-Python CI, local install, fresh native/RLM, review, tag, and downloaded-asset publication

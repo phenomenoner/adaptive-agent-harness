@@ -273,7 +273,7 @@ Plain Python / IPython workers and host-authorized brokers
 - รองรับ Python 3.11 ถึง 3.14;
 - 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - schema SQLite แบบเพิ่มต่อเนื่องจนถึง v5;
-- full repository run: **743 passed, 5 platform-gated skips, 1 existing MCP Sampling deprecation warning**;
+- current full-repository verification is recorded in the canonical English release note and external release receipt;
 - การตรวจสอบ supervisor/frontend แบบ exact-wheel ที่สะอาดบน Linux/WSL;
 - สถานการณ์ supervisor ที่คงทน การแทนที่ frontend การสูญเสียกระบวนการ writer ที่ล้าสมัย การนำใบเสร็จ (receipt) กลับมาใช้ซ้ำ และ successor ของ RLM ที่ผูกกับ policy
 

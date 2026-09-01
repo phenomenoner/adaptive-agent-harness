@@ -273,7 +273,7 @@ MCP frontend は意図的に交換可能です。continuity database や worker 
 - Python 3.11 から 3.14 までの coverage；
 - 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - v5 までの additive SQLite schema；
-- full repository run: **743 passed, 5 platform-gated skips, 1 existing MCP Sampling deprecation warning**;
+- current full-repository verification is recorded in the canonical English release note and external release receipt;
 - Linux/WSL での clean exact-wheel supervisor/frontend probe；
 - durable supervisor、frontend replacement、process-loss、stale-writer、receipt-reuse、policy-bound RLM successor scenarios。
 

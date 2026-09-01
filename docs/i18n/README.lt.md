@@ -273,7 +273,7 @@ Dabartinė viešoji alfa: **`0.6.0a2`**.
 - Python 3.11–3.14 palaikymas;
 - 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - papildanti SQLite schema iki v5;
-- full repository run: **743 passed, 5 platform-gated skips, 1 existing MCP Sampling deprecation warning**;
+- current full-repository verification is recorded in the canonical English release note and external release receipt;
 - švarus exact-wheel supervisor/frontend bandymas Linux/WSL aplinkoje;
 - patvaraus prižiūrėtojo, frontend'o pakeitimo, proceso praradimo, pasenusio rašytojo, kvito pakartotinio panaudojimo ir su politika susieto RLM įpėdinio scenarijai.
 

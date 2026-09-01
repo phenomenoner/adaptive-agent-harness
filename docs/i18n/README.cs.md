@@ -273,7 +273,7 @@ Aktuální veřejná alfa: **`0.6.0a2`**.
 - pokrytí Pythonu 3.11 až 3.14;
 - 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - aditivní schéma SQLite až do v5;
-- full repository run: **743 passed, 5 platform-gated skips, 1 existing MCP Sampling deprecation warning**;
+- current full-repository verification is recorded in the canonical English release note and external release receipt;
 - čisté exact-wheel probe supervisoru/frontendu na Linuxu/WSL;
 - scénáře trvalého supervisoru, náhrady frontendu, ztráty procesu, zastaralého zapisovatele, opětovného použití potvrzení a následníků RLM vázaných na zásady.
 

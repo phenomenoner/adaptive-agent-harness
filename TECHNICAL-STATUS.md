@@ -11,7 +11,7 @@ sdist, CI, clean-install, activation, native-host, provider, review, tag, and do
 is established after source freeze only by external readback and
 `adaptive-agent-runtime-v0.6.0a2-release-receipt.json`, rather than being embedded in the objects it
 hashes. This source snapshot does not establish that the target tag, GitHub prerelease, or receipt
-exists. `v0.6.0a0`, `v0.5.0a0`, and `v0.4.0a6` are predecessor
+exists. `v0.6.0a1`, `v0.6.0a0`, `v0.5.0a0`, and `v0.4.0a6` are predecessor
 release snapshots; their release notes and receipts are historical authorities for those versions,
 not current install guidance.
 

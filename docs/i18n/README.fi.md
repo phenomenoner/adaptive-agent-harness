@@ -273,7 +273,7 @@ Nykyinen julkinen alfa: **`0.6.0a2`**.
 - Python 3.11–3.14-kattavuus;
 - 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - additiivinen SQLite-skeema versioon v5 asti;
-- full repository run: **743 passed, 5 platform-gated skips, 1 existing MCP Sampling deprecation warning**;
+- current full-repository verification is recorded in the canonical English release note and external release receipt;
 - puhdas exact-wheel supervisor/frontend -probe Linux/WSL:ssä;
 - pysyvän valvojan, käyttöliittymän korvaamisen, prosessihäviön, vanhentuneen kirjoittajan, kuitin uudelleenkäytön ja käytäntöihin sidottujen RLM-seuraajaskenaarioiden testit.
 

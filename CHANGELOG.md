@@ -14,6 +14,8 @@ qualification, or formal evaluation exists; those require separately bound exter
 
 - add the strict `aar.caller-driver-ready.v1` loopback-relay readiness envelope and a synchronous
   one-shot reference guard for the host-owned `ready -> mark-send-started -> physical send` boundary;
+- make the guard's one-shot phase transition process-thread-safe so concurrent callers cannot both
+  cross `prepared -> mark_in_progress` and reach the physical-send callback;
 - add a real subprocess, zero-provider conformance regression that rejects the legacy
   `{ready, host, port}` handshake, binding drift, malformed mark receipts, and replay after the
   may-have-sent boundary.

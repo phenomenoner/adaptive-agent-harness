@@ -19,6 +19,8 @@ qualification, formal evaluation, PyPI publication, or official Plugin Directory
   construction before the durable may-have-sent boundary.
 - Enforce the one-shot order `ready -> mark_send_started -> physical_send` with at most one physical
   send after a successful mark.
+- Serialize the local `prepared -> mark_in_progress` transition so concurrent invocations cannot
+  both mark and physically send the same reserved ticket.
 - Reject legacy `{ready, host, port}` readiness, binding drift, malformed mark receipts, mutable-ticket
   drift, and replay after send start.
 - Preserve AAR's existing fail-closed, durable authority, no-resend, and `outcome_unknown` semantics.

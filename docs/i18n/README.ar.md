@@ -273,7 +273,7 @@ Plain Python / IPython workers and host-authorized brokers
 - تغطية Python من 3.11 إلى 3.14؛
 - 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - مخطط SQLite تزايدي حتى v5؛
-- full repository run: **743 passed, 5 platform-gated skips, 1 existing MCP Sampling deprecation warning**;
+- current full-repository verification is recorded in the canonical English release note and external release receipt;
 - فحص exact-wheel نظيف للمشرف والواجهة الأمامية على Linux/WSL؛
 - سيناريوهات المشرف الدائم، واستبدال الواجهة الأمامية، وفقدان العملية، والكاتب القديم، وإعادة استخدام الإيصال، وسيناريوهات محاولات RLM اللاحقة المقيّدة بالسياسة؛
 

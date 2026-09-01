@@ -273,7 +273,7 @@ Alfa pública atual: **`0.6.0a2`**.
 - cobertura de Python 3.11 a 3.14;
 - 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - esquema SQLite aditivo até v5;
-- full repository run: **743 passed, 5 platform-gated skips, 1 existing MCP Sampling deprecation warning**;
+- current full-repository verification is recorded in the canonical English release note and external release receipt;
 - uma sondagem limpa do supervisor/frontend com wheel exato no Linux/WSL;
 - supervisor durável, substituição do frontend, perda de processo, gravador obsoleto, reutilização de recibos e cenários de sucessores RLM vinculados a políticas;
 

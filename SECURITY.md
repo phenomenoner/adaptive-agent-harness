@@ -12,9 +12,9 @@ Security fixes currently target the latest tagged public alpha only.
 
 | Version | Supported |
 |---|---|
-| `0.4.x` alpha | Yes |
-| `0.3.x` alpha | Security fixes only when explicitly backported |
-| Earlier untagged snapshots | No |
+| `0.6.x` alpha | Yes |
+| `0.5.x` and `0.4.x` alpha | Security fixes only when explicitly backported |
+| `0.3.x` and earlier untagged snapshots | No |
 
 ## Reporting a vulnerability
 
