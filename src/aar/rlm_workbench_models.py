@@ -15,6 +15,7 @@ from pydantic import ConfigDict, RootModel, model_validator
 from referencing import Registry, Resource
 
 from aar.canonical import canonical_json_bytes, canonical_sha256
+from aar.schema_generator import current_contract_documents
 from aar.schema_profile import validate_schema_profile
 
 _DRAFT = "https://json-schema.org/draft/2020-12/schema"
@@ -153,7 +154,11 @@ class RlmWorkbenchCapability(ContractDocument):
 
     @classmethod
     def semantic_validate(cls, document: dict[str, Any]) -> None:
-        combined = _load_projection("aar-mcp-tools-v8-combined.json")
+        combined = _load_projection(
+            "aar-mcp-tools-v8-combined.json"
+            if document["surface_version"] == "aar.mcp-tools.v8"
+            else "aar-mcp-tools-v9-combined.json"
+        )
         catalog = _load_projection("aar-broker-catalog-v2.json")
         workbench = _contract_documents()["aar-rlm-workbench-v1.schema.json"]
         planner_digest = canonical_sha256(workbench["$defs"]["RlmDirective"])
@@ -189,7 +194,7 @@ def build_workbench_capability(
 ) -> RlmWorkbenchCapability:
     """Build the truthful v8 projection from reviewed contracts plus runtime availability."""
 
-    combined = _load_projection("aar-mcp-tools-v8-combined.json")
+    combined = _load_projection("aar-mcp-tools-v9-combined.json")
     catalog = _load_projection("aar-broker-catalog-v2.json")
     workbench = _contract_documents()["aar-rlm-workbench-v1.schema.json"]
     unknown = sorted(set(availability) - {row["method"] for row in catalog["contracts"]})
@@ -499,7 +504,7 @@ def _view(value: Any) -> Any:
 
 @lru_cache(maxsize=1)
 def _contract_documents() -> dict[str, dict[str, Any]]:
-    return {name: _load_projection(name) for name in _CONTRACT_FILES}
+    return current_contract_documents({name: _load_projection(name) for name in _CONTRACT_FILES})
 
 
 @cache

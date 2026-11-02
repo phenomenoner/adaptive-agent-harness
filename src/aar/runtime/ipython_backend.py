@@ -57,11 +57,12 @@ from aar.runtime.workspace_models import (
     WorkspaceRestoreSpec,
     WorkspaceVariableSummary,
 )
-from aar.schemas import OperationRef, SessionRef, WorkspaceRef
+from aar.schemas import ArtifactReference, OperationRef, SessionRef, WorkspaceRef
 
 BrokerRequestHandler = Callable[
     [OperationRef, ProgrammableWorkspaceHandle, dict[str, Any]], dict[str, Any]
 ]
+ArtifactStageHandler = Callable[[OperationRef, str, bytes, str], ArtifactReference | None]
 
 
 class WorkspaceWorkerLost(WorkspaceClosed):
@@ -118,11 +119,13 @@ class SupervisedIPythonWorkspaceBackend:
         self,
         *,
         artifact_sink: ArtifactSink | None = None,
+        artifact_stage_handler: ArtifactStageHandler | None = None,
         broker_handler: BrokerRequestHandler | None = None,
         startup_timeout_s: float = 60.0,
         worker_manager: WorkerManager | None = None,
     ) -> None:
         self._artifact_sink = artifact_sink
+        self._artifact_stage_handler = artifact_stage_handler
         self._broker_handler = broker_handler
         self._startup_timeout_s = startup_timeout_s
         self._worker_manager = worker_manager
@@ -163,6 +166,26 @@ class SupervisedIPythonWorkspaceBackend:
             if self._broker_handler is not None and self._broker_handler is not handler:
                 raise WorkspaceOperationConflict("workspace broker handler is already bound")
             self._broker_handler = handler
+
+    def bind_artifact_stage_handler(self, handler: ArtifactStageHandler) -> None:
+        with self._lock:
+            if (
+                self._artifact_stage_handler is not None
+                and self._artifact_stage_handler is not handler
+            ):
+                raise WorkspaceOperationConflict(
+                    "workspace artifact stage handler is already bound"
+                )
+            self._artifact_stage_handler = handler
+
+    def unbind_artifact_stage_handler(self, expected: ArtifactStageHandler) -> None:
+        """Release this exact callback after its owner has quiesced.
+
+        A late predecessor close cannot remove a successor's registration.
+        """
+        with self._lock:
+            if self._artifact_stage_handler is expected:
+                self._artifact_stage_handler = None
 
     def worker_binding(self, handle: ProgrammableWorkspaceHandle) -> WorkspaceWorkerBinding:
         state = self._state(handle.workspace)
@@ -968,16 +991,33 @@ class SupervisedIPythonWorkspaceBackend:
             kind = raw["kind"]
             try:
                 if kind == "artifact":
-                    if self._artifact_sink is None:
+                    item = artifacts[int(raw["artifact_index"])]
+                    content = base64.b64decode(item["content_base64"], validate=True)
+                    reference = None
+                    if self._artifact_stage_handler is not None:
+                        reference = self._artifact_stage_handler(
+                            operation,
+                            str(item["name"]),
+                            content,
+                            str(item["media_type"]),
+                        )
+                    if reference is None and operation.value.startswith("exec-"):
+                        # Reserved native-cell executions never publish via the
+                        # legacy sink, including after their coordinator closes.
+                        raise WorkspaceOperationConflict(
+                            "native artifact staging binding unavailable"
+                        )
+                    if reference is None and self._artifact_sink is None:
                         raise WorkspaceWorkerProtocolError(
                             "worker emitted artifact without a host sink"
                         )
-                    item = artifacts[int(raw["artifact_index"])]
-                    reference = self._artifact_sink(
-                        base64.b64decode(item["content_base64"], validate=True),
-                        str(item["media_type"]),
-                        operation,
-                    )
+                    if reference is None:
+                        assert self._artifact_sink is not None
+                        reference = self._artifact_sink(
+                            content,
+                            str(item["media_type"]),
+                            operation,
+                        )
                     event = WorkspaceEvent(
                         sequence=len(events) + 1,
                         kind="artifact",
@@ -1003,25 +1043,30 @@ class SupervisedIPythonWorkspaceBackend:
                 break
         if artifact_error is not None:
             status = "failed"
-            if len(events) >= spec.max_events - 1:
-                events.pop()
+            retained = max(0, spec.max_events - 2)
+            events = events[:retained]
+            error_data = {
+                "type": type(artifact_error).__name__,
+                "message": str(artifact_error)[:2_048],
+            }
+            if spec.max_events == 1:
+                error_data.update(phase="finished", status="failed")
             events.append(
                 WorkspaceEvent(
                     sequence=len(events) + 1,
                     kind="exception",
-                    data={
-                        "type": type(artifact_error).__name__,
-                        "message": str(artifact_error)[:2_048],
-                    },
+                    data=error_data,
+                    truncated=True,
                 )
             )
-            events.append(
-                WorkspaceEvent(
-                    sequence=len(events) + 1,
-                    kind="progress",
-                    data={"phase": "finished", "status": "failed"},
+            if spec.max_events > 1:
+                events.append(
+                    WorkspaceEvent(
+                        sequence=len(events) + 1,
+                        kind="progress",
+                        data={"phase": "finished", "status": "failed"},
+                    )
                 )
-            )
         return WorkspaceProgramResult(
             operation=operation,
             workspace=handle.workspace,
@@ -1045,7 +1090,28 @@ class SupervisedIPythonWorkspaceBackend:
         message: str,
         max_events: int,
     ) -> WorkspaceProgramResult:
-        del max_events
+        error_data = {"type": "WorkspaceWorkerLost", "message": message[-2_048:]}
+        events = [
+            WorkspaceEvent(sequence=1, kind="progress", data={"phase": "started"}),
+            WorkspaceEvent(sequence=2, kind="exception", data=error_data),
+            WorkspaceEvent(
+                sequence=3, kind="progress", data={"phase": "finished", "status": status}
+            ),
+        ]
+        if max_events == 1:
+            events = [
+                WorkspaceEvent(
+                    sequence=1,
+                    kind="exception",
+                    truncated=True,
+                    data={**error_data, "phase": "finished", "status": status},
+                )
+            ]
+        elif max_events == 2:
+            events = [
+                event.model_copy(update={"sequence": index + 1})
+                for index, event in enumerate(events[1:])
+            ]
         return WorkspaceProgramResult(
             operation=operation,
             workspace=handle.workspace,
@@ -1055,22 +1121,7 @@ class SupervisedIPythonWorkspaceBackend:
             revision_after=handle.revision + 1,
             status=status,
             workspace_lost=True,
-            events=(
-                WorkspaceEvent(sequence=1, kind="progress", data={"phase": "started"}),
-                WorkspaceEvent(
-                    sequence=2,
-                    kind="exception",
-                    data={
-                        "type": "WorkspaceWorkerLost",
-                        "message": message[-2_048:],
-                    },
-                ),
-                WorkspaceEvent(
-                    sequence=3,
-                    kind="progress",
-                    data={"phase": "finished", "status": status},
-                ),
-            ),
+            events=tuple(events),
         )
 
     def _state(self, workspace: WorkspaceRef) -> _WorkerState:

@@ -4,11 +4,11 @@
     "scope": "release_contract_snapshot",
     "publication_status": "not_established_by_source",
     "publication_authority": "external_readback_only",
-    "version": "0.6.0a2",
-    "tag": "v0.6.0a2",
-    "operation_skill_version": "0.11.0",
+    "version": "0.6.1a0",
+    "tag": "v0.6.1a0",
+    "operation_skill_version": "0.11.1",
     "codex_profile_version": "0.5.0-a0+codex.20260820194429",
-    "mcp_surface": "aar.mcp-tools.v8",
+    "mcp_surface": "aar.mcp-tools.v9",
     "mcp_tool_count": 38
   },
   "evidence_binding": {
@@ -17,7 +17,7 @@
     "reason": "Embedding commit, tree, enclosing distribution, CI, installed-host, provider, review, or release-asset identities in the objects they attest would be self-referential.",
     "receipt": {
       "schema_id": "aar.release-receipt.v1",
-      "asset_name": "adaptive-agent-runtime-v0.6.0a2-release-receipt.json",
+      "asset_name": "adaptive-agent-runtime-v0.6.1a0-release-receipt.json",
       "required_fields": [
         "source.commit",
         "source.tree",
@@ -53,13 +53,13 @@
         "required_rows": 20,
         "status": "frozen"
       },
-      "public_mcp_v8_surface": {
+      "public_mcp_v9_surface": {
         "required_tools": 38,
         "status": "frozen"
       }
     },
     "post_freeze": {
-      "authority": "adaptive-agent-runtime-v0.6.0a2-release-receipt.json",
+      "authority": "adaptive-agent-runtime-v0.6.1a0-release-receipt.json",
       "required_fields_source": "evidence_binding.receipt.required_fields"
     }
   },
@@ -68,7 +68,7 @@
     "CHANGELOG.md",
     "TECHNICAL-STATUS.md",
     "HOST-COMPATIBILITY.md",
-    "docs/RELEASE-v0.6.0a2.md",
+    "docs/RELEASE-v0.6.1a0.md",
     "profiles/codex/plugins/adaptive-agent-runtime/README.md",
     "profiles/hermes/adaptive-agent-runtime/README.md",
     "docs/CODEX-INSTALL.md",
@@ -77,7 +77,7 @@
     "tests/test_public_release_consistency.py"
   ],
   "behavior": {
-    "public_mcp_surface": "aar.mcp-tools.v8",
+    "public_mcp_surface": "aar.mcp-tools.v9",
     "public_mcp_tool_count": 38,
     "frozen_v7_compatibility_tool_count": 30,
     "database_runtime_process_lock": true,

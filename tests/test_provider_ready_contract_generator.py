@@ -173,6 +173,8 @@ def test_module_surface_and_exact_spec_identity() -> None:
 def test_exact_schema_bundle_self_digests_and_independent_schemas() -> None:
     spec = _spec()
     bundle = provider_ready_schema_bundle()
+    current_bundle = provider_ready_schema_bundle(current=True)
+    assert current_bundle["schema_version"] == "aar.provider-ready-schema-bundle.v2"
     assert bundle["schema_version"] == "aar.provider-ready-schema-bundle.v1"
     assert list(bundle["schemas"]) == spec["constants"]["schemaIds"]
     assert list(bundle["schema_digests"]) == spec["constants"]["schemaIds"]
@@ -181,7 +183,7 @@ def test_exact_schema_bundle_self_digests_and_independent_schemas() -> None:
     for schema_id, schema in bundle["schemas"].items():
         Draft202012Validator.check_schema(schema)
         assert bundle["schema_digests"][schema_id] == canonical_sha256(schema)
-        assert schema == PROVIDER_READY_SCHEMA_MODELS[schema_id].model_json_schema(mode="validation")
+        assert current_bundle["schemas"][schema_id] == PROVIDER_READY_SCHEMA_MODELS[schema_id].model_json_schema(mode="validation")
     core = {key: bundle[key] for key in ("schema_version", "schemas", "schema_digests")}
     assert bundle["bundle_digest"] == canonical_sha256(core)
 

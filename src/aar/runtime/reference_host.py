@@ -81,6 +81,7 @@ from aar.runtime.rlm import RlmEngine, RlmExecutionCancelled
 from aar.runtime.rlm_workbench import (
     RlmWorkbenchCoordinator,
     RlmWorkbenchDeadlineExceeded,
+    RlmWorkbenchModelCallBudgetExceeded,
     RlmWorkbenchPlanner,
 )
 from aar.runtime.worker_manager import WorkerManager
@@ -258,6 +259,7 @@ class ReferenceHost:
                     self.caller_work,
                     self.registry,
                     now_ms=now_ms,
+                    runtime_generation=self.runtime_generation,
                     planner=workbench_planner,
                 )
                 ipython_workspace.bind_broker_handler(self.rlm_workbench.handle_broker_request)
@@ -1198,6 +1200,28 @@ class ReferenceHost:
         if kind == "rlm.workbench.execute":
             if self.rlm_workbench is None:
                 raise ReferenceHostError("RLM workbench coordinator is unavailable")
+            if isinstance(error, RlmWorkbenchModelCallBudgetExceeded):
+                self.rlm_workbench.mark_model_call_budget_terminal(operation, attempt, fence)
+                snapshot = self.rlm_workbench.snapshot(operation)
+                failure = FailureEnvelope(
+                    category=FailureCategory.BUDGET,
+                    code="BUDGET_EXCEEDED",
+                    message="workbench root planner model-call budget exhausted",
+                    retryable=False,
+                    certainty=OutcomeCertainty.CERTAIN,
+                    operation=operation,
+                )
+                return self.registry.transition_claimed(
+                    attempt,
+                    self.runtime_generation,
+                    fence.dispatcher_generation,
+                    fence.lease_epoch,
+                    fence.owner_digest,
+                    state=OperationState.FAILED,
+                    result_json=canonical_json_bytes(snapshot.root).decode(),
+                    failure=failure,
+                    note="workbench_model_call_budget_exhausted",
+                )
             if isinstance(error, RlmWorkbenchDeadlineExceeded):
                 self.rlm_workbench.mark_deadline_terminal(operation)
                 snapshot = self.rlm_workbench.snapshot(operation)

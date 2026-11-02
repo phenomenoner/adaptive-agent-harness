@@ -869,7 +869,7 @@ def test_workbench_grant_set_collections_budget_ttl_and_digest() -> None:
 
     for field_name, value in (
         ("max_ttl_ms", 999),
-        ("max_ttl_ms", 900_001),
+        ("max_ttl_ms", MAX_COUNTER + 1),
         ("runtime_generation", 0),
         ("activation_generation", 0),
     ):

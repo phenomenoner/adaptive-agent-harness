@@ -120,9 +120,11 @@ class WorkspaceEnvironmentFingerprint(StrictModel):
 
 class WorkspaceProgramSpec(StrictModel):
     code: Annotated[str, Field(min_length=1, max_length=65_536, strict=True)]
-    wall_time_ms: Annotated[int, Field(ge=1, le=60_000, strict=True)] = 10_000
-    max_output_chars: Annotated[int, Field(ge=256, le=65_536, strict=True)] = 16_384
-    max_events: Annotated[int, Field(ge=8, le=256, strict=True)] = 64
+    # The host/job owns the finite time allowance; this value only specifies
+    # one cell within it. Keep the shared backend range truthful for both APIs.
+    wall_time_ms: Annotated[int, Field(ge=1, le=9_223_372_036_854_775_807, strict=True)] = 10_000
+    max_output_chars: Annotated[int, Field(ge=1, le=262_144, strict=True)] = 16_384
+    max_events: Annotated[int, Field(ge=1, le=512, strict=True)] = 64
     checkpoint_replay_safe: bool = False
 
 

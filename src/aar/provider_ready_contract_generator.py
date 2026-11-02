@@ -1214,14 +1214,35 @@ def _all_records(documents: dict[str, dict[str, Any]]) -> tuple[list[dict[str, A
     return records, raw_documents
 
 
-def provider_ready_schema_bundle() -> dict[str, Any]:
+def provider_ready_schema_bundle(*, current: bool = False) -> dict[str, Any]:
+    """Render current owner constraints or the immutable v1 fixture baseline.
+
+    The six v1 time nodes are compatibility projections, not runtime policy.
+    Current v2 schemas come directly from the executable models.
+    """
     schemas = {
         schema_id: model_type.model_json_schema(mode="validation")
         for schema_id, model_type in sorted(PROVIDER_READY_SCHEMA_MODELS.items())
     }
+    if not current:
+        frozen_nodes = (
+            ("aar.host-activation-intent.v1", "$defs", "ActivationGrantPolicy", "properties", "max_deadline_ms"),
+            ("aar.host-activation-intent.v1", "$defs", "GrantBudgetCeiling", "properties", "wall_time_ms"),
+            ("aar.host-activation-profile.v1", "$defs", "ActivationGrantPolicy", "properties", "max_deadline_ms"),
+            ("aar.host-activation-profile.v1", "$defs", "GrantBudgetCeiling", "properties", "wall_time_ms"),
+            ("aar.workbench-grant-set.v1", "$defs", "GrantBudgetCeiling", "properties", "wall_time_ms"),
+            ("aar.workbench-grant-set.v1", "properties", "max_ttl_ms"),
+        )
+        for path in frozen_nodes:
+            node = schemas
+            for key in path:
+                node = node[key]
+            node["maximum"] = 900_000
     schema_digests = {schema_id: canonical_sha256(schema) for schema_id, schema in schemas.items()}
     core = {
-        "schema_version": SCHEMA_BUNDLE_SCHEMA_VERSION,
+        "schema_version": (
+            "aar.provider-ready-schema-bundle.v2" if current else SCHEMA_BUNDLE_SCHEMA_VERSION
+        ),
         "schemas": schemas,
         "schema_digests": schema_digests,
     }

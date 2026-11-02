@@ -67,9 +67,9 @@ PlannerMode = Literal["caller_delegated_ticketed", "service_managed"]
 BackendKind = Literal["native", "caller_driver", "reference"]
 
 _BUDGET_MAX = 9_223_372_036_854_775_807
-_WALL_TIME = Annotated[int, Field(ge=1_000, le=900_000, strict=True)]
+_WALL_TIME = Annotated[int, Field(ge=1_000, le=_BUDGET_MAX, strict=True)]
 _MODEL_REQUESTS = Annotated[int, Field(ge=1, le=128, strict=True)]
-_MAX_DEADLINE = Annotated[int, Field(ge=1_000, le=900_000, strict=True)]
+_MAX_DEADLINE = Annotated[int, Field(ge=1_000, le=_BUDGET_MAX, strict=True)]
 _CHILD_OPERATIONS = Annotated[int, Field(ge=0, le=64, strict=True)]
 _ARTIFACT_BYTES = Annotated[int, Field(ge=0, le=33_554_432, strict=True)]
 _ADAPTER_RANK = {

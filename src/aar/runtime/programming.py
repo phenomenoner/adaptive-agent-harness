@@ -168,7 +168,8 @@ class _EventCollector:
             self._dropped_events = True
             if not force:
                 return
-            self._events.pop()
+            if self._events:
+                self._events.pop()
         self._events.append(
             WorkspaceEvent(
                 sequence=len(self._events) + 1,
@@ -210,6 +211,12 @@ class _EventCollector:
                     data=data,
                     truncated=self._dropped_events,
                 )
+            )
+        elif self._max_events == 1:
+            event = self._events[0]
+            prior = event.data if isinstance(event.data, dict) else {}
+            self._events[0] = event.model_copy(
+                update={"data": {**prior, **data}, "truncated": True}
             )
         return tuple(self._events)
 
@@ -266,9 +273,7 @@ class PlainPythonWorkspaceBackend:
     def environment(self) -> WorkspaceEnvironmentFingerprint:
         return self._environment
 
-    def create(
-        self, workspace: WorkspaceRef, session: SessionRef
-    ) -> ProgrammableWorkspaceHandle:
+    def create(self, workspace: WorkspaceRef, session: SessionRef) -> ProgrammableWorkspaceHandle:
         with self._lock:
             state = self._states.get(workspace.value)
             if state is None:
@@ -572,8 +577,7 @@ class PlainPythonWorkspaceBackend:
         with self._lock:
             current = self._states.get(spec.workspace.value)
             running = any(
-                workspace == spec.workspace.value
-                for workspace, _event in self._running.values()
+                workspace == spec.workspace.value for workspace, _event in self._running.values()
             )
         if running:
             raise WorkspaceOperationConflict("cannot restore while an operation is running")
@@ -583,9 +587,7 @@ class PlainPythonWorkspaceBackend:
             state = _WorkspaceState(
                 session=spec.session,
                 generation=(
-                    spec.expected_handle.generation + 1
-                    if spec.expected_handle is not None
-                    else 1
+                    spec.expected_handle.generation + 1 if spec.expected_handle is not None else 1
                 ),
                 revision=0,
                 namespace=namespace,
@@ -607,11 +609,7 @@ class PlainPythonWorkspaceBackend:
                 spec.recover_lost_generation
                 and current.generation == spec.expected_handle.generation + 1
             ):
-                if (
-                    current.closed
-                    or current.revision != 0
-                    or current.namespace != namespace
-                ):
+                if current.closed or current.revision != 0 or current.namespace != namespace:
                     raise WorkspaceOperationConflict(
                         "existing recovery generation does not match checkpoint"
                     )
@@ -624,9 +622,7 @@ class PlainPythonWorkspaceBackend:
                     workspace == spec.workspace.value
                     for workspace, _event in self._running.values()
                 ):
-                    raise WorkspaceOperationConflict(
-                        "cannot restore while an operation is running"
-                    )
+                    raise WorkspaceOperationConflict("cannot restore while an operation is running")
                 state = _WorkspaceState(
                     session=spec.session,
                     generation=current.generation + 1,
@@ -702,9 +698,7 @@ class PlainPythonWorkspaceBackend:
                 raise WorkspaceOperationConflict("only a lost workspace receipt may be retired")
             del self._receipts[operation.value]
 
-    def close(
-        self, handle: ProgrammableWorkspaceHandle, *, reason: str
-    ) -> WorkspaceCloseResult:
+    def close(self, handle: ProgrammableWorkspaceHandle, *, reason: str) -> WorkspaceCloseResult:
         state = self._state(handle.workspace)
         with state.lock:
             self._check_handle(state, handle)
@@ -739,9 +733,7 @@ class PlainPythonWorkspaceBackend:
             raise WorkspaceNotFound(workspace.value)
         return state
 
-    def _check_handle(
-        self, state: _WorkspaceState, handle: ProgrammableWorkspaceHandle
-    ) -> None:
+    def _check_handle(self, state: _WorkspaceState, handle: ProgrammableWorkspaceHandle) -> None:
         if handle.backend != self.descriptor:
             raise WorkspaceRevisionConflict(
                 "workspace backend capability identity does not match this backend"

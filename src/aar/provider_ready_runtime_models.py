@@ -83,11 +83,11 @@ _METHODS: tuple[WorkbenchActivationMethodName, ...] = (
 )
 _METHOD_RANK = {method: index for index, method in enumerate(_METHODS)}
 _MAX_COUNTER = 9_223_372_036_854_775_807
-_WALL_TIME = Annotated[int, Field(ge=1_000, le=900_000, strict=True)]
+_WALL_TIME = Annotated[int, Field(ge=1_000, le=_MAX_COUNTER, strict=True)]
 _MODEL_REQUESTS = Annotated[int, Field(ge=1, le=128, strict=True)]
 _CHILD_OPERATIONS = Annotated[int, Field(ge=0, le=64, strict=True)]
 _ARTIFACT_BYTES = Annotated[int, Field(ge=0, le=33_554_432, strict=True)]
-_MAX_TTL = Annotated[int, Field(ge=1_000, le=900_000, strict=True)]
+_MAX_TTL = Annotated[int, Field(ge=1_000, le=_MAX_COUNTER, strict=True)]
 _PLACEHOLDER_DIGEST = "sha256:" + "0" * 64
 
 

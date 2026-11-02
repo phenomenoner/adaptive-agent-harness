@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SUCCESSOR = PACKAGE_VERSION
 TAG = f"v{SUCCESSOR}"
 MATRIX_ROWS = 20
-TOOL_MANIFEST_PATH = ROOT / "schemas" / "aar-mcp-tools-v8-combined.json"
+TOOL_MANIFEST_PATH = ROOT / "schemas" / "aar-mcp-tools-v9-combined.json"
 STATUS_PATH = ROOT / "profiles" / "release-status-v1.json"
 HERMES_PROFILE_README = "profiles/hermes/adaptive-agent-runtime/README.md"
 
@@ -131,7 +131,7 @@ def _status() -> dict:
 
 
 def _tool_manifest() -> dict:
-    assert TOOL_MANIFEST_PATH.is_file(), "combined MCP v8 tool manifest is missing"
+    assert TOOL_MANIFEST_PATH.is_file(), "combined MCP v9 tool manifest is missing"
     return json.loads(TOOL_MANIFEST_PATH.read_text(encoding="utf-8"))
 
 
@@ -178,7 +178,7 @@ def test_release_status_is_timeless_release_contract() -> None:
         "mcp_surface": MCP_TOOL_SURFACE_VERSION,
         "mcp_tool_count": len(tools),
     }
-    assert MCP_TOOL_SURFACE_VERSION == "aar.mcp-tools.v8"
+    assert MCP_TOOL_SURFACE_VERSION == "aar.mcp-tools.v9"
     assert len(tools) == 38
     serialized = json.dumps(status, sort_keys=True)
     assert "immutable_release_snapshot" not in serialized
@@ -221,7 +221,7 @@ def test_release_status_separates_frozen_and_post_freeze_evidence() -> None:
             "required_rows": MATRIX_ROWS,
             "status": "frozen",
         },
-        "public_mcp_v8_surface": {
+        "public_mcp_v9_surface": {
             "required_tools": len(_tool_manifest()["tools"]),
             "status": "frozen",
         },
@@ -309,15 +309,15 @@ def test_stale_current_version_negative_fixtures_are_rejected(fixture: str) -> N
 
 def _assert_current_tool_surface(text: str, *, surface: str) -> None:
     lines = text.splitlines()[:200]
-    current_tool_lines = [line for line in lines if "38" in line and "v8" in line]
-    assert len(current_tool_lines) == 1, f"{surface} omits the current 38-tool v8 surface"
+    current_tool_lines = [line for line in lines if "38" in line and "v9" in line]
+    assert len(current_tool_lines) == 1, f"{surface} omits the current 38-tool v9 surface"
     for line in lines:
         lowered = line.casefold()
         stale_projection = "30" in lowered and "v7" in lowered
         current_claim = "current" in lowered or "public mcp surface" in lowered
         compatibility_context = (
             "38" in lowered
-            and "v8" in lowered
+            and "v9" in lowered
             and ("frozen" in lowered or "compatibility" in lowered)
         )
         assert not (stale_projection and current_claim and not compatibility_context), (
@@ -326,7 +326,7 @@ def _assert_current_tool_surface(text: str, *, surface: str) -> None:
 
 
 def test_stale_current_tool_count_negative_fixture_is_rejected() -> None:
-    with pytest.raises(AssertionError, match="omits the current 38-tool v8 surface"):
+    with pytest.raises(AssertionError, match="omits the current 38-tool v9 surface"):
         _assert_current_tool_surface(
             "Current public MCP surface: 30 tools on v7.",
             surface="synthetic stale tool-count fixture",
@@ -336,7 +336,7 @@ def test_stale_current_tool_count_negative_fixture_is_rejected() -> None:
 def test_contradictory_current_tool_surface_negative_fixture_is_rejected() -> None:
     with pytest.raises(AssertionError, match="contradictory stale current tool surface"):
         _assert_current_tool_surface(
-            "Current public MCP surface: 38 tools on v8.\n"
+            "Current public MCP surface: 38 tools on v9.\n"
             "Current public MCP surface: 30 tools on v7.",
             surface="synthetic contradictory tool-count fixture",
         )

@@ -1,8 +1,8 @@
 # Hermes provider-ready host adapter
 
-AAR `0.6.0a2` adds an opt-in Hermes launcher for clean-installed provider-ready runtimes. It keeps
-the MCP tool surface unchanged while giving the local host an explicit way to issue short-lived,
-memory-only session grants.
+AAR `0.6.1a0` retains the opt-in Hermes launcher for clean-installed provider-ready runtimes. It keeps
+the same 38 MCP tool names on the current v9 constraint profile, with frozen v7/v8 source snapshots,
+and gives the local host an explicit way to issue finite, memory-only session grants.
 
 ## What it adds
 
@@ -19,7 +19,7 @@ mutation request all remain grant-free.
 
 Prepare these host-owned inputs before configuring Hermes:
 
-1. an exact `0.6.0a2` wheel;
+1. an exact `0.6.1a0` wheel;
 2. a new, previously absent runtime home installed through `aar-admin runtime install`;
 3. the matching host activation intent, candidate receipt, and route catalog;
 4. a successful read-only `aar-admin activation verify` result.
