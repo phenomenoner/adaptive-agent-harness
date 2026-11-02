@@ -233,7 +233,9 @@ class McpRlmWorkbenchMutationContext(McpRlmWorkbenchReadContext):
     request_id: IdentityValue
     idempotency_key: Annotated[str, Field(min_length=8, max_length=128)]
     grant_ids: Annotated[list[IdentityValue], Field(min_length=1, max_length=64)]
-    budget_wall_time_ms: Annotated[int, Field(ge=1_000, le=900_000, strict=True)]
+    budget_wall_time_ms: Annotated[
+        int, Field(ge=1_000, le=9_223_372_036_854_775_807, strict=True)
+    ]
     budget_model_requests: Annotated[int, Field(ge=1, le=128, strict=True)]
     budget_input_tokens: Annotated[int, Field(ge=0, strict=True)]
     budget_output_tokens: Annotated[int, Field(ge=0, strict=True)]

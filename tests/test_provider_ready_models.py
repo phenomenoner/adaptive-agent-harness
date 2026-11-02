@@ -628,7 +628,7 @@ def test_budget_bounds_include_exact_edges_but_reject_out_of_range_and_coercion(
     )
     cases = (
         ("wall_time_ms", 999),
-        ("wall_time_ms", 900_001),
+        ("wall_time_ms", MAX_COUNTER + 1),
         ("model_requests", 0),
         ("model_requests", 129),
         ("input_tokens", -1),

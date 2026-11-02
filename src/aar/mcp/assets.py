@@ -21,6 +21,7 @@ from aar.mcp.server import (
     build_server,
     tool_surface_manifest,
 )
+from aar.provider_ready_contract_generator import provider_ready_schema_bundle
 
 TOOL_TOKEN = re.compile(r"`(aar_[a-z0-9_]+)`")
 
@@ -51,26 +52,28 @@ async def asset_documents(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     return tool_manifest, metadata
 
 
-def _paths(root: Path) -> tuple[Path, Path]:
+def _paths(root: Path) -> tuple[Path, Path, Path]:
     return (
-        root / "schemas" / "aar-mcp-tools-v8-combined.json",
+        root / "schemas" / "aar-mcp-tools-v9-combined.json",
         root / "skills" / "aar-operations" / "metadata.json",
+        root / "schemas" / "aar-provider-ready-schemas-v2.json",
     )
 
 
-def generate_assets(root: Path) -> tuple[Path, Path]:
+def generate_assets(root: Path) -> tuple[Path, Path, Path]:
     tool_manifest, metadata = asyncio.run(asset_documents(root))
-    tool_path, metadata_path = _paths(root)
+    tool_path, metadata_path, provider_schema_path = _paths(root)
     tool_path.parent.mkdir(parents=True, exist_ok=True)
     metadata_path.parent.mkdir(parents=True, exist_ok=True)
     tool_path.write_bytes(pretty_json_bytes(tool_manifest))
     metadata_path.write_bytes(pretty_json_bytes(metadata))
-    return tool_path, metadata_path
+    provider_schema_path.write_bytes(pretty_json_bytes(provider_ready_schema_bundle(current=True)))
+    return tool_path, metadata_path, provider_schema_path
 
 
 def verify_assets(root: Path) -> list[str]:
     errors: list[str] = []
-    tool_path, metadata_path = _paths(root)
+    tool_path, metadata_path, provider_schema_path = _paths(root)
     expected_tool, expected_metadata = asyncio.run(asset_documents(root))
     try:
         checked_tool = json.loads(tool_path.read_text(encoding="utf-8"))
@@ -86,6 +89,12 @@ def verify_assets(root: Path) -> list[str]:
         errors.append("checked-in MCP tool surface is stale")
     if checked_metadata != expected_metadata:
         errors.append("checked-in operation skill metadata is stale")
+    expected_provider_schema = pretty_json_bytes(provider_ready_schema_bundle(current=True))
+    if (
+        not provider_schema_path.is_file()
+        or provider_schema_path.read_bytes() != expected_provider_schema
+    ):
+        errors.append("checked-in current provider-ready schemas are stale")
 
     declared_tools = {tool["name"] for tool in expected_tool["tools"]}
     skill_text = (root / "skills" / "aar-operations" / "SKILL.md").read_text(encoding="utf-8")

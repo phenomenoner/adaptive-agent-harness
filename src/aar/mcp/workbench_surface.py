@@ -9,7 +9,7 @@ from typing import Any
 
 from mcp.types import ToolAnnotations
 
-SUCCESSOR_SURFACE_VERSION = "aar.mcp-tools.v8"
+SUCCESSOR_SURFACE_VERSION = "aar.mcp-tools.v9"
 SUCCESSOR_TOOL_NAMES = (
     "aar_rlm_workbench_execute",
     "aar_rlm_workbench_capabilities",
@@ -59,10 +59,10 @@ def successor_surface_contract() -> dict[str, Any]:
             / "sdd"
             / "aar-rlm-native-workbench-v2"
             / "contracts"
-            / "aar-mcp-tools-v8-combined.json",
-            root / "schemas" / "aar-mcp-tools-v8-combined.json",
+            / "aar-mcp-tools-v9-combined.json",
+            root / "schemas" / "aar-mcp-tools-v9-combined.json",
         ),
-        "aar-mcp-tools-v8-combined.json",
+        "aar-mcp-tools-v9-combined.json",
     )
 
 

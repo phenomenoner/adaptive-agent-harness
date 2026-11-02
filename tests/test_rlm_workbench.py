@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import copy
 import hashlib
 import json
@@ -11,6 +12,7 @@ from threading import Barrier, Event
 from typing import Any, cast
 
 import pytest
+from mcp import Client
 
 from aar.broker_models import (
     EffectiveModelRoute,
@@ -20,6 +22,7 @@ from aar.broker_models import (
     ModelUsageRecord,
 )
 from aar.canonical import canonical_json_bytes, canonical_sha256
+from aar.mcp.server import build_server
 from aar.rlm_workbench_models import RecoveryPlannerInput, RlmWorkbenchExecuteInput
 from aar.runtime.caller_work import CallerWorkRepository, build_reconcile_fence
 from aar.runtime.dispatcher import AttemptFence
@@ -232,6 +235,7 @@ def commit_pending_ticket_success(
     pending: Any,
     *,
     prefix: str,
+    output_text: str = "ok",
 ) -> Any:
     claimed = repository.claim(
         {
@@ -270,7 +274,7 @@ def commit_pending_ticket_success(
     )
     assert started.claimant is not None
     assert started.physical_attempt is not None
-    evidence, model_response = model_commit_evidence(started, "ok")
+    evidence, model_response = model_commit_evidence(started, output_text)
     return repository.commit(
         {
             **caller_common_input(
@@ -288,8 +292,8 @@ def commit_pending_ticket_success(
             "observation": {
                 "kind": "model",
                 "outcome": "succeeded",
-                "output_text": "ok",
-                "output_digest": digest_bytes(b"ok"),
+                "output_text": output_text,
+                "output_digest": digest_bytes(output_text.encode()),
                 **evidence,
             },
             "model_response": model_response,
@@ -2026,3 +2030,403 @@ def test_settlement_directly_notifies_live_dispatcher_callback(tmp_path: Path) -
         assert notifications == [(admitted.operation, "rlm.workbench.execute")]
     finally:
         host.close()
+
+
+class NamedArtifactPlanner:
+    code = (
+        "aar_artifact('reports/answer.txt', b'42', 'text/plain')\n"
+        "aar_artifact('reports/unselected.txt', b'', 'text/plain')\n"
+        "answer = '42'\nanswer"
+    )
+
+    def __init__(self) -> None:
+        self.cell_committed = Event()
+        self.release_finalization = Event()
+        self.calls = 0
+
+    def plan(self, operation: Any, _spec: Any, _snapshot: Any) -> dict[str, Any]:
+        self.calls += 1
+        directive = {
+            "kind": "execute_cell",
+            "code": self.code,
+            "expected_result_hint": "42",
+        }
+        if self.calls == 1:
+            return directive
+        if self.calls == 2:
+            source_digest = canonical_sha256(directive)
+            cell_execution_id = "cell-" + hashlib.sha256(
+                f"{operation.value}\0{0}\0{source_digest}".encode()
+            ).hexdigest()[:32]
+            digest = digest_bytes(b"42")
+            stage_id = "stage-" + hashlib.sha256(
+                canonical_json_bytes(
+                    {
+                        "operation": operation.model_dump(mode="json"),
+                        "cell_execution_id": cell_execution_id,
+                        "ordinal": 1,
+                        "logical_name": "reports/answer.txt",
+                        "digest": digest,
+                    }
+                )
+            ).hexdigest()[:48]
+            self.cell_committed.set()
+            if not self.release_finalization.wait(timeout=10):
+                raise TimeoutError("test did not release named artifact finalization")
+            return {
+                "kind": "finalize",
+                "output": {"answer": "42", "artifacts": []},
+                "artifact_stage_ids": [stage_id],
+            }
+        raise AssertionError("planner requested an unexpected extra directive")
+
+
+@pytest.mark.parametrize("existing_legacy_blob", [False, True])
+def test_named_artifact_stages_then_finalizes_to_public_resolver(
+    tmp_path: Path, existing_legacy_blob: bool
+) -> None:
+    database = tmp_path / "registry.sqlite"
+    prepare_v6_registry(database, tmp_path / "registry-v5.snapshot.sqlite")
+    planner = NamedArtifactPlanner()
+    application = build_server(
+        database,
+        now_ms=lambda: FIXED_NOW_MS,
+        enable_durable_dispatch=True,
+        dispatcher_concurrency=1,
+    )
+    try:
+        host = application.host
+        assert host.rlm_workbench is not None
+        host.rlm_workbench._planner = planner
+        request = workbench_request(host, require_named_artifacts=True)
+        record = host.submit_rlm_workbench(workbench_envelope(host, request), request)
+        assert planner.cell_committed.wait(timeout=10)
+
+        digest = digest_bytes(b"42")
+        artifact_id = "artifact-" + digest.removeprefix("sha256:")[:32]
+        read_context = {
+            "runtime_generation": host.runtime_generation,
+            "capability_digest": host.capabilities.digest,
+            "principal_id": request.root["context"]["principal_id"],
+            "session_id": request.root["context"]["session_id"],
+            "deadline_unix_ms": request.root["context"]["deadline_unix_ms"],
+        }
+
+        async def resolve(arguments: dict[str, Any]) -> dict[str, Any]:
+            async with Client(application.server) as client:
+                result = await client.call_tool("aar_artifact_resolve", arguments)
+                assert result.structured_content is not None
+                return result.structured_content
+
+        arguments = {
+            "context": read_context,
+            "artifact_id": artifact_id,
+            "digest": digest,
+            "media_type": "text/plain",
+            "size_bytes": 2,
+            "created_by_operation_id": record.operation.value,
+            "redacted": False,
+            "max_bytes": 2,
+        }
+        if existing_legacy_blob:
+            # Fixture: identical bytes from an earlier legacy write already exist.
+            # Global content availability must not authorize this unfinalized job.
+            with sqlite3.connect(database) as connection:
+                connection.execute(
+                    "INSERT OR IGNORE INTO broker_artifacts(digest, content) VALUES (?, ?)",
+                    (digest, b"42"),
+                )
+
+        async def create_legacy_operation() -> tuple[str, dict[str, Any]]:
+            legacy_context = {
+                **read_context,
+                "principal_id": "principal-mcp-test",
+                "session_id": "session-mcp-test",
+            }
+            async with Client(application.server) as client:
+                capabilities = (await client.call_tool("aar_capabilities", {})).structured_content
+                assert capabilities is not None
+                grants = {
+                    item["capability"]: item["grant_id"]
+                    for item in capabilities["reference_grants"]
+                }
+                created = (
+                    await client.call_tool(
+                        "aar_workspace_create",
+                        {
+                            "context": {
+                                **legacy_context,
+                                "request_id": "request-legacy-artifact",
+                                "idempotency_key": "idempotency-legacy-artifact",
+                                "grant_id": grants["workspace.create"],
+                                "budget_wall_time_ms": legacy_context["deadline_unix_ms"]
+                                - FIXED_NOW_MS,
+                            },
+                            "workspace_id": "workspace-legacy-artifact",
+                        },
+                    )
+                ).structured_content
+                assert created is not None and created.get("failure") is None
+                return created["operation"]["operation"]["value"], legacy_context
+
+        legacy_operation, legacy_context = asyncio.run(create_legacy_operation())
+        legacy_arguments = {
+            **arguments,
+            "context": legacy_context,
+            "created_by_operation_id": legacy_operation,
+        }
+        legacy_before = asyncio.run(resolve(legacy_arguments))
+        if existing_legacy_blob:
+            assert legacy_before["failure"] is None
+            assert legacy_before["content_base64"] == "NDI="
+        else:
+            assert legacy_before["failure"]["code"] == "REFERENCE_NOT_FOUND"
+        staged = asyncio.run(resolve(arguments))
+        assert staged["failure"] is not None, (
+            "pre-finalization read borrowed an existing legacy blob"
+        )
+        assert staged["failure"]["code"] == "REFERENCE_NOT_FOUND"
+
+        planner.release_finalization.set()
+        assert host.dispatcher is not None
+        terminal = host.dispatcher.wait(record.operation, timeout_s=10)
+        assert terminal.state.value == "succeeded"
+        snapshot = host.rlm_workbench.snapshot(record.operation)
+        binding = snapshot.result.artifact_bindings[0]
+        assert binding.logical_name == "reports/answer.txt"
+        assert binding.digest == digest
+        assert binding.size_bytes == 2
+        assert binding.operation.value == record.operation.value
+
+        resolved = asyncio.run(resolve(arguments))
+        assert resolved["failure"] is None
+        assert resolved["content_base64"] == "NDI="
+        # Both stages committed, but the actual workbench finalizer selected only answer.txt.
+        with sqlite3.connect(database) as connection:
+            assert connection.execute(
+                "SELECT COUNT(*) FROM rlm_workbench_artifact_stages "
+                "WHERE operation_id=? AND state='committed'",
+                (record.operation.value,),
+            ).fetchone() == (2,)
+        empty_digest = digest_bytes(b"")
+        unselected = asyncio.run(resolve({
+            **arguments,
+            "digest": empty_digest,
+            "artifact_id": "artifact-" + empty_digest.removeprefix("sha256:")[:32],
+            "size_bytes": 0,
+            "max_bytes": 1,
+        }))
+        assert unselected["failure"]["code"] == "REFERENCE_NOT_FOUND"
+        legacy_after = asyncio.run(resolve(legacy_arguments))
+        if existing_legacy_blob:
+            assert legacy_after["failure"] is None, (
+                "native publication shadowed a legitimate legacy read"
+            )
+            assert legacy_after["content_base64"] == "NDI="
+        else:
+            assert legacy_after["failure"]["code"] == "REFERENCE_NOT_FOUND", (
+                "native publication copied bytes into the legacy namespace"
+            )
+        with sqlite3.connect(database) as connection:
+            legacy_blob = connection.execute(
+                "SELECT content FROM broker_artifacts WHERE digest = ?", (digest,)
+            ).fetchone()
+        assert legacy_blob == ((b"42",) if existing_legacy_blob else None)
+        # A real, same-principal/session operation must not borrow this blob.
+        # A nonexistent operation would fail earlier and mask this invariant.
+        other_payload = copy.deepcopy(request.root)
+        other_payload["context"]["request_id"] += "-other"
+        other_payload["context"]["idempotency_key"] += "-other"
+        other_request = RlmWorkbenchExecuteInput.model_validate(other_payload, strict=True)
+        other_record = host.submit_rlm_workbench(
+            workbench_envelope(host, other_request), other_request
+        )
+        foreign = asyncio.run(
+            resolve({**arguments, "created_by_operation_id": other_record.operation.value})
+        )
+        assert foreign["failure"] is not None, (
+            "unpublished operation borrowed a globally stored blob"
+        )
+        for altered in (
+            {"artifact_id": "artifact-" + "0" * 32},
+            {"media_type": "application/json"},
+            {"size_bytes": 3, "max_bytes": 3},
+            {"digest": digest_bytes(b"wrong")},
+        ):
+            assert asyncio.run(resolve({**arguments, **altered}))["failure"] is not None
+        assert (
+            asyncio.run(resolve({**arguments, "max_bytes": 1}))["failure"]["code"]
+            == "INVALID_ARGUMENT"
+        )
+        assert (
+            asyncio.run(resolve({**arguments, "created_by_operation_id": "other-operation"}))[
+                "failure"
+            ]["code"]
+            == "REFERENCE_NOT_FOUND"
+        )
+        assert (
+            asyncio.run(resolve({**arguments, "digest": digest_bytes(b"wrong")}))["failure"]
+            is not None
+        )
+    finally:
+        planner.release_finalization.set()
+        application.close()
+
+
+def test_caller_delegated_planner_receives_committed_artifact_stage_ids(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "registry.sqlite"
+    prepare_v6_registry(database, tmp_path / "registry-v5.snapshot.sqlite")
+    host = ReferenceHost(
+        database,
+        now_ms=lambda: FIXED_NOW_MS,
+        enable_durable_dispatch=False,
+        dispatcher_concurrency=1,
+    )
+    try:
+        assert host.rlm_workbench is not None and host.caller_work is not None
+        coordinator = host.rlm_workbench
+        request = workbench_request(
+            host,
+            require_named_artifacts=True,
+            execution_mode="caller_delegated",
+        )
+        record = host.submit_rlm_workbench(workbench_envelope(host, request), request)
+
+        def run_next(owner: str) -> Any:
+            claim = host.registry.claim_next(
+                runtime_generation=host.runtime_generation,
+                dispatcher_generation=host.runtime_generation,
+                owner_digest=canonical_sha256(owner),
+                lease_duration_ms=30_000,
+            )
+            assert claim is not None
+            return coordinator.run_claimed(
+                record.operation,
+                claim.attempt,
+                AttemptFence(
+                    dispatcher_generation=claim.dispatcher_generation,
+                    lease_epoch=claim.lease_epoch,
+                    owner_digest=claim.owner_digest,
+                ),
+            )
+
+        assert run_next("caller-stage-initial").phase == "waiting_external"
+        initial = host.caller_work.get(wait_for_pending_ticket(database))
+        execute = {
+            "kind": "execute_cell",
+            "code": "aar_artifact('reports/answer.txt', b'42', 'text/plain')\n'42'",
+            "expected_result_hint": "42",
+        }
+        assert commit_pending_ticket_success(
+            host.caller_work,
+            database,
+            request,
+            initial,
+            prefix="caller-stage-execute",
+            output_text=canonical_json_bytes(execute).decode(),
+        ).state == "settled_success"
+        assert run_next("caller-stage-cell").phase == "waiting_external"
+
+        finalizer = host.caller_work.get(wait_for_pending_ticket(database))
+        prompt = json.loads(finalizer.root["request"]["prompt"])
+        stage_ids = prompt["last_committed_cell"]["artifact_stage_ids"]
+        assert len(stage_ids) == 1
+        finalize = {
+            "kind": "finalize",
+            "output": {"answer": "42", "artifacts": []},
+            "artifact_stage_ids": stage_ids,
+        }
+        assert commit_pending_ticket_success(
+            host.caller_work,
+            database,
+            request,
+            finalizer,
+            prefix="caller-stage-finalize",
+            output_text=canonical_json_bytes(finalize).decode(),
+        ).state == "settled_success"
+        terminal = run_next("caller-stage-final")
+        assert terminal.operation.value == record.operation.value
+        assert len(terminal.artifact_bindings) == 1
+    finally:
+        host.close()
+
+
+class _ArtifactPolicyPlanner:
+    def __init__(self, code: str) -> None:
+        self._code = code
+        self.calls = 0
+
+    def plan(self, _operation: Any, _spec: Any, _snapshot: Any) -> dict[str, Any]:
+        self.calls += 1
+        if self.calls == 1:
+            return {
+                "kind": "execute_cell",
+                "code": self._code,
+                "expected_result_hint": "policy",
+            }
+        raise AssertionError("artifact policy violation must stop before another plan")
+
+
+@pytest.mark.parametrize(
+    ("code", "budget_overrides", "expected_stage_count", "expected_failure"),
+    (
+        (
+            "aar_artifact('reports/bytes.txt', b'42', 'text/plain')",
+            {"max_artifact_bytes": 1},
+            0,
+            "artifact byte budget exhausted",
+        ),
+        (
+            "aar_artifact('reports/media.bin', b'x', 'application/octet-stream')",
+            {},
+            0,
+            "artifact media type is not allowed",
+        ),
+        (
+            "aar_artifact('reports/one.txt', b'x', 'text/plain')\n"
+            "aar_artifact('reports/two.txt', b'y', 'text/plain')",
+            {"max_artifact_count": 1},
+            1,
+            "artifact count budget exhausted",
+        ),
+    ),
+)
+def test_native_artifact_policy_is_enforced_before_stage_publication(
+    tmp_path: Path,
+    code: str,
+    budget_overrides: dict[str, int],
+    expected_stage_count: int,
+    expected_failure: str,
+) -> None:
+    database = tmp_path / "registry.sqlite"
+    prepare_v6_registry(database, tmp_path / "registry-v5.snapshot.sqlite")
+    application = build_server(
+        database,
+        now_ms=lambda: FIXED_NOW_MS,
+        enable_durable_dispatch=True,
+        dispatcher_concurrency=1,
+    )
+    try:
+        host = application.host
+        assert host.rlm_workbench is not None and host.dispatcher is not None
+        host.rlm_workbench._planner = cast(Any, _ArtifactPolicyPlanner(code))
+        payload = copy.deepcopy(workbench_request(host, require_named_artifacts=True).root)
+        payload["spec"]["budgets"].update(budget_overrides)
+        request = RlmWorkbenchExecuteInput.model_validate(payload, strict=True)
+        record = host.submit_rlm_workbench(workbench_envelope(host, request), request)
+        terminal = host.dispatcher.wait(record.operation, timeout_s=10)
+        assert terminal.state.value == "indeterminate"
+        with sqlite3.connect(database) as connection:
+            failure = connection.execute(
+                "SELECT failure_json FROM rlm_workbench_jobs WHERE operation_id = ?",
+                (record.operation.value,),
+            ).fetchone()
+            assert failure is not None and expected_failure in json.loads(failure[0])["message"]
+            assert connection.execute(
+                "SELECT COUNT(*) FROM rlm_workbench_artifact_stages WHERE operation_id = ?",
+                (record.operation.value,),
+            ).fetchone() == (expected_stage_count,)
+    finally:
+        application.close()

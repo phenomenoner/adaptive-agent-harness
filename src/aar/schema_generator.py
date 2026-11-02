@@ -12,7 +12,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from aar.canonical import canonical_sha256
-from aar.versions import FROZEN_COMPATIBILITY_PACKAGE_VERSION
+from aar.versions import FROZEN_COMPATIBILITY_PACKAGE_VERSION, PACKAGE_VERSION
 
 BASELINE_TOOL_MANIFEST_SHA256 = "6ebf848eee74795771af23dfaaeb70fd5030cb88878327f76ffc10d1c4639ab8"
 TARGET_PACKAGE_VERSION = FROZEN_COMPATIBILITY_PACKAGE_VERSION
@@ -94,6 +94,69 @@ def build_mcp_tools_v8_manifest(root: Path) -> dict[str, Any]:
     return {**core, "tool_surface_digest": canonical_sha256(core)}
 
 
+def current_contract_documents(
+    frozen_documents: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Compile v9 constraints without changing any frozen v7/v8 source bytes.
+
+    Both the runtime validator and the v9 generator use this exact compiler.
+    Only the named time allowances change; identity, token and byte bounds do
+    not inherit a blanket numeric rewrite. Explicit host grants still bind.
+    """
+    documents = deepcopy(frozen_documents)
+    time_fields = {
+        "budget_wall_time_ms",
+        "total_wall_time_ms",
+        "cell_wall_time_ms",
+        "remaining_wall_time_ms",
+    }
+
+    def compile_node(value: Any) -> None:
+        if isinstance(value, list):
+            for item in value:
+                compile_node(item)
+        elif isinstance(value, dict):
+            properties = value.get("properties", {})
+            for name in time_fields:
+                field = properties.get(name)
+                if isinstance(field, dict) and field.get("maximum") in {60_000, 900_000}:
+                    field["maximum"] = 9_223_372_036_854_775_807
+            surface = properties.get("surface_version")
+            if isinstance(surface, dict) and surface.get("const") == "aar.mcp-tools.v8":
+                surface.pop("const")
+                surface["enum"] = ["aar.mcp-tools.v8", "aar.mcp-tools.v9"]
+            for item in value.values():
+                compile_node(item)
+
+    for document in documents.values():
+        compile_node(document)
+    return documents
+
+
+def build_mcp_tools_v9_manifest(root: Path) -> dict[str, Any]:
+    """Generate the current additive constraint profile over immutable v8."""
+    predecessor = build_mcp_tools_v8_manifest(root)
+    additive = _load_json(root / "schemas" / "aar-mcp-tools-v8.json")
+    contracts = current_contract_documents(
+        {name: _load_json(root / "schemas" / name) for name in _CONTRACT_FILES}
+    )
+    tools = deepcopy(predecessor["tools"])
+    for entry, source in zip(tools[30:], additive["tools"], strict=True):
+        entry["inputSchema"] = _bundle_schema(source["input_schema"], contracts)
+        entry["outputSchema"] = {
+            "type": "object",
+            **_bundle_schema(source["output_schema"], contracts),
+        }
+    core = {key: value for key, value in predecessor.items() if key != "tool_surface_digest"}
+    core.update(
+        server_version=PACKAGE_VERSION,
+        tool_surface_version="aar.mcp-tools.v9",
+        instructions=predecessor["instructions"].replace("AR-RW v8:", "AR-RW v9:"),
+        tools=tools,
+    )
+    return {**core, "tool_surface_digest": canonical_sha256(core)}
+
+
 def verify_generated_assets(root: Path) -> list[str]:
     """Return deterministic drift messages without mutating the checkout."""
 
@@ -118,6 +181,9 @@ def verify_generated_assets(root: Path) -> list[str]:
     reviewed_combined = _load_json(sdd / "contracts" / "aar-mcp-tools-v8-combined.json")
     if build_mcp_tools_v8_manifest(root) != reviewed_combined:
         failures.append("aar-mcp-tools-v8-combined.json: generated content drift")
+    current_path = root / "schemas" / "aar-mcp-tools-v9-combined.json"
+    if not current_path.is_file() or _load_json(current_path) != build_mcp_tools_v9_manifest(root):
+        failures.append("aar-mcp-tools-v9-combined.json: generated content drift")
     return failures
 
 

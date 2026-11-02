@@ -320,3 +320,85 @@ def test_finalization_crash_replay_commits_result_and_named_artifacts_once(
             connection.close()
     finally:
         repo.close()
+
+
+@pytest.mark.parametrize("content", [b"", b"42"])
+def test_native_public_read_uses_selected_final_bytes_and_checks_integrity(
+    tmp_path: Path, content: bytes
+) -> None:
+    from aar.runtime.artifact_publication import (
+        ArtifactPublicationConflict,
+        ArtifactPublicationRepository,
+    )
+    from aar.schemas import ArtifactIdRef, ArtifactReference, OperationRef
+
+    database = tmp_path / "registry.sqlite"
+    create_artifact_registry(database)
+    repo = ArtifactPublicationRepository(database, now_ms=lambda: FIXED_NOW_MS)
+    try:
+        stage, binding = stage_one(repo, content)
+        digest = digest_bytes(content)
+        reference = ArtifactReference(
+            artifact=ArtifactIdRef(value="artifact-" + digest.removeprefix("sha256:")[:32]),
+            digest=digest,
+            media_type="text/plain",
+            size_bytes=len(content),
+            created_by=OperationRef(value=OPERATION_ID),
+            redacted=False,
+        )
+        # None means non-native, not missing native publication or empty bytes.
+        assert (
+            repo.resolve_public_reference(
+                reference.model_copy(
+                    update={
+                        "created_by": OperationRef(value="legacy-operation"),
+                    }
+                )
+            )
+            is None
+        )
+        with pytest.raises(KeyError):
+            repo.resolve_public_reference(reference)
+        repo.commit_cell(cell_manifest(stage.stage_id))
+        with pytest.raises(KeyError):
+            repo.resolve_public_reference(reference)
+        with sqlite3.connect(database) as connection:
+            connection.execute(
+                "UPDATE rlm_workbench_jobs SET phase='finalizing', "
+                "control_revision=2 WHERE operation_id=?",
+                (OPERATION_ID,),
+            )
+        manifest = finalization_manifest(binding)
+        repo.finalize(
+            manifest,
+            result={
+                "schema_version": "aar.rlm-workbench-result.v1",
+                "operation": {"type": "operation", "value": OPERATION_ID},
+                "result_digest": manifest["result_digest"],
+            },
+        )
+        assert repo.resolve_public_reference(reference) == content
+        with pytest.raises(KeyError):
+            repo.resolve_public_reference(reference.model_copy(update={"redacted": True}))
+        if not content:
+            # The database itself rejects length corruption before a read is possible.
+            with (
+                pytest.raises(sqlite3.IntegrityError),
+                sqlite3.connect(database) as connection,
+            ):
+                connection.execute(
+                    "UPDATE rlm_workbench_artifact_stages SET content=? WHERE stage_id=?",
+                    (b"24", stage.stage_id),
+                )
+            assert repo.resolve_public_reference(reference) == b""
+            return
+        # Equal-length corruption passes the storage length check but not the byte hash.
+        with sqlite3.connect(database) as connection:
+            connection.execute(
+                "UPDATE rlm_workbench_artifact_stages SET content=? WHERE stage_id=?",
+                (b"24", stage.stage_id),
+            )
+        with pytest.raises(ArtifactPublicationConflict, match="content integrity mismatch"):
+            repo.resolve_public_reference(reference)
+    finally:
+        repo.close()

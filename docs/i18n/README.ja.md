@@ -1,6 +1,6 @@
 <div align="center">
 
-> **`0.6.0a2` release-contract target** · target tag `v0.6.0a2` · source text does not establish publication; read the canonical English [release notes](../RELEASE-v0.6.0a2.md) before using the tag.
+> **`0.6.1a0` release-contract target** · target tag `v0.6.1a0` · source text does not establish publication; read the canonical English [release notes](../RELEASE-v0.6.1a0.md) before using the tag.
 
 # Adaptive Agent Harness
 
@@ -10,7 +10,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release contract](https://img.shields.io/badge/release--contract-v0.6.0a2-blue)](../RELEASE-v0.6.0a2.md)
+[![Release contract](https://img.shields.io/badge/release--contract-v0.6.1a0-blue)](../RELEASE-v0.6.1a0.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#プロジェクトのステータス)
 
@@ -149,7 +149,7 @@ flowchart LR
 
 ### Portable contracts
 
-- 現在の v8 surface にある 38 MCP tools；
+- 現在の v9 surface にある 38 MCP tools；
 - versioned schemas と digest-bound assets；
 - Codex と Hermes profiles 用に bundled された operation guidance；
 - development と conformance testing のための deterministic reference brokers；
@@ -193,7 +193,7 @@ Adaptive Agent Harness は次の用途に適しています。
 ```bash
 # Use only after external GitHub readback confirms the target tag exists.
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a2"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.1a0"
 ```
 
 ### Codex App のセットアップ
@@ -260,18 +260,18 @@ MCP frontend は意図的に交換可能です。continuity database や worker 
 
 ## プロジェクトのステータス
 
-現在の公開 alpha：**`0.6.0a2`**。
+現在の公開 alpha：**`0.6.1a0`**。
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.6.0a2` receipt-backed model routing, current verification, and exact publication
-> boundaries, read the canonical English [release notes](../RELEASE-v0.6.0a2.md) and
+> context. For `v0.6.1a0` receipt-backed model routing, current verification, and exact publication
+> boundaries, read the canonical English [release notes](../RELEASE-v0.6.1a0.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
 
-`v0.6.0a2` release-contract evidence represented by this source:
+`v0.6.1a0` release-contract evidence represented by this source:
 
 - Python 3.11 から 3.14 までの coverage；
-- 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
+- 38-tool MCP v9 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - v5 までの additive SQLite schema；
 - current full-repository verification is recorded in the canonical English release note and external release receipt;
 - Linux/WSL での clean exact-wheel supervisor/frontend probe；

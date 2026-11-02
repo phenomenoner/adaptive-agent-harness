@@ -2,6 +2,36 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
+## 0.6.1a0 — 2026-11-02 release-contract target
+
+`v0.6.1a0` targets reliable longer-running work under explicit host allowances. Its release contract
+is [`profiles/release-status-v1.json`](profiles/release-status-v1.json). This source does not establish
+that the target tag, GitHub prerelease, installed runtime, provider qualification, or
+`adaptive-agent-runtime-v0.6.1a0-release-receipt.json` exists; those claims require external readback.
+
+### Changed
+
+- renew the existing fenced workbench lease during active execution, without weakening stale-owner
+  or physical-send protection;
+- enforce root planner call and correction allowances before the next model ticket/call, including
+  an effective `max_corrections=0`;
+- remove universal short workbench/cell/grant time maxima while retaining finite owner authority,
+  actual deadlines and technical serialization limits;
+- align shared workspace output and event ranges with the advertised workbench range;
+- publish the additive `aar.mcp-tools.v9` constraint profile with the same 38 tool names; preserve
+  exact frozen v7/v8 and contract-v1 source bytes;
+- retain evaluated artifact manifest/binding and worker-result corrections in the public source.
+
+### Installation and evidence boundary
+
+The runtime remains **clean-install-only**. Keep predecessor roots, old UNKNOWN outcomes and costs
+unchanged. Provider credentials, physical calls, operator integration bindings and final delivery
+remain host-owned. Source-main publication and local activation are distinct from a target-tag
+GitHub prerelease, provider-backed qualification or formal evaluation. Official Plugin Directory
+publication and general production deployment are not established by this release contract.
+
+See [the current release notes](docs/RELEASE-v0.6.1a0.md) for compatibility and verification scope.
+
 ## 0.6.0a2 — 2026-09-01 release-contract target
 
 `v0.6.0a2` releases the caller-driver conformance guard merged after `v0.6.0a1`. Its in-tree

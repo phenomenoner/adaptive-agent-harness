@@ -394,7 +394,14 @@ def test_frozen_compatibility_manifest_is_complete_ordered_and_content_bound() -
     observed_schema_paths = sorted(
         path.relative_to(ROOT).as_posix() for path in (ROOT / "schemas").glob("*.json")
     )
-    assert observed_schema_paths == sorted([*EXPECTED_SCHEMA_PATHS, PLANNED_RECEIPT_SCHEMA])
+    assert observed_schema_paths == sorted(
+        [
+            *EXPECTED_SCHEMA_PATHS,
+            PLANNED_RECEIPT_SCHEMA,
+            "schemas/aar-mcp-tools-v9-combined.json",
+            "schemas/aar-provider-ready-schemas-v2.json",
+        ]
+    )
 
     fixture_manifest_path = "tests/fixtures/provider-ready/manifest.json"
     fixture_manifest_entry = manifest["fixture_manifest"]

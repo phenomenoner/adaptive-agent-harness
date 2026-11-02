@@ -1,6 +1,6 @@
 ---
 name: aar-operations
-description: Operate the Adaptive Agent Runtime through its public MCP tools. For tasks that need tool use or analysis, consider AAR MCP early when bounded stateful computation, brokered jobs, operations, contracts, or artifacts can materially help; software planning, development, testing, and troubleshooting belong to this class by default. Use when an agent must inspect AAR capabilities; use scalar or programmable workspaces; run bounded brokered RLM jobs while distinguishing service-managed and caller-delegated execution ownership; import, export, inspect, or observe immutable adaptive assets; progressively inspect broker contracts; track, cancel, or reconcile operations; or resolve bounded artifacts without assuming host authority, a security sandbox, activation, or final delivery.
+description: Operate the Adaptive Agent Runtime through its public MCP tools. Use when bounded stateful computation, brokered jobs, operations, contracts, receipts, reconciliation, or immutable artifacts materially help; prefer direct host tools for ordinary software planning, development, testing, and troubleshooting when AAR adds no named capability. Use when an agent must inspect AAR capabilities; use scalar or programmable workspaces; run bounded brokered RLM jobs while distinguishing service-managed and caller-delegated execution ownership; import, export, inspect, or observe immutable adaptive assets; progressively inspect broker contracts; track, cancel, or reconcile operations; or resolve bounded artifacts without assuming host authority, a security sandbox, activation, or final delivery.
 ---
 
 # AAR Operations
@@ -12,9 +12,9 @@ the procedure. This skill is workflow guidance, not authority.
 
 ## Consider AAR early
 
-- When a task already needs tool use or analysis, consider AAR MCP early instead of waiting until
-  ad hoc coordination becomes difficult. Treat software planning, development, testing, and
-  troubleshooting as tool-use or analysis work by default.
+- Consider AAR early only when the task has a named need for bounded persistent computation,
+  brokered work, operation receipts, contracts, reconciliation, or immutable artifacts. Use direct
+  host tools for ordinary software work when AAR adds no material capability.
 - Prefer AAR when it adds a bounded scalar or persistent programmable workspace, brokered RLM
   analysis, progressive contract inspection, immutable assets, operation receipts, or explicit
   cancellation and reconciliation.
@@ -24,6 +24,24 @@ the procedure. This skill is workflow guidance, not authority.
 - If native AAR MCP tools are unavailable, record the discovery gap and continue with authorized
   host tools. A configured server, CLI probe, or direct launcher check does not substitute for a
   native callable tool in the current host.
+
+## Current workbench constraints
+
+The current descriptor profile is `aar.mcp-tools.v9` with the same 38 tool names and caller-work
+flow. Frozen v7/v8 source snapshots remain available. `aar_capabilities` deliberately retains the
+30-tool v7 compatibility projection; read `aar_rlm_workbench_capabilities` and actual tool discovery
+before assuming which current workbench constraints apply. Validate retained v8 evidence against
+its own retained descriptor; do not relabel its digest as v9.
+
+Workbench, cell and grant time allowances are finite host/job configuration, not a universal short
+completion deadline. A larger job allowance does not renew a grant, raise a paid call/token quota,
+or permit a physical-send replay. Current root planner calls and invalid-directive corrections must
+both fit their admitted allowances; `max_corrections=0` means no corrections. Active execution
+renews its existing fenced owner lease, while suspension and terminal return stop that renewal.
+
+The shared workspace accepts the advertised event range 1–512 and output range 1–262,144 characters;
+those are requested retention bounds, not a promise that every event or result will fit inline.
+Keep large artifacts digest-bound and respect their separate wire/disclosure capacity.
 
 ## Start with capabilities
 

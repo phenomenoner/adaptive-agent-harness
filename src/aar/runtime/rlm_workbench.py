@@ -21,6 +21,7 @@ from aar.provider_ready_contract import (
     load_provider_ready_json_bytes,
 )
 from aar.rlm_workbench_models import (
+    ArtifactBinding,
     CallerWorkTicket,
     RecoveryPlannerInput,
     RlmDirective,
@@ -32,6 +33,7 @@ from aar.rlm_workbench_models import (
     _contract_documents,
     derive_cumulative_deadline_unix_ms,
 )
+from aar.runtime.artifact_publication import ArtifactPublicationRepository
 from aar.runtime.caller_work import CallerWorkConflict, CallerWorkRepository
 from aar.runtime.dispatcher import AttemptFence
 from aar.runtime.ipython_backend import (
@@ -39,7 +41,12 @@ from aar.runtime.ipython_backend import (
     WorkspaceBrokerSession,
     WorkspaceBrokerSuspended,
 )
-from aar.runtime.registry import InvalidTransition, OperationRegistry, PlannerOwner
+from aar.runtime.registry import (
+    InvalidTransition,
+    OperationRegistry,
+    PlannerOwner,
+    StaleAttemptFence,
+)
 from aar.runtime.sqlite_repository import SQLiteConnectionFactory
 from aar.runtime.workspace_models import (
     ProgrammableWorkspaceHandle,
@@ -49,7 +56,18 @@ from aar.runtime.workspace_models import (
     WorkspaceProgramSpec,
     WorkspaceRestoreSpec,
 )
-from aar.schemas import OperationRef, OperationState, RequestEnvelope, SessionRef, WorkspaceRef
+from aar.schemas import (
+    ArtifactIdRef,
+    ArtifactReference,
+    OperationRef,
+    OperationState,
+    RequestEnvelope,
+    SessionRef,
+    WorkspaceRef,
+)
+
+_WORKBENCH_ATTEMPT_LEASE_DURATION_MS = 30_000
+_WORKBENCH_ATTEMPT_LEASE_HEARTBEAT_INTERVAL_MS = 10_000
 
 
 class RlmWorkbenchError(RuntimeError):
@@ -62,6 +80,10 @@ class RlmWorkbenchConflict(RlmWorkbenchError):
 
 class RlmWorkbenchDeadlineExceeded(RlmWorkbenchConflict):
     """The cumulative deadline fenced further workbench side effects."""
+
+
+class RlmWorkbenchModelCallBudgetExceeded(RlmWorkbenchConflict):
+    """The root planner has no remaining model-call allowance."""
 
 
 class RlmWorkbenchUnsupported(RlmWorkbenchError):
@@ -99,6 +121,10 @@ class _ActiveCell:
     handle: ProgrammableWorkspaceHandle
     session: WorkspaceBrokerSession
     broker_call_ordinal: int = 0
+    artifact_ordinal: int = 0
+    max_artifact_count: int = 0
+    max_artifact_bytes: int = 0
+    allowed_artifact_media_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -213,6 +239,7 @@ class RlmWorkbenchCoordinator:
         registry: OperationRegistry,
         *,
         now_ms: Callable[[], int] = system_now_ms,
+        runtime_generation: int | None = None,
         planner: RlmWorkbenchPlanner | None = None,
         barrier: Callable[[str], None] | None = None,
     ) -> None:
@@ -222,7 +249,15 @@ class RlmWorkbenchCoordinator:
         self._backend = workspace_backend
         self._caller_work = caller_work
         self._registry = registry
+        self._runtime_generation = (
+            registry.current_runtime_generation()
+            if runtime_generation is None
+            else runtime_generation
+        )
         self._factory = SQLiteConnectionFactory(self.database_path)
+        self._artifact_publications = ArtifactPublicationRepository(
+            self.database_path, now_ms=now_ms
+        )
         self._now_ms = now_ms
         self._planner = planner
         self._barrier = barrier or (lambda _name: None)
@@ -232,7 +267,86 @@ class RlmWorkbenchCoordinator:
         self._dispatch_notifier: Callable[[OperationRef, str], None] | None = None
         self._deadline_terminalizer: Callable[[OperationRef], None] | None = None
         self._caller_work.bind_settlement_handler(self.notify_caller_settlement)
+        bind_artifact_stage_handler = getattr(
+            self._backend, "bind_artifact_stage_handler", None
+        )
+        self._artifact_stage_callback = self._stage_worker_artifact
+        if callable(bind_artifact_stage_handler):
+            bind_artifact_stage_handler(self._artifact_stage_callback)
         self.schedule_pending_successors()
+
+    def _stage_worker_artifact(
+        self,
+        execution_operation: OperationRef,
+        logical_name: str,
+        content: bytes,
+        media_type: str,
+    ) -> ArtifactReference | None:
+        with self._active_lock:
+            active = self._active_cells.get(execution_operation.value)
+            if active is None:
+                return None
+            active.artifact_ordinal += 1
+            ordinal = active.artifact_ordinal
+            operation = active.operation
+            handle = active.handle
+            cell_execution_id = active.cell_execution_id
+            max_artifact_count = active.max_artifact_count
+            max_artifact_bytes = active.max_artifact_bytes
+            allowed_media_types = active.allowed_artifact_media_types
+        if media_type not in allowed_media_types:
+            raise RlmWorkbenchConflict("workbench artifact media type is not allowed")
+        digest = f"sha256:{hashlib.sha256(content).hexdigest()}"
+        with self._factory.transaction(write=False) as connection:
+            count, used, same_name = connection.execute(
+                "SELECT COUNT(*), COALESCE(SUM(size_bytes), 0), "
+                "COALESCE(SUM(CASE WHEN logical_name = ? THEN 1 ELSE 0 END), 0) "
+                "FROM rlm_workbench_artifact_stages WHERE operation_id = ?",
+                (logical_name, operation.value),
+            ).fetchone()
+        if int(count) >= max_artifact_count:
+            raise RlmWorkbenchConflict("workbench artifact count budget exhausted")
+        if int(same_name):
+            raise RlmWorkbenchConflict("workbench artifact logical name is already staged")
+        if int(used) + len(content) > max_artifact_bytes:
+            raise RlmWorkbenchConflict("workbench artifact byte budget exhausted")
+        binding = ArtifactBinding.model_validate(
+            {
+                "schema_version": "aar.artifact-binding.v1",
+                "logical_name": logical_name,
+                "media_type": media_type,
+                "digest": digest,
+                "size_bytes": len(content),
+                "operation": operation.model_dump(mode="json"),
+                "workspace": handle.workspace.model_dump(mode="json"),
+                "workspace_generation": handle.generation,
+                "cell_execution_id": cell_execution_id,
+                "role": "result",
+            },
+            strict=True,
+        )
+        stage_id = "stage-" + hashlib.sha256(
+            canonical_json_bytes(
+                {
+                    "operation": operation.model_dump(mode="json"),
+                    "cell_execution_id": cell_execution_id,
+                    "ordinal": ordinal,
+                    "logical_name": logical_name,
+                    "digest": digest,
+                }
+            )
+        ).hexdigest()[:48]
+        self._artifact_publications.stage_content(
+            stage_id=stage_id, binding=binding, content=content
+        )
+        return ArtifactReference(
+            artifact=ArtifactIdRef(value="artifact-" + digest.removeprefix("sha256:")[:32]),
+            digest=digest,
+            media_type=media_type,
+            size_bytes=len(content),
+            created_by=operation,
+            redacted=False,
+        )
 
     def bind_runtime_callbacks(
         self,
@@ -566,6 +680,79 @@ class RlmWorkbenchCoordinator:
                 """,
                 (now, operation.value),
             )
+
+    def mark_model_call_budget_terminal(
+        self, operation: OperationRef, attempt: OperationAttemptRefV1, fence: AttemptFence
+    ) -> None:
+        """CAS a running workbench to the known root-planner budget failure."""
+
+        now = self._now_ms()
+        with self._factory.transaction(write=True) as connection:
+            self._assert_attempt_fence(connection, operation, attempt, fence)
+            row = connection.execute(
+                """
+                SELECT phase, control_revision, cancellation_requested
+                FROM rlm_workbench_jobs WHERE operation_id = ?
+                """,
+                (operation.value,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(operation.value)
+            phase = str(row["phase"])
+            if phase == "failed":
+                return
+            if phase != "running":
+                raise RlmWorkbenchConflict(
+                    "model-call budget terminalization lost running phase"
+                )
+            if bool(row["cancellation_requested"]):
+                raise RlmWorkbenchConflict(
+                    "model-call budget terminalization lost cancellation authority"
+                )
+            prior_revision = int(row["control_revision"])
+            next_revision = prior_revision + 1
+            failure = {
+                "schema_version": "aar.envelope.v1",
+                "category": "budget",
+                "code": "BUDGET_EXCEEDED",
+                "message": "workbench root planner model-call budget exhausted",
+                "retryable": False,
+                "certainty": "certain",
+                "operation": operation.model_dump(mode="json"),
+                "details": [],
+            }
+            connection.execute(
+                """
+                UPDATE rlm_workbench_jobs
+                SET phase = 'failed', control_revision = ?, certainty = 'certain',
+                    failure_json = ?, updated_at_unix_ms = ?
+                WHERE operation_id = ? AND phase = 'running' AND control_revision = ?
+                  AND cancellation_requested = 0
+                """,
+                (
+                    next_revision,
+                    canonical_json_bytes(failure).decode("utf-8"),
+                    now,
+                    operation.value,
+                    prior_revision,
+                ),
+            )
+            if connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise RlmWorkbenchConflict(
+                    "model-call budget terminalization lost its job CAS"
+                )
+            connection.execute(
+                """
+                UPDATE operation_controls SET control_revision = ?
+                WHERE operation_id = ? AND control_revision = ?
+                  AND cancellation_requested = 0
+                """,
+                (next_revision, operation.value, prior_revision),
+            )
+            if connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise RlmWorkbenchConflict(
+                    "model-call budget terminalization lost its control CAS"
+                )
 
     def recover_indeterminate(self, runtime_generation: int) -> int:
         """Recover committed rebinds whose exact worker vanished with the supervisor."""
@@ -1140,6 +1327,9 @@ class RlmWorkbenchCoordinator:
             strict=True,
         )
 
+    def resolve_public_artifact(self, reference: ArtifactReference) -> bytes | None:
+        return self._artifact_publications.resolve_public_reference(reference)
+
     def workspace_handle(self, operation: OperationRef) -> ProgrammableWorkspaceHandle:
         with self._factory.transaction(write=False) as connection:
             row = connection.execute(
@@ -1177,6 +1367,7 @@ class RlmWorkbenchCoordinator:
         fence: AttemptFence,
         spec: RlmWorkbenchJobSpec,
     ) -> RlmWorkbenchSnapshot:
+        self._require_deadline(operation)
         with self._factory.transaction(write=False) as connection:
             row = connection.execute(
                 """
@@ -1196,7 +1387,8 @@ class RlmWorkbenchCoordinator:
             ).fetchone()
             last_cell = connection.execute(
                 """
-                SELECT cell_index, result_json, result_digest, post_checkpoint_digest
+                SELECT cell_index, cell_execution_id, result_json, result_digest,
+                       post_checkpoint_digest
                 FROM rlm_workbench_cells
                 WHERE operation_id = ? AND state = 'committed'
                 ORDER BY cell_index DESC LIMIT 1
@@ -1205,6 +1397,10 @@ class RlmWorkbenchCoordinator:
             ).fetchone()
         if row is None or prior is None:
             raise KeyError(operation.value)
+        if int(prior["planner_steps"]) >= int(spec.root["budgets"]["max_model_calls"]):
+            raise RlmWorkbenchModelCallBudgetExceeded(
+                "workbench root planner model-call budget exhausted"
+            )
         suspension_revision = int(prior["value"]) + 1
         owner = PlannerOwner(
             phase="initial" if int(prior["planner_steps"]) == 0 else "finalizer",
@@ -1212,11 +1408,21 @@ class RlmWorkbenchCoordinator:
         ).as_wire()
         last_committed_cell = None
         if last_cell is not None:
+            with self._factory.transaction(write=False) as connection:
+                stage_rows = connection.execute(
+                    """
+                    SELECT stage_id FROM rlm_workbench_artifact_stages
+                    WHERE operation_id = ? AND cell_execution_id = ? AND state = 'committed'
+                    ORDER BY stage_id
+                    """,
+                    (operation.value, last_cell["cell_execution_id"]),
+                ).fetchall()
             last_committed_cell = {
                 "cell_index": int(last_cell["cell_index"]),
                 "result": json.loads(str(last_cell["result_json"])),
                 "result_digest": str(last_cell["result_digest"]),
                 "post_checkpoint_digest": str(last_cell["post_checkpoint_digest"]),
+                "artifact_stage_ids": [str(item["stage_id"]) for item in stage_rows],
             }
         request = _planner_request(
             spec,
@@ -1428,16 +1634,21 @@ class RlmWorkbenchCoordinator:
             str(self._job_row(operation)["spec_json"]), strict=True
         )
         with self._factory.transaction(write=False) as connection:
-            planner_call_count = int(
-                connection.execute(
-                    """
-                    SELECT COUNT(*) FROM rlm_workbench_suspensions
-                    WHERE operation_id = ? AND cell_execution_id IS NULL
-                    """,
-                    (operation.value,),
-                ).fetchone()[0]
-            )
+            planner_owners = connection.execute(
+                """
+                SELECT logical_owner_json FROM rlm_workbench_suspensions
+                WHERE operation_id = ? AND cell_execution_id IS NULL
+                ORDER BY suspension_revision
+                """,
+                (operation.value,),
+            ).fetchall()
+        planner_call_count = len(planner_owners)
+        correction_count = sum(
+            json.loads(str(row["logical_owner_json"])).get("phase") == "correction"
+            for row in planner_owners
+        )
         max_model_calls = int(spec.root["budgets"]["max_model_calls"])
+        max_corrections = int(spec.root["model"]["max_corrections"])
         error_details: list[dict[str, Any]]
         if isinstance(error, ValidationError):
             error_details = [
@@ -1456,7 +1667,7 @@ class RlmWorkbenchCoordinator:
                     "message": str(error)[:256],
                 }
             ]
-        if planner_call_count >= max_model_calls:
+        if planner_call_count >= max_model_calls or correction_count >= max_corrections:
             failure = {
                 "schema_version": "aar.envelope.v1",
                 "category": "validation",
@@ -1628,6 +1839,56 @@ class RlmWorkbenchCoordinator:
     ) -> RlmWorkbenchResult | RlmWorkbenchSnapshot:
         if attempt.operation != operation:
             raise RlmWorkbenchConflict("claimed attempt does not belong to operation")
+        stop_heartbeat = threading.Event()
+        lost_fence = threading.Event()
+
+        def renew_attempt_lease() -> None:
+            while not stop_heartbeat.wait(
+                _WORKBENCH_ATTEMPT_LEASE_HEARTBEAT_INTERVAL_MS / 1_000
+            ):
+                try:
+                    self._registry.heartbeat(
+                        attempt,
+                        self._runtime_generation,
+                        fence.dispatcher_generation,
+                        fence.lease_epoch,
+                        fence.owner_digest,
+                        _WORKBENCH_ATTEMPT_LEASE_DURATION_MS,
+                    )
+                except StaleAttemptFence:
+                    lost_fence.set()
+                    return
+                except Exception:
+                    # A transient registry fault is retried on the next beat;
+                    # subsequent work still has to pass the normal fence checks.
+                    continue
+
+        heartbeat_thread = threading.Thread(
+            target=renew_attempt_lease,
+            name=f"aar-workbench-heartbeat-{operation.value}",
+            daemon=True,
+        )
+        heartbeat_thread.start()
+        try:
+            result = self._run_claimed_inner(operation, attempt, fence)
+            if lost_fence.is_set() and not (
+                isinstance(result, RlmWorkbenchSnapshot)
+                and result.phase in {"waiting_external", "failed", "cancelled", "timed_out"}
+            ):
+                raise RlmWorkbenchConflict("workbench attempt lease fence was lost")
+            return result
+        finally:
+            stop_heartbeat.set()
+            heartbeat_thread.join()
+
+    def _run_claimed_inner(
+        self,
+        operation: OperationRef,
+        attempt: OperationAttemptRefV1,
+        fence: AttemptFence,
+    ) -> RlmWorkbenchResult | RlmWorkbenchSnapshot:
+        if attempt.operation != operation:
+            raise RlmWorkbenchConflict("claimed attempt does not belong to operation")
         persisted_spec = RlmWorkbenchJobSpec.model_validate_json(
             str(self._job_row(operation)["spec_json"]), strict=True
         )
@@ -1720,8 +1981,21 @@ class RlmWorkbenchCoordinator:
         self._require_deadline(operation)
         directive_digests: list[str] = []
         recovery = self._prepare_recovery_continuation(operation, attempt, fence, spec)
-        model_calls = 0 if recovery is None else recovery.consumed_model_calls
+        with self._factory.transaction(write=False) as connection:
+            model_calls = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM rlm_workbench_cells WHERE operation_id = ?",
+                    (operation.value,),
+                ).fetchone()[0]
+            )
         if recovery is not None:
+            model_calls = max(model_calls, recovery.consumed_model_calls)
+        max_model_calls = int(spec.root["budgets"]["max_model_calls"])
+        if recovery is not None:
+            if model_calls >= max_model_calls:
+                raise RlmWorkbenchModelCallBudgetExceeded(
+                    "workbench root planner model-call budget exhausted"
+                )
             recover = getattr(self._planner, "recover", None)
             if not callable(recover):
                 raise RlmWorkbenchUnsupported(
@@ -1734,8 +2008,6 @@ class RlmWorkbenchCoordinator:
                 strict=True,
             )
             model_calls += 1
-            if model_calls > int(spec.root["budgets"]["max_model_calls"]):
-                raise RlmWorkbenchConflict("workbench model-call budget exhausted")
             if str(directive.root["kind"]) != "execute_cell":
                 raise RlmWorkbenchUnsupported(
                     "workbench recovery planner must produce a continuation cell"
@@ -1756,6 +2028,10 @@ class RlmWorkbenchCoordinator:
                 return self.snapshot(operation)
         while True:
             self._require_deadline(operation)
+            if model_calls >= max_model_calls:
+                raise RlmWorkbenchModelCallBudgetExceeded(
+                    "workbench root planner model-call budget exhausted"
+                )
             raw_directive = self._planner.plan(operation, spec, self.snapshot(operation))
             self._require_deadline(operation)
             directive = RlmDirective.model_validate(
@@ -1765,8 +2041,6 @@ class RlmWorkbenchCoordinator:
                 strict=True,
             )
             model_calls += 1
-            if model_calls > int(spec.root["budgets"]["max_model_calls"]):
-                raise RlmWorkbenchConflict("workbench model-call budget exhausted")
             directive_digests.append(canonical_sha256(directive.root))
             kind = str(directive.root["kind"])
             if kind == "execute_cell":
@@ -1852,12 +2126,13 @@ class RlmWorkbenchCoordinator:
         )
         consumed_model_calls = int(row["consumed_model_calls"])
         remaining_model_calls = int(spec.root["budgets"]["max_model_calls"]) - consumed_model_calls
-        remaining_wall_time_ms = min(
-            900_000,
-            int(row["cumulative_deadline_unix_ms"]) - self._now_ms(),
+        remaining_wall_time_ms = self._remaining_wall_time_ms(
+            int(row["cumulative_deadline_unix_ms"])
         )
-        if remaining_model_calls < 1 or remaining_wall_time_ms < 1:
-            raise RlmWorkbenchConflict("workbench recovery budget is exhausted")
+        if remaining_model_calls < 1:
+            raise RlmWorkbenchModelCallBudgetExceeded(
+                "workbench root planner model-call budget exhausted"
+            )
         document = RecoveryPlannerInput.model_validate(
             {
                 "schema_version": "aar.rlm-recovery-planner-input.v1",
@@ -1963,7 +2238,9 @@ class RlmWorkbenchCoordinator:
         budgets = dict(spec.root["budgets"])
         program_spec = WorkspaceProgramSpec(
             code=str(directive.root["code"]),
-            wall_time_ms=min(60_000, int(budgets["cell_wall_time_ms"])),
+            wall_time_ms=self._cell_execution_wall_time_ms(
+                operation, int(budgets["cell_wall_time_ms"])
+            ),
             max_output_chars=int(budgets["max_output_chars_per_cell"]),
             max_events=int(budgets["max_events_per_cell"]),
         )
@@ -2411,6 +2688,11 @@ class RlmWorkbenchCoordinator:
                 cell_execution_id=cell_execution_id,
                 handle=handle,
                 session=broker_session,
+                max_artifact_count=int(spec.root["budgets"]["max_artifact_count"]),
+                max_artifact_bytes=int(spec.root["budgets"]["max_artifact_bytes"]),
+                allowed_artifact_media_types=tuple(
+                    str(item) for item in spec.root["artifacts"]["allowed_media_types"]
+                ),
             )
         try:
             result = self._backend.execute(
@@ -2418,7 +2700,10 @@ class RlmWorkbenchCoordinator:
                 handle,
                 WorkspaceProgramSpec(
                     code=str(directive.root["code"]),
-                    wall_time_ms=min(60_000, int(spec.root["budgets"]["cell_wall_time_ms"])),
+                    wall_time_ms=self._cell_execution_wall_time_ms(
+                        operation,
+                        int(spec.root["budgets"]["cell_wall_time_ms"]),
+                    ),
                     max_output_chars=int(spec.root["budgets"]["max_output_chars_per_cell"]),
                     max_events=int(spec.root["budgets"]["max_events_per_cell"]),
                 ),
@@ -2461,22 +2746,37 @@ class RlmWorkbenchCoordinator:
         self._require_deadline(operation)
         result_json = canonical_json_bytes(result).decode("utf-8")
         result_digest = canonical_sha256(result)
-        manifest = {
-            "operation": operation,
-            "cell_execution_id": cell_execution_id,
-            "cell_index": cell_index,
+        with self._factory.transaction(write=False) as connection:
+            stage_ids = tuple(
+                str(row[0])
+                for row in connection.execute(
+                    "SELECT stage_id FROM rlm_workbench_artifact_stages "
+                    "WHERE operation_id = ? AND cell_execution_id = ? AND state = 'staged' "
+                    "ORDER BY stage_id",
+                    (operation.value, cell_execution_id),
+                ).fetchall()
+            )
+        manifest_payload = {
+            "schema_version": "aar.cell-commit-manifest.v1",
+            "operation": operation.model_dump(mode="json"),
             "attempt_id": attempt.attempt_id,
             "attempt_fence": fence_digest,
+            "workspace": post_handle.workspace.model_dump(mode="json"),
+            "workspace_generation": post_handle.generation,
+            "pre_revision": handle.revision,
+            "post_revision": post_handle.revision,
+            "cell_execution_id": cell_execution_id,
             "source_digest": source_digest,
             "result_digest": result_digest,
-            "pre_checkpoint_digest": pre_checkpoint.content_digest,
-            "post_checkpoint_digest": post_checkpoint.content_digest,
-            "pre_checkpoint": pre_checkpoint.model_dump(mode="json"),
-            "post_checkpoint": post_checkpoint.model_dump(mode="json"),
-            "workspace": post_handle,
+            "checkpoint_digest": post_checkpoint.content_digest,
+            "artifact_stage_ids": list(stage_ids),
+        }
+        manifest = {
+            **manifest_payload,
+            "manifest_digest": canonical_sha256(manifest_payload),
         }
         manifest_json = canonical_json_bytes(manifest).decode("utf-8")
-        manifest_digest = canonical_sha256(manifest)
+        manifest_digest = manifest["manifest_digest"]
         now = self._now_ms()
         with self._factory.transaction(write=True) as connection:
             self._assert_attempt_fence(connection, operation, attempt, fence)
@@ -2523,6 +2823,16 @@ class RlmWorkbenchCoordinator:
                     now,
                 ),
             )
+            connection.execute(
+                """
+                UPDATE rlm_workbench_artifact_stages
+                SET state = 'committed', updated_at_unix_ms = ?
+                WHERE operation_id = ? AND cell_execution_id = ? AND state = 'staged'
+                """,
+                (now, operation.value, cell_execution_id),
+            )
+            if connection.execute("SELECT changes()").fetchone()[0] != len(stage_ids):
+                raise RlmWorkbenchConflict("cell artifact stages changed before commit")
             connection.execute(
                 """
                 UPDATE rlm_workbench_jobs
@@ -2575,18 +2885,38 @@ class RlmWorkbenchCoordinator:
         with self._factory.transaction(write=True) as connection:
             self._assert_attempt_fence(connection, operation, attempt, fence)
             placeholders = ",".join("?" for _ in stage_ids)
-            stage_count = 0
+            stage_rows = ()
             if stage_ids:
-                stage_count = int(
-                    connection.execute(
-                        "SELECT COUNT(*) FROM rlm_workbench_artifact_stages "
-                        f"WHERE operation_id = ? AND state = 'staged' "
-                        f"AND stage_id IN ({placeholders})",
-                        (operation.value, *stage_ids),
-                    ).fetchone()[0]
+                stage_rows = connection.execute(
+                    "SELECT s.*, j.workspace_id, j.workspace_generation "
+                    "FROM rlm_workbench_artifact_stages AS s "
+                    "JOIN rlm_workbench_jobs AS j ON j.operation_id = s.operation_id "
+                    f"WHERE s.operation_id = ? AND s.state = 'committed' "
+                    f"AND s.stage_id IN ({placeholders}) ORDER BY s.logical_name, s.stage_id",
+                    (operation.value, *stage_ids),
+                ).fetchall()
+            if len(stage_rows) != len(stage_ids):
+                raise RlmWorkbenchConflict(
+                    "finalization references absent or uncommitted artifact stages"
                 )
-            if stage_count != len(stage_ids):
-                raise RlmWorkbenchConflict("finalization references absent artifact stages")
+            bindings = tuple(
+                ArtifactBinding.model_validate(
+                    {
+                        "schema_version": "aar.artifact-binding.v1",
+                        "logical_name": str(item["logical_name"]),
+                        "media_type": str(item["media_type"]),
+                        "digest": str(item["content_digest"]),
+                        "size_bytes": int(item["size_bytes"]),
+                        "operation": operation.model_dump(mode="json"),
+                        "workspace": {"type": "workspace", "value": str(item["workspace_id"])},
+                        "workspace_generation": int(item["workspace_generation"]),
+                        "cell_execution_id": str(item["cell_execution_id"]),
+                        "role": str(item["role"]),
+                    },
+                    strict=True,
+                )
+                for item in stage_rows
+            )
             unresolved = int(
                 connection.execute(
                     "SELECT COUNT(*) FROM rlm_workbench_suspensions "
@@ -2618,6 +2948,7 @@ class RlmWorkbenchCoordinator:
             )
 
         handle = self.workspace_handle(operation)
+        worker_owner_generation = self._backend.worker_binding(handle).owner_generation
         final_checkpoint = self._backend.checkpoint(
             OperationRef(value="ck-final-" + operation.value[:96]),
             handle,
@@ -2648,7 +2979,7 @@ class RlmWorkbenchCoordinator:
             "certainty": "certain",
             "output": output,
             "output_digest": canonical_sha256(output),
-            "artifact_bindings": [],
+            "artifact_bindings": [item.model_dump(mode="json") for item in bindings],
             "child_lineage": [],
             "unresolved_required_children": 0,
             "model_calls": model_calls,
@@ -2672,18 +3003,33 @@ class RlmWorkbenchCoordinator:
         result_json = canonical_json_bytes(result.root).decode("utf-8")
         proposal_digest = canonical_sha256(directive.root)
         fence_digest = _attempt_fence_digest(fence)
-        manifest = {
-            "operation": operation,
-            "attempt_id": attempt.attempt_id,
-            "attempt_fence": fence_digest,
-            "proposal_digest": proposal_digest,
-            "result_digest": result.root["result_digest"],
+        manifest_payload = {
+            "schema_version": "aar.finalization-manifest.v1",
+            "operation": operation.model_dump(mode="json"),
+            "finalizer_attempt_id": attempt.attempt_id,
+            "finalizer_attempt_fence": fence_digest,
             "expected_prior_phase": "finalizing",
+            "control_revision": revision,
             "expected_cancellation_revision": prior_cancellation_revision,
-            "expected_cumulative_deadline_unix_ms": deadline,
+            "expected_deadline_unix_ms": deadline,
+            "worker_owner_generation": worker_owner_generation,
+            "unresolved_required_ticket_count": 0,
+            "result_digest": result.root["result_digest"],
+            "artifact_binding_digests": [
+                canonical_sha256(item.model_dump(mode="json")) for item in bindings
+            ],
+            "usage_digest": canonical_sha256(list(usage_receipt_digests)),
+            "child_policy_digest": canonical_sha256([]),
+            "workspace_disposition_digest": canonical_sha256(
+                {"workspace_disposition": "closed", "checkpoint": final_checkpoint.content_digest}
+            ),
+        }
+        manifest = {
+            **manifest_payload,
+            "manifest_digest": canonical_sha256(manifest_payload),
         }
         manifest_json = canonical_json_bytes(manifest).decode("utf-8")
-        manifest_digest = canonical_sha256(manifest)
+        manifest_digest = manifest["manifest_digest"]
         now = self._now_ms()
         with self._factory.transaction(write=True) as connection:
             self._assert_attempt_fence(connection, operation, attempt, fence)
@@ -2762,6 +3108,15 @@ class RlmWorkbenchCoordinator:
     def _require_deadline(self, operation: OperationRef) -> None:
         if self._now_ms() >= self._deadline(operation):
             raise RlmWorkbenchDeadlineExceeded("workbench cumulative deadline expired")
+
+    def _remaining_wall_time_ms(self, deadline_unix_ms: int) -> int:
+        remaining_ms = deadline_unix_ms - self._now_ms()
+        if remaining_ms < 1:
+            raise RlmWorkbenchDeadlineExceeded("workbench cumulative deadline expired")
+        return remaining_ms
+
+    def _cell_execution_wall_time_ms(self, operation: OperationRef, requested_ms: int) -> int:
+        return min(requested_ms, self._remaining_wall_time_ms(self._deadline(operation)))
 
     def handle_broker_request(
         self,
@@ -3014,8 +3369,8 @@ class RlmWorkbenchCoordinator:
             )
         return self.snapshot(operation)
 
-    @staticmethod
     def _assert_attempt_fence(
+        self,
         connection: Any,
         operation: OperationRef,
         attempt: OperationAttemptRefV1,
@@ -3037,6 +3392,7 @@ class RlmWorkbenchCoordinator:
               AND dispatch.current_attempt_no = attempt.attempt_no
               AND lease.lease_epoch = ? AND lease.owner_digest = ?
               AND lease.released_at_unix_ms IS NULL
+              AND lease.expires_at_unix_ms > ?
             """,
             (
                 operation.value,
@@ -3045,6 +3401,7 @@ class RlmWorkbenchCoordinator:
                 fence.dispatcher_generation,
                 fence.lease_epoch,
                 fence.owner_digest,
+                self._now_ms(),
             ),
         ).fetchone()
         if row is None:
@@ -3059,6 +3416,12 @@ class RlmWorkbenchCoordinator:
             self._broker_sessions.clear()
         for session in sessions:
             session.close()
+        unbind_artifact_stage_handler = getattr(
+            self._backend, "unbind_artifact_stage_handler", None
+        )
+        if callable(unbind_artifact_stage_handler):
+            unbind_artifact_stage_handler(self._artifact_stage_callback)
+        self._artifact_publications.close()
         self._factory.close()
 
     def _prepare_workspace(

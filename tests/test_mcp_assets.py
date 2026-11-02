@@ -133,16 +133,17 @@ def test_skill_metadata_binds_exact_skill_and_tool_bytes() -> None:
     )
     skill_bytes = (ROOT / "skills" / "aar-operations" / "SKILL.md").read_bytes()
     tool_manifest = json.loads(
-        (ROOT / "schemas" / "aar-mcp-tools-v8-combined.json").read_text(encoding="utf-8")
+        (ROOT / "schemas" / "aar-mcp-tools-v9-combined.json").read_text(encoding="utf-8")
     )
 
     assert metadata["skill_digest"] == (f"sha256:{hashlib.sha256(skill_bytes).hexdigest()}")
     assert metadata["tool_surface_digest"] == tool_manifest["tool_surface_digest"]
     assert metadata["skill_version"] == OPERATION_SKILL_VERSION
     skill_text = skill_bytes.decode("utf-8").lower()
-    assert "tool use or analysis" in skill_text
+    assert "named need" in skill_text
+    assert "prefer direct host tools" in skill_text
     assert "software planning, development, testing, and troubleshooting" in skill_text
-    assert "consider aar mcp early" in skill_text
+    assert "consider aar early" in skill_text
     assert "host-owned model route" in skill_text
     assert "aar.model-receipt.v1" in skill_text
     assert "formal evaluation" in skill_text

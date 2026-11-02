@@ -1,6 +1,6 @@
 <div align="center">
 
-> **`0.6.0a2` release-contract target** · target tag `v0.6.0a2` · source text does not establish publication; read the canonical English [release notes](../RELEASE-v0.6.0a2.md) before using the tag.
+> **`0.6.1a0` release-contract target** · target tag `v0.6.1a0` · source text does not establish publication; read the canonical English [release notes](../RELEASE-v0.6.1a0.md) before using the tag.
 
 # Adaptive Agent Harness
 
@@ -10,7 +10,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release contract](https://img.shields.io/badge/release--contract-v0.6.0a2-blue)](../RELEASE-v0.6.0a2.md)
+[![Release contract](https://img.shields.io/badge/release--contract-v0.6.1a0-blue)](../RELEASE-v0.6.1a0.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#项目状态)
 
@@ -149,7 +149,7 @@ flowchart LR
 
 ### 可移植 contracts
 
-- 当前 v8 surface 上的 38 个 MCP tools；
+- 当前 v9 surface 上的 38 个 MCP tools；
 - 版本化 schemas 和 digest-bound assets；
 - Codex 和 Hermes profiles 的内置操作指南；
 - 用于开发和 conformance testing 的确定性 reference brokers；
@@ -193,7 +193,7 @@ Adaptive Agent Harness 很适合：
 ```bash
 # Use only after external GitHub readback confirms the target tag exists.
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a2"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.1a0"
 ```
 
 ### Codex App 设置
@@ -260,18 +260,18 @@ MCP frontend 刻意可以替换。它不拥有 continuity database 或 worker li
 
 ## 项目状态
 
-当前公开 alpha：**`0.6.0a2`**。
+当前公开 alpha：**`0.6.1a0`**。
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.6.0a2` receipt-backed model routing, current verification, and exact publication
-> boundaries, read the canonical English [release notes](../RELEASE-v0.6.0a2.md) and
+> context. For `v0.6.1a0` receipt-backed model routing, current verification, and exact publication
+> boundaries, read the canonical English [release notes](../RELEASE-v0.6.1a0.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
 
-`v0.6.0a2` release-contract evidence represented by this source:
+`v0.6.1a0` release-contract evidence represented by this source:
 
 - Python 3.11 至 3.14 覆盖范围；
-- 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
+- 38-tool MCP v9 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - 直到 v5 的 additive SQLite schema；
 - current full-repository verification is recorded in the canonical English release note and external release receipt;
 - 在 Linux/WSL 上通过 clean exact-wheel supervisor/frontend probe；

@@ -1,6 +1,6 @@
 <div align="center">
 
-> **`0.6.0a2` release-contract target** · target tag `v0.6.0a2` · source text does not establish publication; read the canonical English [release notes](../RELEASE-v0.6.0a2.md) before using the tag.
+> **`0.6.1a0` release-contract target** · target tag `v0.6.1a0` · source text does not establish publication; read the canonical English [release notes](../RELEASE-v0.6.1a0.md) before using the tag.
 
 # Adaptive Agent Harness
 
@@ -10,7 +10,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release contract](https://img.shields.io/badge/release--contract-v0.6.0a2-blue)](../RELEASE-v0.6.0a2.md)
+[![Release contract](https://img.shields.io/badge/release--contract-v0.6.1a0-blue)](../RELEASE-v0.6.1a0.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#projekto-būsena)
 
@@ -149,7 +149,7 @@ Pagrindinė taisyklė sąmoningai paprasta:
 
 ### Perkeliami kontraktai
 
-- 38 MCP įrankių dabartiniame v8 paviršiuje;
+- 38 MCP įrankių dabartiniame v9 paviršiuje;
 - versijuojamas schemas ir su digestu susietus aktyvus;
 - integruotus operacijų nurodymus Codex ir Hermes profiliams;
 - deterministinius etaloninius brokerius kūrimui ir atitikties tikrinimui;
@@ -193,7 +193,7 @@ Išsamesnį projektavimo pagrindimą ir šaltinių pastabas rasite [Why RLM + IP
 ```bash
 # Use only after external GitHub readback confirms the target tag exists.
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a2"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.1a0"
 ```
 
 ### Codex App sąranka
@@ -260,18 +260,18 @@ MCP frontend'as sąmoningai pakeičiamas. Jis nevaldo tęstinumo duomenų bazės
 
 ## Projekto būsena
 
-Dabartinė viešoji alfa: **`0.6.0a2`**.
+Dabartinė viešoji alfa: **`0.6.1a0`**.
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.6.0a2` receipt-backed model routing, current verification, and exact publication
-> boundaries, read the canonical English [release notes](../RELEASE-v0.6.0a2.md) and
+> context. For `v0.6.1a0` receipt-backed model routing, current verification, and exact publication
+> boundaries, read the canonical English [release notes](../RELEASE-v0.6.1a0.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
 
-`v0.6.0a2` release-contract evidence represented by this source:
+`v0.6.1a0` release-contract evidence represented by this source:
 
 - Python 3.11–3.14 palaikymas;
-- 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
+- 38-tool MCP v9 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - papildanti SQLite schema iki v5;
 - current full-repository verification is recorded in the canonical English release note and external release receipt;
 - švarus exact-wheel supervisor/frontend bandymas Linux/WSL aplinkoje;

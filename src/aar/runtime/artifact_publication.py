@@ -16,6 +16,7 @@ from aar.rlm_workbench_models import (
     FinalizationManifest,
 )
 from aar.runtime.sqlite_repository import SQLiteConnectionFactory
+from aar.schemas import ArtifactIdRef, ArtifactReference
 
 
 class ArtifactPublicationError(RuntimeError):
@@ -416,6 +417,65 @@ class ArtifactPublicationRepository:
                 for binding in bindings
                 if canonical_sha256(binding.model_dump(mode="json")) in expected
             )
+
+    def resolve_public_reference(
+        self,
+        reference: ArtifactReference,
+    ) -> bytes | None:
+        """Resolve native bytes by operation; None means a non-native operation.
+
+        A missing native publication is a refusal, never a legacy fallback.
+        Operation, finalization, binding and bytes are read in one snapshot.
+        """
+        with self._factory.transaction(write=False) as connection:
+            native = connection.execute(
+                "SELECT 1 FROM rlm_workbench_jobs WHERE operation_id = ?",
+                (reference.created_by.value,),
+            ).fetchone()
+            if native is None:
+                return None
+            rows = connection.execute(
+                """
+                SELECT s.*, j.workspace_id, j.workspace_generation, f.manifest_json
+                FROM rlm_workbench_artifact_stages AS s
+                JOIN rlm_workbench_jobs AS j ON j.operation_id = s.operation_id
+                JOIN rlm_workbench_finalization_manifests AS f
+                  ON f.operation_id = s.operation_id
+                WHERE s.operation_id = ? AND s.content_digest = ?
+                  AND s.state = 'committed' AND j.phase = 'succeeded'
+                """,
+                (reference.created_by.value, reference.digest),
+            ).fetchall()
+            for row in rows:
+                binding = self._binding_from_row(row)
+                manifest = FinalizationManifest.model_validate_json(
+                    str(row["manifest_json"]), strict=True
+                )
+                if (
+                    canonical_sha256(binding.model_dump(mode="json"))
+                    not in manifest.artifact_binding_digests
+                ):
+                    continue
+                document = binding.model_dump(mode="json")
+                expected_artifact = ArtifactIdRef(
+                    value="artifact-" + str(document["digest"]).removeprefix("sha256:")[:32]
+                )
+                if (
+                    reference.artifact == expected_artifact
+                    and reference.media_type == document["media_type"]
+                    and reference.size_bytes == document["size_bytes"]
+                    and not reference.redacted
+                ):
+                    content = bytes(row["content"])
+                    if (
+                        len(content) != reference.size_bytes
+                        or "sha256:" + hashlib.sha256(content).hexdigest() != reference.digest
+                    ):
+                        raise ArtifactPublicationConflict(
+                            "native artifact content integrity mismatch"
+                        )
+                    return content
+        raise KeyError(reference.digest)
 
     def close(self) -> None:
         self._factory.close()

@@ -8,9 +8,9 @@
     "2024-11-05"
   ],
   "schema_bundle_digest": "sha256:159f31737e958cc2835af3be414a6a531fe6729de05db393672ba57910cdf2d2",
-  "skill_digest": "sha256:bfd414ae23507781871a7e38ef92653e3502bb38800170f0d0865ffe104eca61",
+  "skill_digest": "sha256:422238f00324170b2cdb4ca6a048d53a6439a2aac391ff0d9d0f2d52b886c3c9",
   "skill_name": "aar-operations",
-  "skill_version": "0.11.0",
-  "tool_surface_digest": "sha256:b12e88d11cabdd577953da291259ba9902a960275c641ba9829a4e8d1fb3d043",
-  "tool_surface_version": "aar.mcp-tools.v8"
+  "skill_version": "0.11.1",
+  "tool_surface_digest": "sha256:9b76ffb0c36a3ad5e0a9d5e2497d91d3c24a25ae404ff9773225c696a1c0a8eb",
+  "tool_surface_version": "aar.mcp-tools.v9"
 }

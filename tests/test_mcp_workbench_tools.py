@@ -222,13 +222,13 @@ def _model_commit_payload(ticket: dict[str, Any], output_text: str) -> dict[str,
     }
 
 
-def test_installed_surface_loader_uses_the_combined_v8_asset(
+def test_installed_surface_loader_uses_the_combined_v9_asset(
     tmp_path: Path, monkeypatch: Any
 ) -> None:
     package_root = tmp_path / "aar"
     bundled = package_root / "bundled" / "schemas"
     bundled.mkdir(parents=True)
-    source = ROOT / "schemas" / "aar-mcp-tools-v8-combined.json"
+    source = ROOT / "schemas" / "aar-mcp-tools-v9-combined.json"
     (bundled / source.name).write_bytes(source.read_bytes())
 
     monkeypatch.setattr(workbench_surface, "_source_root", lambda: tmp_path / "empty")
@@ -239,7 +239,7 @@ def test_installed_surface_loader_uses_the_combined_v8_asset(
     )
 
     contract = workbench_surface.successor_surface_contract()
-    assert contract["tool_surface_version"] == "aar.mcp-tools.v8"
+    assert contract["tool_surface_version"] == "aar.mcp-tools.v9"
     assert len(contract["tools"]) == 38
     assert tuple(tool["name"] for tool in contract["tools"][-8:]) == (
         workbench_surface.SUCCESSOR_TOOL_NAMES

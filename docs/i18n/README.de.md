@@ -1,6 +1,6 @@
 <div align="center">
 
-> **`0.6.0a2` release-contract target** · target tag `v0.6.0a2` · source text does not establish publication; read the canonical English [release notes](../RELEASE-v0.6.0a2.md) before using the tag.
+> **`0.6.1a0` release-contract target** · target tag `v0.6.1a0` · source text does not establish publication; read the canonical English [release notes](../RELEASE-v0.6.1a0.md) before using the tag.
 
 # Adaptive Agent Harness
 
@@ -10,7 +10,7 @@
 
 [![Python 3.11–3.14](https://img.shields.io/badge/Python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-38_tools-6f42c1)](https://modelcontextprotocol.io/)
-[![Release contract](https://img.shields.io/badge/release--contract-v0.6.0a2-blue)](../RELEASE-v0.6.0a2.md)
+[![Release contract](https://img.shields.io/badge/release--contract-v0.6.1a0-blue)](../RELEASE-v0.6.1a0.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](../../LICENSE)
 [![Status: public alpha](https://img.shields.io/badge/status-public_alpha-blue)](#projektstatus)
 
@@ -149,7 +149,7 @@ Die maßgeblichen Regeln sind bewusst einfach:
 
 ### Portierbare Verträge
 
-- 38 MCP-Tools auf der aktuellen v8-Oberfläche;
+- 38 MCP-Tools auf der aktuellen v9-Oberfläche;
 - versionierte Schemas und an Digests gebundene Assets;
 - gebündelte Operationsanleitungen für Codex- und Hermes-Profile;
 - deterministische Referenz-Broker für Entwicklung und Konformitätstests;
@@ -193,7 +193,7 @@ Siehe [Warum RLM + IPython](../../docs/WHY-RLM-AND-IPYTHON.md) für die ausführ
 ```bash
 # Use only after external GitHub readback confirms the target tag exists.
 uv tool install --force \
-  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.0a2"
+  "git+https://github.com/phenomenoner/adaptive-agent-harness.git@v0.6.1a0"
 ```
 
 ### Codex-App einrichten
@@ -260,18 +260,18 @@ Das MCP-Frontend ist absichtlich austauschbar. Es besitzt weder die Kontinuität
 
 ## Projektstatus
 
-Aktuelle öffentliche Alpha: **`0.6.0a2`**.
+Aktuelle öffentliche Alpha: **`0.6.1a0`**.
 
 > **Translation status:** the overview below retains the `v0.3.0a1` public baseline as historical
-> context. For `v0.6.0a2` receipt-backed model routing, current verification, and exact publication
-> boundaries, read the canonical English [release notes](../RELEASE-v0.6.0a2.md) and
+> context. For `v0.6.1a0` receipt-backed model routing, current verification, and exact publication
+> boundaries, read the canonical English [release notes](../RELEASE-v0.6.1a0.md) and
 > [model-routing guide](../MODEL-ROUTING-AND-EVALUATION.md).
 
 
-`v0.6.0a2` release-contract evidence represented by this source:
+`v0.6.1a0` release-contract evidence represented by this source:
 
 - Abdeckung von Python 3.11 bis 3.14;
-- 38-tool MCP v8 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
+- 38-tool MCP v9 executable surface (frozen 30-tool MCP v7 prefix + exact 8-tool successor suffix);
 - additive SQLite-Schemata bis v5;
 - current full-repository verification is recorded in the canonical English release note and external release receipt;
 - ein sauberer Exact-Wheel-Probe für Supervisor/Frontend unter Linux/WSL;
