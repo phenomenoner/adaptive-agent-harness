@@ -1000,10 +1000,11 @@ def test_rebind_replays_after_coordinator_crash(
     tmp_path: Path,
     barrier_name: str,
     expected_barrier_hits: tuple[str, ...],
+    _planner: Any = None,
 ) -> None:
     database = tmp_path / "registry.sqlite"
     prepare_v6_registry(database, tmp_path / "registry-v5.snapshot.sqlite")
-    planner = BrokerRoundTripPlanner()
+    planner = BrokerRoundTripPlanner() if _planner is None else _planner
     host = ReferenceHost(
         database,
         now_ms=lambda: FIXED_NOW_MS,

@@ -18,6 +18,10 @@ that the target tag, GitHub prerelease, installed runtime, provider qualificatio
 - remove universal short workbench/cell/grant time maxima while retaining finite owner authority,
   actual deadlines and technical serialization limits;
 - align shared workspace output and event ranges with the advertised workbench range;
+- retain original cell/artifact failure identity at the one-event lower bound, including lost-result
+  and in-process backend paths;
+- keep broker-resumed and reconciled cell artifacts in native staging and finalization, never in
+  the legacy blob namespace;
 - publish the additive `aar.mcp-tools.v9` constraint profile with the same 38 tool names; preserve
   exact frozen v7/v8 and contract-v1 source bytes;
 - retain evaluated artifact manifest/binding and worker-result corrections in the public source.

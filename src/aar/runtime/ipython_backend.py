@@ -1001,6 +1001,12 @@ class SupervisedIPythonWorkspaceBackend:
                             content,
                             str(item["media_type"]),
                         )
+                    if reference is None and operation.value.startswith("exec-"):
+                        # Reserved native-cell executions never publish via the
+                        # legacy sink, including after their coordinator closes.
+                        raise WorkspaceOperationConflict(
+                            "native artifact staging binding unavailable"
+                        )
                     if reference is None and self._artifact_sink is None:
                         raise WorkspaceWorkerProtocolError(
                             "worker emitted artifact without a host sink"
@@ -1037,25 +1043,30 @@ class SupervisedIPythonWorkspaceBackend:
                 break
         if artifact_error is not None:
             status = "failed"
-            if len(events) >= spec.max_events - 1:
-                events.pop()
+            retained = max(0, spec.max_events - 2)
+            events = events[:retained]
+            error_data = {
+                "type": type(artifact_error).__name__,
+                "message": str(artifact_error)[:2_048],
+            }
+            if spec.max_events == 1:
+                error_data.update(phase="finished", status="failed")
             events.append(
                 WorkspaceEvent(
                     sequence=len(events) + 1,
                     kind="exception",
-                    data={
-                        "type": type(artifact_error).__name__,
-                        "message": str(artifact_error)[:2_048],
-                    },
+                    data=error_data,
+                    truncated=True,
                 )
             )
-            events.append(
-                WorkspaceEvent(
-                    sequence=len(events) + 1,
-                    kind="progress",
-                    data={"phase": "finished", "status": "failed"},
+            if spec.max_events > 1:
+                events.append(
+                    WorkspaceEvent(
+                        sequence=len(events) + 1,
+                        kind="progress",
+                        data={"phase": "finished", "status": "failed"},
+                    )
                 )
-            )
         return WorkspaceProgramResult(
             operation=operation,
             workspace=handle.workspace,
@@ -1079,7 +1090,28 @@ class SupervisedIPythonWorkspaceBackend:
         message: str,
         max_events: int,
     ) -> WorkspaceProgramResult:
-        del max_events
+        error_data = {"type": "WorkspaceWorkerLost", "message": message[-2_048:]}
+        events = [
+            WorkspaceEvent(sequence=1, kind="progress", data={"phase": "started"}),
+            WorkspaceEvent(sequence=2, kind="exception", data=error_data),
+            WorkspaceEvent(
+                sequence=3, kind="progress", data={"phase": "finished", "status": status}
+            ),
+        ]
+        if max_events == 1:
+            events = [
+                WorkspaceEvent(
+                    sequence=1,
+                    kind="exception",
+                    truncated=True,
+                    data={**error_data, "phase": "finished", "status": status},
+                )
+            ]
+        elif max_events == 2:
+            events = [
+                event.model_copy(update={"sequence": index + 1})
+                for index, event in enumerate(events[1:])
+            ]
         return WorkspaceProgramResult(
             operation=operation,
             workspace=handle.workspace,
@@ -1089,22 +1121,7 @@ class SupervisedIPythonWorkspaceBackend:
             revision_after=handle.revision + 1,
             status=status,
             workspace_lost=True,
-            events=(
-                WorkspaceEvent(sequence=1, kind="progress", data={"phase": "started"}),
-                WorkspaceEvent(
-                    sequence=2,
-                    kind="exception",
-                    data={
-                        "type": "WorkspaceWorkerLost",
-                        "message": message[-2_048:],
-                    },
-                ),
-                WorkspaceEvent(
-                    sequence=3,
-                    kind="progress",
-                    data={"phase": "finished", "status": status},
-                ),
-            ),
+            events=tuple(events),
         )
 
     def _state(self, workspace: WorkspaceRef) -> _WorkerState:

@@ -102,7 +102,8 @@ class _Worker:
                 dropped = True
                 if not force:
                     return
-                events.pop()
+                if events:
+                    events.pop()
             events.append(event)
 
         def progress(
@@ -359,13 +360,12 @@ class _Worker:
         finish: dict[str, Any] = {"phase": "finished", "status": status}
         if dropped:
             finish["events_truncated"] = True
-        events.append(
-            {
-                "kind": "progress",
-                "data": finish,
-                "truncated": dropped,
-            }
-        )
+        if len(events) < max_events:
+            events.append({"kind": "progress", "data": finish, "truncated": dropped})
+        else:
+            # Capacity one retains the original exception plus terminal metadata.
+            events[-1]["data"].update(finish)
+            events[-1]["truncated"] = True
         return {
             "ok": True,
             "status": status,

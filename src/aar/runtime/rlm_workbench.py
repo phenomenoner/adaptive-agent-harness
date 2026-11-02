@@ -6,7 +6,8 @@ import hashlib
 import json
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -186,9 +187,7 @@ def _planner_request(
         "objective": str(spec.root["objective"]),
         "planner_owner": dict(owner),
         "workbench_snapshot": snapshot.root,
-        "last_committed_cell": (
-            None if last_committed_cell is None else dict(last_committed_cell)
-        ),
+        "last_committed_cell": (None if last_committed_cell is None else dict(last_committed_cell)),
         "instructions": (
             "Return exactly one JSON value matching response_contract. "
             "Use execute_cell to compute or inspect the persistent IPython workspace; "
@@ -267,13 +266,48 @@ class RlmWorkbenchCoordinator:
         self._dispatch_notifier: Callable[[OperationRef, str], None] | None = None
         self._deadline_terminalizer: Callable[[OperationRef], None] | None = None
         self._caller_work.bind_settlement_handler(self.notify_caller_settlement)
-        bind_artifact_stage_handler = getattr(
-            self._backend, "bind_artifact_stage_handler", None
-        )
+        bind_artifact_stage_handler = getattr(self._backend, "bind_artifact_stage_handler", None)
         self._artifact_stage_callback = self._stage_worker_artifact
         if callable(bind_artifact_stage_handler):
             bind_artifact_stage_handler(self._artifact_stage_callback)
         self.schedule_pending_successors()
+
+    @contextmanager
+    def _active_cell_binding(
+        self,
+        execution_operation: OperationRef,
+        operation: OperationRef,
+        attempt: OperationAttemptRefV1,
+        fence: AttemptFence,
+        handle: ProgrammableWorkspaceHandle,
+        spec: RlmWorkbenchJobSpec,
+        session: WorkspaceBrokerSession,
+        *,
+        cell_execution_id: str,
+        broker_call_ordinal: int = 0,
+    ) -> Iterator[None]:
+        active = _ActiveCell(
+            operation=operation,
+            attempt=attempt,
+            fence=fence,
+            cell_execution_id=cell_execution_id,
+            handle=handle,
+            session=session,
+            broker_call_ordinal=broker_call_ordinal,
+            max_artifact_count=int(spec.root["budgets"]["max_artifact_count"]),
+            max_artifact_bytes=int(spec.root["budgets"]["max_artifact_bytes"]),
+            allowed_artifact_media_types=tuple(spec.root["artifacts"]["allowed_media_types"]),
+        )
+        with self._active_lock:
+            if execution_operation.value in self._active_cells:
+                raise RlmWorkbenchConflict("cell execution already has an active broker context")
+            self._active_cells[execution_operation.value] = active
+        try:
+            yield
+        finally:
+            with self._active_lock:
+                if self._active_cells.get(execution_operation.value) is active:
+                    del self._active_cells[execution_operation.value]
 
     def _stage_worker_artifact(
         self,
@@ -325,17 +359,20 @@ class RlmWorkbenchCoordinator:
             },
             strict=True,
         )
-        stage_id = "stage-" + hashlib.sha256(
-            canonical_json_bytes(
-                {
-                    "operation": operation.model_dump(mode="json"),
-                    "cell_execution_id": cell_execution_id,
-                    "ordinal": ordinal,
-                    "logical_name": logical_name,
-                    "digest": digest,
-                }
-            )
-        ).hexdigest()[:48]
+        stage_id = (
+            "stage-"
+            + hashlib.sha256(
+                canonical_json_bytes(
+                    {
+                        "operation": operation.model_dump(mode="json"),
+                        "cell_execution_id": cell_execution_id,
+                        "ordinal": ordinal,
+                        "logical_name": logical_name,
+                        "digest": digest,
+                    }
+                )
+            ).hexdigest()[:48]
+        )
         self._artifact_publications.stage_content(
             stage_id=stage_id, binding=binding, content=content
         )
@@ -702,9 +739,7 @@ class RlmWorkbenchCoordinator:
             if phase == "failed":
                 return
             if phase != "running":
-                raise RlmWorkbenchConflict(
-                    "model-call budget terminalization lost running phase"
-                )
+                raise RlmWorkbenchConflict("model-call budget terminalization lost running phase")
             if bool(row["cancellation_requested"]):
                 raise RlmWorkbenchConflict(
                     "model-call budget terminalization lost cancellation authority"
@@ -738,9 +773,7 @@ class RlmWorkbenchCoordinator:
                 ),
             )
             if connection.execute("SELECT changes()").fetchone()[0] != 1:
-                raise RlmWorkbenchConflict(
-                    "model-call budget terminalization lost its job CAS"
-                )
+                raise RlmWorkbenchConflict("model-call budget terminalization lost its job CAS")
             connection.execute(
                 """
                 UPDATE operation_controls SET control_revision = ?
@@ -750,9 +783,7 @@ class RlmWorkbenchCoordinator:
                 (next_revision, operation.value, prior_revision),
             )
             if connection.execute("SELECT changes()").fetchone()[0] != 1:
-                raise RlmWorkbenchConflict(
-                    "model-call budget terminalization lost its control CAS"
-                )
+                raise RlmWorkbenchConflict("model-call budget terminalization lost its control CAS")
 
     def recover_indeterminate(self, runtime_generation: int) -> int:
         """Recover committed rebinds whose exact worker vanished with the supervisor."""
@@ -845,9 +876,7 @@ class RlmWorkbenchCoordinator:
                         ),
                     )
                     if connection.execute("SELECT changes()").fetchone()[0] != 1:
-                        raise RlmWorkbenchConflict(
-                            "prepared planner cell changed during restore"
-                        )
+                        raise RlmWorkbenchConflict("prepared planner cell changed during restore")
                     connection.execute(
                         """
                         UPDATE rlm_workbench_attempt_authority
@@ -916,10 +945,9 @@ class RlmWorkbenchCoordinator:
                     restored = self._backend.create(
                         WorkspaceRef(value=str(planner["workspace_id"])), envelope.session
                     )
-                    if (
-                        restored.generation != int(planner["workspace_generation"])
-                        or restored.revision != int(planner["workspace_revision"])
-                    ):
+                    if restored.generation != int(
+                        planner["workspace_generation"]
+                    ) or restored.revision != int(planner["workspace_revision"]):
                         raise RlmWorkbenchConflict(
                             "empty planner workspace did not recover its exact handle"
                         )
@@ -1436,9 +1464,9 @@ class RlmWorkbenchCoordinator:
             "owner": owner,
             "request_digest": request_digest,
         }
-        ticket_id = "planner-" + hashlib.sha256(
-            canonical_json_bytes(ticket_material)
-        ).hexdigest()[:48]
+        ticket_id = (
+            "planner-" + hashlib.sha256(canonical_json_bytes(ticket_material)).hexdigest()[:48]
+        )
         ticket_payload = {
             "schema_version": "aar.caller-work-ticket.v1",
             "ticket_id": ticket_id,
@@ -1493,14 +1521,10 @@ class RlmWorkbenchCoordinator:
             failure = {
                 "schema_version": "aar.envelope.v1",
                 "category": (
-                    "cancelled"
-                    if terminal_state is OperationState.CANCELLED
-                    else "internal"
+                    "cancelled" if terminal_state is OperationState.CANCELLED else "internal"
                 ),
                 "code": (
-                    "CONFLICT"
-                    if terminal_state is OperationState.CANCELLED
-                    else "INTERNAL_ERROR"
+                    "CONFLICT" if terminal_state is OperationState.CANCELLED else "INTERNAL_ERROR"
                 ),
                 "message": f"root planner settled as {token['ticket_state']}",
                 "retryable": False,
@@ -1537,13 +1561,9 @@ class RlmWorkbenchCoordinator:
             or observation.get("usage_receipt_digest") is None
             or observation.get("host_receipt_digest") is None
         ):
-            raise RlmWorkbenchConflict(
-                "planner settlement lacks exact successful model evidence"
-            )
+            raise RlmWorkbenchConflict("planner settlement lacks exact successful model evidence")
         output_text = str(observation["output_text"])
-        output_digest = "sha256:" + hashlib.sha256(
-            output_text.encode("utf-8")
-        ).hexdigest()
+        output_digest = "sha256:" + hashlib.sha256(output_text.encode("utf-8")).hexdigest()
         if output_digest != str(observation["output_digest"]):
             raise RlmWorkbenchConflict("planner response digest is stale")
         try:
@@ -1575,9 +1595,12 @@ class RlmWorkbenchCoordinator:
             handle = self.workspace_handle(operation)
             source_json = canonical_json_bytes(directive.root).decode("utf-8")
             source_digest = canonical_sha256(directive.root)
-            cell_execution_id = "cell-" + hashlib.sha256(
-                f"{operation.value}\0{cell_index}\0{source_digest}".encode()
-            ).hexdigest()[:32]
+            cell_execution_id = (
+                "cell-"
+                + hashlib.sha256(
+                    f"{operation.value}\0{cell_index}\0{source_digest}".encode()
+                ).hexdigest()[:32]
+            )
             pre_checkpoint = self._backend.checkpoint(
                 OperationRef(value=f"ck-pre-{cell_execution_id}"),
                 handle,
@@ -1585,9 +1608,9 @@ class RlmWorkbenchCoordinator:
                 trace_id=f"trace-pre-{cell_execution_id}",
             )
             worker_binding = self._backend.worker_binding(handle)
-            checkpoint_json = canonical_json_bytes(
-                pre_checkpoint.model_dump(mode="json")
-            ).decode("utf-8")
+            checkpoint_json = canonical_json_bytes(pre_checkpoint.model_dump(mode="json")).decode(
+                "utf-8"
+            )
             cell_projection = {
                 "cell_index": cell_index,
                 "cell_execution_id": cell_execution_id,
@@ -1717,9 +1740,9 @@ class RlmWorkbenchCoordinator:
             "owner": owner,
             "request_digest": request_digest,
         }
-        ticket_id = "planner-" + hashlib.sha256(
-            canonical_json_bytes(ticket_material)
-        ).hexdigest()[:48]
+        ticket_id = (
+            "planner-" + hashlib.sha256(canonical_json_bytes(ticket_material)).hexdigest()[:48]
+        )
         ticket_payload = {
             "schema_version": "aar.caller-work-ticket.v1",
             "ticket_id": ticket_id,
@@ -1843,9 +1866,7 @@ class RlmWorkbenchCoordinator:
         lost_fence = threading.Event()
 
         def renew_attempt_lease() -> None:
-            while not stop_heartbeat.wait(
-                _WORKBENCH_ATTEMPT_LEASE_HEARTBEAT_INTERVAL_MS / 1_000
-            ):
+            while not stop_heartbeat.wait(_WORKBENCH_ATTEMPT_LEASE_HEARTBEAT_INTERVAL_MS / 1_000):
                 try:
                     self._registry.heartbeat(
                         attempt,
@@ -1944,9 +1965,7 @@ class RlmWorkbenchCoordinator:
             )
             if suspended:
                 return self.snapshot(operation)
-            return self._suspend_root_planner(
-                operation, attempt, fence, persisted_spec
-            )
+            return self._suspend_root_planner(operation, attempt, fence, persisted_spec)
         if self._planner is None:
             raise RlmWorkbenchUnsupported("workbench planner is not configured")
         with self._active_lock:
@@ -1977,6 +1996,7 @@ class RlmWorkbenchCoordinator:
                 attempt,
                 fence,
                 successor_token,
+                broker_session,
             )
         self._require_deadline(operation)
         directive_digests: list[str] = []
@@ -2216,6 +2236,7 @@ class RlmWorkbenchCoordinator:
         attempt: OperationAttemptRefV1,
         fence: AttemptFence,
         token: Mapping[str, Any],
+        broker_session: WorkspaceBrokerSession,
     ) -> ProgrammableWorkspaceHandle:
         job = self._job_row(operation)
         handle = self._handle_from_row(job)
@@ -2255,51 +2276,62 @@ class RlmWorkbenchCoordinator:
         )
         result: WorkspaceProgramResult | None = None
         acknowledgement: WorkspaceBrokerFrame | None = None
-        applied = self._backend.reconcile_rebind_commit(execution_operation, handle)
-        if applied is None:
-            binding = self._backend.worker_binding(handle)
-        else:
-            binding, result, acknowledgement = applied
-        if binding.owner_generation != int(
-            token["worker_owner_generation"]
-        ) or binding.process_identity_digest != str(token["worker_process_identity_digest"]):
-            raise RlmWorkbenchConflict("successor worker identity changed before prepare")
-        if applied is None:
-            prepare_frame = self._supervisor_frame(
-                kind="rebind_prepare",
-                operation=operation,
-                token=token,
-                payload={"phase": "prepare", "token": dict(token)},
-                frame_sequence=2,
-            )
-            self._backend.send_rebind_prepare(execution_operation, handle, prepare_frame)
-            self._barrier("rebind_prepared_before_commit")
-        self._registry.commit_workbench_rebind(
+        with self._active_cell_binding(
+            execution_operation,
+            operation,
             attempt,
-            fence.dispatcher_generation,
-            fence.lease_epoch,
-            fence.owner_digest,
-            token_digest=str(token["token_digest"]),
-            worker_owner_generation=binding.owner_generation,
-            worker_process_identity_digest=binding.process_identity_digest,
-        )
-        if applied is None:
-            self._barrier("rebind_committed_before_delivery")
-            commit_frame = self._supervisor_frame(
-                kind="rebind_commit",
-                operation=operation,
-                token=token,
-                payload={"phase": "commit", "token": dict(token)},
-                frame_sequence=4,
+            fence,
+            handle,
+            spec,
+            broker_session,
+            cell_execution_id=str(token["cell_execution_id"]),
+            broker_call_ordinal=ordinal,
+        ):
+            applied = self._backend.reconcile_rebind_commit(execution_operation, handle)
+            if applied is None:
+                binding = self._backend.worker_binding(handle)
+            else:
+                binding, result, acknowledgement = applied
+            if binding.owner_generation != int(
+                token["worker_owner_generation"]
+            ) or binding.process_identity_digest != str(token["worker_process_identity_digest"]):
+                raise RlmWorkbenchConflict("successor worker identity changed before prepare")
+            if applied is None:
+                prepare_frame = self._supervisor_frame(
+                    kind="rebind_prepare",
+                    operation=operation,
+                    token=token,
+                    payload={"phase": "prepare", "token": dict(token)},
+                    frame_sequence=2,
+                )
+                self._backend.send_rebind_prepare(execution_operation, handle, prepare_frame)
+                self._barrier("rebind_prepared_before_commit")
+            self._registry.commit_workbench_rebind(
+                attempt,
+                fence.dispatcher_generation,
+                fence.lease_epoch,
+                fence.owner_digest,
+                token_digest=str(token["token_digest"]),
+                worker_owner_generation=binding.owner_generation,
+                worker_process_identity_digest=binding.process_identity_digest,
             )
-            result, acknowledgement = self._backend.resume_rebind_commit(
-                execution_operation,
-                handle,
-                program_spec,
-                receipt_frame,
-                commit_frame,
-            )
-            self._barrier("rebind_delivered_before_ack")
+            if applied is None:
+                self._barrier("rebind_committed_before_delivery")
+                commit_frame = self._supervisor_frame(
+                    kind="rebind_commit",
+                    operation=operation,
+                    token=token,
+                    payload={"phase": "commit", "token": dict(token)},
+                    frame_sequence=4,
+                )
+                result, acknowledgement = self._backend.resume_rebind_commit(
+                    execution_operation,
+                    handle,
+                    program_spec,
+                    receipt_frame,
+                    commit_frame,
+                )
+                self._barrier("rebind_delivered_before_ack")
         if result is None or acknowledgement is None:
             raise RlmWorkbenchConflict("successor rebind produced no committed worker result")
         ack_document = acknowledgement.model_dump(mode="json")
@@ -2333,6 +2365,16 @@ class RlmWorkbenchCoordinator:
             "utf-8"
         )
         result_json = canonical_json_bytes(result.model_dump(mode="json")).decode("utf-8")
+        with self._factory.transaction(write=False) as connection:
+            stage_ids = tuple(
+                str(row[0])
+                for row in connection.execute(
+                    "SELECT stage_id FROM rlm_workbench_artifact_stages "
+                    "WHERE operation_id = ? AND cell_execution_id = ? AND state = 'staged' "
+                    "ORDER BY stage_id",
+                    (operation.value, token["cell_execution_id"]),
+                ).fetchall()
+            )
         cell_manifest = {
             "operation": operation,
             "cell_execution_id": token["cell_execution_id"],
@@ -2345,6 +2387,7 @@ class RlmWorkbenchCoordinator:
             "post_checkpoint_digest": post_checkpoint.content_digest,
             "post_checkpoint": post_checkpoint.model_dump(mode="json"),
             "workspace": current_handle,
+            "artifact_stage_ids": list(stage_ids),
         }
         cell_manifest_json = canonical_json_bytes(cell_manifest).decode("utf-8")
         cell_manifest_digest = canonical_sha256(cell_manifest)
@@ -2434,6 +2477,14 @@ class RlmWorkbenchCoordinator:
                     now,
                 ),
             )
+            connection.execute(
+                "UPDATE rlm_workbench_artifact_stages "
+                "SET state = 'committed', updated_at_unix_ms = ? "
+                "WHERE operation_id = ? AND cell_execution_id = ? AND state = 'staged'",
+                (now, operation.value, token["cell_execution_id"]),
+            )
+            if connection.execute("SELECT changes()").fetchone()[0] != len(stage_ids):
+                raise RlmWorkbenchConflict("successor artifact stages changed before commit")
             connection.execute(
                 """
                 UPDATE rlm_workbench_attempt_authority
@@ -2573,9 +2624,12 @@ class RlmWorkbenchCoordinator:
                 )
             if cell_index >= int(spec.root["budgets"]["max_cells"]):
                 raise RlmWorkbenchConflict("workbench cell budget exhausted")
-            cell_execution_id = "cell-" + hashlib.sha256(
-                f"{operation.value}\0{cell_index}\0{source_digest}".encode()
-            ).hexdigest()[:32]
+            cell_execution_id = (
+                "cell-"
+                + hashlib.sha256(
+                    f"{operation.value}\0{cell_index}\0{source_digest}".encode()
+                ).hexdigest()[:32]
+            )
             pre_checkpoint = self._backend.checkpoint(
                 OperationRef(value=f"ck-pre-{cell_execution_id}"),
                 handle,
@@ -2583,9 +2637,9 @@ class RlmWorkbenchCoordinator:
                 trace_id=f"trace-pre-{cell_execution_id}",
             )
             worker_binding = self._backend.worker_binding(handle)
-            checkpoint_json = canonical_json_bytes(
-                pre_checkpoint.model_dump(mode="json")
-            ).decode("utf-8")
+            checkpoint_json = canonical_json_bytes(pre_checkpoint.model_dump(mode="json")).decode(
+                "utf-8"
+            )
             now = self._now_ms()
             with self._factory.transaction(write=True) as connection:
                 self._assert_attempt_fence(connection, operation, attempt, fence)
@@ -2678,41 +2732,32 @@ class RlmWorkbenchCoordinator:
                         "workbench attempt authority changed before cell start"
                     )
         execution_operation = OperationRef(value=f"exec-{cell_execution_id}")
-        with self._active_lock:
-            if execution_operation.value in self._active_cells:
-                raise RlmWorkbenchConflict("cell execution already has an active broker context")
-            self._active_cells[execution_operation.value] = _ActiveCell(
-                operation=operation,
-                attempt=attempt,
-                fence=fence,
-                cell_execution_id=cell_execution_id,
-                handle=handle,
-                session=broker_session,
-                max_artifact_count=int(spec.root["budgets"]["max_artifact_count"]),
-                max_artifact_bytes=int(spec.root["budgets"]["max_artifact_bytes"]),
-                allowed_artifact_media_types=tuple(
-                    str(item) for item in spec.root["artifacts"]["allowed_media_types"]
-                ),
-            )
-        try:
-            result = self._backend.execute(
-                execution_operation,
-                handle,
-                WorkspaceProgramSpec(
-                    code=str(directive.root["code"]),
-                    wall_time_ms=self._cell_execution_wall_time_ms(
-                        operation,
-                        int(spec.root["budgets"]["cell_wall_time_ms"]),
+        with self._active_cell_binding(
+            execution_operation,
+            operation,
+            attempt,
+            fence,
+            handle,
+            spec,
+            broker_session,
+            cell_execution_id=cell_execution_id,
+        ):
+            try:
+                result = self._backend.execute(
+                    execution_operation,
+                    handle,
+                    WorkspaceProgramSpec(
+                        code=str(directive.root["code"]),
+                        wall_time_ms=self._cell_execution_wall_time_ms(
+                            operation,
+                            int(spec.root["budgets"]["cell_wall_time_ms"]),
+                        ),
+                        max_output_chars=int(spec.root["budgets"]["max_output_chars_per_cell"]),
+                        max_events=int(spec.root["budgets"]["max_events_per_cell"]),
                     ),
-                    max_output_chars=int(spec.root["budgets"]["max_output_chars_per_cell"]),
-                    max_events=int(spec.root["budgets"]["max_events_per_cell"]),
-                ),
-            )
-        except WorkspaceBrokerSuspended:
-            return True
-        finally:
-            with self._active_lock:
-                self._active_cells.pop(execution_operation.value, None)
+                )
+            except WorkspaceBrokerSuspended:
+                return True
         self._require_deadline(operation)
         if result.status != "succeeded" or result.workspace_lost:
             diagnostic = next(
