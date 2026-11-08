@@ -191,7 +191,16 @@ def _planner_request(
         "instructions": (
             "Return exactly one JSON value matching response_contract. "
             "Use execute_cell to compute or inspect the persistent IPython workspace; "
-            "use finalize only when the output contract can be satisfied."
+            "use finalize only when the output contract can be satisfied. "
+            "The workspace has injected global callables, not importable modules: "
+            "aar_artifact(name, content, media_type='application/octet-stream'), "
+            "aar_display(value, media_type='application/json'), "
+            "aar_progress(message, *, completed=None, total=None), and aar_broker(value). "
+            "Call these existing globals directly; ordinary library imports remain available. "
+            "aar_artifact accepts str or bytes content and returns an artifact_index; "
+            "artifact indices are not stage IDs. Committed stage IDs are supplied after a cell "
+            "in last_committed_cell.artifact_stage_ids; retain and use those IDs when finalizing "
+            "required artifacts. aar_broker requires a configured host broker and its authority."
         ),
     }
     return {
