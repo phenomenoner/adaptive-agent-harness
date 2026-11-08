@@ -12,6 +12,15 @@ from pathlib import Path
 
 import pytest
 from pydantic import JsonValue
+from test_rlm_workbench import (
+    FIXED_NOW_MS,
+    BrokerRoundTripPlanner,
+    commit_pending_ticket_success,
+    prepare_v6_registry,
+    wait_for_pending_ticket,
+    workbench_envelope,
+    workbench_request,
+)
 
 import aar.runtime.rlm_workbench as workbench
 from aar.canonical import canonical_json_bytes, canonical_sha256
@@ -24,15 +33,6 @@ from aar.runtime.workspace_models import (
     WorkspaceProgramResult,
 )
 from aar.schemas import OperationRef, WorkspaceRef
-from tests.test_rlm_workbench import (
-    FIXED_NOW_MS,
-    BrokerRoundTripPlanner,
-    commit_pending_ticket_success,
-    prepare_v6_registry,
-    wait_for_pending_ticket,
-    workbench_envelope,
-    workbench_request,
-)
 
 
 class CallerCase:
