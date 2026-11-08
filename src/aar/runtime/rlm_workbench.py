@@ -173,6 +173,33 @@ def normalize_planner_mode(execution_mode: str) -> str:
     raise RlmWorkbenchUnsupported(f"unsupported workbench planner mode: {execution_mode!r}")
 
 
+def _cell_result_committable(
+    result: WorkspaceProgramResult,
+    handle: ProgrammableWorkspaceHandle,
+    execution_operation: OperationRef,
+) -> bool:
+    """Commit a completed receipt, never reinterpret a failed execution as success."""
+    if result.workspace_lost:
+        return False
+    if result.status == "succeeded":
+        return True
+    return (
+        result.status == "failed"
+        and result.operation == execution_operation
+        and result.workspace == handle.workspace
+        and result.backend == handle.backend
+        and result.generation == handle.generation
+        and result.revision_before == handle.revision
+        and result.revision_after == handle.revision + 1
+        and any(event.kind == "exception" for event in result.events)
+        and all(
+            event.kind != "exception"
+            or (isinstance(event.data, dict) and event.data.get("origin") == "user_code")
+            for event in result.events
+        )
+    )
+
+
 def _planner_request(
     spec: RlmWorkbenchJobSpec,
     *,
@@ -191,6 +218,11 @@ def _planner_request(
         "instructions": (
             "Return exactly one JSON value matching response_contract. "
             "Use execute_cell to compute or inspect the persistent IPython workspace; "
+            "a committed cell receipt can report result.status='failed'. In that case read "
+            "its source and exception feedback before choosing a new corrective cell or "
+            "abstaining within the existing budgets. The namespace may have changed and its "
+            "revision has advanced; do not assume rollback or replay external effects. "
+            "Failed-cell artifact stages are not eligible for finalization. "
             "use finalize only when the output contract can be satisfied. "
             "The workspace has injected global callables, not importable modules: "
             "aar_artifact(name, content, media_type='application/octet-stream'), "
@@ -1424,7 +1456,8 @@ class RlmWorkbenchCoordinator:
             ).fetchone()
             last_cell = connection.execute(
                 """
-                SELECT cell_index, cell_execution_id, result_json, result_digest,
+                SELECT cell_index, cell_execution_id, source_json, source_digest,
+                       result_json, result_digest,
                        post_checkpoint_digest
                 FROM rlm_workbench_cells
                 WHERE operation_id = ? AND state = 'committed'
@@ -1461,6 +1494,9 @@ class RlmWorkbenchCoordinator:
                 "post_checkpoint_digest": str(last_cell["post_checkpoint_digest"]),
                 "artifact_stage_ids": [str(item["stage_id"]) for item in stage_rows],
             }
+            if last_committed_cell["result"]["status"] == "failed":
+                last_committed_cell["source"] = json.loads(str(last_cell["source_json"]))
+                last_committed_cell["source_digest"] = str(last_cell["source_digest"])
         request = _planner_request(
             spec,
             owner=owner,
@@ -2360,7 +2396,7 @@ class RlmWorkbenchCoordinator:
         )
         self._barrier("rebind_acked_before_cell_commit")
         result_digest = canonical_sha256(result.model_dump(mode="json"))
-        if result.status != "succeeded" or result.workspace_lost:
+        if not _cell_result_committable(result, handle, execution_operation):
             raise RlmWorkbenchConflict(self._failure_message_from_result(result))
         current_handle = handle.model_copy(update={"revision": result.revision_after})
         post_checkpoint = self._backend.checkpoint(
@@ -2380,8 +2416,9 @@ class RlmWorkbenchCoordinator:
                 for row in connection.execute(
                     "SELECT stage_id FROM rlm_workbench_artifact_stages "
                     "WHERE operation_id = ? AND cell_execution_id = ? AND state = 'staged' "
+                    "AND ? = 'succeeded' "
                     "ORDER BY stage_id",
-                    (operation.value, token["cell_execution_id"]),
+                    (operation.value, token["cell_execution_id"], result.status),
                 ).fetchall()
             )
         cell_manifest = {
@@ -2489,8 +2526,9 @@ class RlmWorkbenchCoordinator:
             connection.execute(
                 "UPDATE rlm_workbench_artifact_stages "
                 "SET state = 'committed', updated_at_unix_ms = ? "
-                "WHERE operation_id = ? AND cell_execution_id = ? AND state = 'staged'",
-                (now, operation.value, token["cell_execution_id"]),
+                "WHERE operation_id = ? AND cell_execution_id = ? AND state = 'staged' "
+                "AND ? = 'succeeded'",
+                (now, operation.value, token["cell_execution_id"], result.status),
             )
             if connection.execute("SELECT changes()").fetchone()[0] != len(stage_ids):
                 raise RlmWorkbenchConflict("successor artifact stages changed before commit")
@@ -2768,7 +2806,7 @@ class RlmWorkbenchCoordinator:
             except WorkspaceBrokerSuspended:
                 return True
         self._require_deadline(operation)
-        if result.status != "succeeded" or result.workspace_lost:
+        if not _cell_result_committable(result, handle, execution_operation):
             diagnostic = next(
                 (
                     event
@@ -2806,8 +2844,9 @@ class RlmWorkbenchCoordinator:
                 for row in connection.execute(
                     "SELECT stage_id FROM rlm_workbench_artifact_stages "
                     "WHERE operation_id = ? AND cell_execution_id = ? AND state = 'staged' "
+                    "AND ? = 'succeeded' "
                     "ORDER BY stage_id",
-                    (operation.value, cell_execution_id),
+                    (operation.value, cell_execution_id, result.status),
                 ).fetchall()
             )
         manifest_payload = {
@@ -2882,8 +2921,9 @@ class RlmWorkbenchCoordinator:
                 UPDATE rlm_workbench_artifact_stages
                 SET state = 'committed', updated_at_unix_ms = ?
                 WHERE operation_id = ? AND cell_execution_id = ? AND state = 'staged'
+                  AND ? = 'succeeded'
                 """,
-                (now, operation.value, cell_execution_id),
+                (now, operation.value, cell_execution_id, result.status),
             )
             if connection.execute("SELECT changes()").fetchone()[0] != len(stage_ids):
                 raise RlmWorkbenchConflict("cell artifact stages changed before commit")

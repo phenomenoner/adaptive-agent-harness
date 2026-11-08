@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import functools
 import io
 import json
 import re
@@ -20,6 +21,21 @@ from aar.runtime.programming import (
     _portable_value,
     _PortableValueError,
 )
+
+
+class _HostCallbackError(RuntimeError):
+    """An uncaught helper/control failure is not an ordinary user-code error."""
+
+
+def _host_callback(function):
+    @functools.wraps(function)
+    def invoke(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except Exception as error:
+            raise _HostCallbackError(str(error)) from error
+
+    return invoke
 
 
 def _write(payload: dict[str, Any]) -> None:
@@ -127,6 +143,7 @@ class _Worker:
                 data = {"media_type": "text/plain", "value": "<display payload excluded>"}
             add({"kind": "display", "data": data})
 
+        @_host_callback
         def artifact(
             name: str,
             content: str | bytes,
@@ -150,6 +167,7 @@ class _Worker:
             add({"kind": "artifact", "artifact_index": index})
             return {"artifact_index": index}
 
+        @_host_callback
         def broker(value: Any) -> Any:
             if not broker_enabled:
                 raise RuntimeError("no host broker is configured")
@@ -341,8 +359,13 @@ class _Worker:
                 {
                     "kind": "exception",
                     "data": {
-                        "type": type(error).__name__,
+                        "type": type(error.__cause__).__name__
+                        if isinstance(error, _HostCallbackError)
+                        else type(error).__name__,
                         "message": str(error)[:2_048],
+                        "origin": "host_control"
+                        if isinstance(error, _HostCallbackError)
+                        else "user_code",
                     },
                 },
                 force=True,
