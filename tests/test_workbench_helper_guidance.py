@@ -107,3 +107,41 @@ def test_advertised_callable_and_artifact_return_shape_matches_actual_ipython_wo
     finally:
         worker.shell.user_ns.clear()
         worker.shell.user_ns.update(prior)
+
+
+@pytest.mark.parametrize("last_cell", [None, {"cell_index": 0, "artifact_stage_ids": []}])
+@pytest.mark.parametrize(
+    ("allowed_media_types", "max_count", "max_bytes"),
+    [
+        (["text/plain"], 1, 2048),
+        (["application/octet-stream", "application/json"], 3, 8192),
+    ],
+)
+def test_planner_discloses_admitted_artifact_policy_without_granting_more(
+    last_cell, allowed_media_types, max_count, max_bytes
+):
+    payload = json.loads(FIXTURE.read_text())
+    payload["spec"]["artifacts"]["allowed_media_types"] = allowed_media_types
+    payload["spec"]["budgets"].update(
+        max_artifact_count=max_count, max_artifact_bytes=max_bytes
+    )
+    spec = RlmWorkbenchJobSpec.model_validate(payload["spec"], strict=True)
+    before = copy.deepcopy(spec.root)
+    request = _planner_request(
+        spec,
+        owner={"phase": "controlled-policy-test", "step_index": 0},
+        snapshot=cast(RlmWorkbenchSnapshot, SimpleNamespace(root={"phase": "planning"})),
+        last_committed_cell=last_cell,
+    )
+    prompt = json.loads(request["prompt"])
+    assert prompt["artifact_policy"] == {
+        **before["artifacts"],
+        "max_artifact_count": max_count,
+        "max_artifact_bytes": max_bytes,
+    }
+    assert "helper default is not an authorization" in prompt["instructions"]
+    assert request["route_binding"] == before["model"]["route_binding"]
+    assert request["max_output_bytes"] == before["budgets"]["max_result_bytes"]
+    assert prompt["last_committed_cell"] == last_cell
+    prompt["artifact_policy"]["allowed_media_types"].append("application/not-admitted")
+    assert spec.root == before

@@ -215,6 +215,11 @@ def _planner_request(
         "planner_owner": dict(owner),
         "workbench_snapshot": snapshot.root,
         "last_committed_cell": (None if last_committed_cell is None else dict(last_committed_cell)),
+        "artifact_policy": {
+            **dict(spec.root["artifacts"]),
+            "max_artifact_count": int(spec.root["budgets"]["max_artifact_count"]),
+            "max_artifact_bytes": int(spec.root["budgets"]["max_artifact_bytes"]),
+        },
         "instructions": (
             "Return exactly one JSON value matching response_contract. "
             "Use execute_cell to compute or inspect the persistent IPython workspace; "
@@ -230,6 +235,9 @@ def _planner_request(
             "aar_progress(message, *, completed=None, total=None), and aar_broker(value). "
             "Call these existing globals directly; ordinary library imports remain available. "
             "aar_artifact accepts str or bytes content and returns an artifact_index; "
+            "follow artifact_policy and explicitly choose an allowed media_type. "
+            "The helper default is not an authorization, and filename extensions do not "
+            "expand the admitted media types. "
             "artifact indices are not stage IDs. Committed stage IDs are supplied after a cell "
             "in last_committed_cell.artifact_stage_ids; retain and use those IDs when finalizing "
             "required artifacts. aar_broker requires a configured host broker and its authority."
