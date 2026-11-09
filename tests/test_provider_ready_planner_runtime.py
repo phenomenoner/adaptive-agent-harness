@@ -796,8 +796,13 @@ def test_settled_planner_directive_consumes_exact_prepared_successor(
                 directive_digests,
                 usage_receipt_digests,
                 broker_trace,
+                input_tokens,
+                output_tokens,
             ) = coordinator._planner_trace(record.operation)
             assert model_calls == 1
+            assert model_response is not None
+            assert input_tokens == model_response["usage"]["input_tokens"]
+            assert output_tokens == model_response["usage"]["output_tokens"]
             assert directive_digests == (canonical_sha256(planner_output),)
             assert usage_receipt_digests == (model_evidence["usage_receipt_digest"],)
             assert broker_trace == (
@@ -931,10 +936,15 @@ def test_settled_planner_directive_consumes_exact_prepared_successor(
                 ),
             )
             assert replacement_directive.root == replacement
-            model_calls, directive_digests, usage_digests, broker_trace = (
+            model_calls, directive_digests, usage_digests, broker_trace, inputs, outputs = (
                 coordinator._planner_trace(record.operation)
             )
             assert model_calls == 2
+            assert model_response is not None
+            assert inputs == (model_response["usage"]["input_tokens"]
+                              + correction_response["usage"]["input_tokens"])
+            assert outputs == (model_response["usage"]["output_tokens"]
+                               + correction_response["usage"]["output_tokens"])
             assert directive_digests == (canonical_sha256(replacement),)
             assert usage_digests == (
                 model_evidence["usage_receipt_digest"],
