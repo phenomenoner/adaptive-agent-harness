@@ -15,6 +15,7 @@ from typing import Any, Protocol
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
+from aar.broker_models import ModelResponse, ModelUsageRecord
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.continuity_models import OperationAttemptRefV1
 from aar.provider_ready_contract import (
@@ -1830,17 +1831,23 @@ class RlmWorkbenchCoordinator:
     def _planner_trace(
         self,
         operation: OperationRef,
-    ) -> tuple[int, tuple[str, ...], tuple[str, ...], tuple[dict[str, Any], ...]]:
+    ) -> tuple[int, tuple[str, ...], tuple[str, ...], tuple[dict[str, Any], ...], int, int]:
         """Read exact consumed planner directives and their durable model receipts."""
 
         with self._factory.transaction(write=False) as connection:
             rows = connection.execute(
                 """
                 SELECT suspension.suspension_revision, suspension.ticket_id,
-                       ticket.state, ticket.settled_receipt_digest
+                       ticket.state, ticket.settled_receipt_digest,
+                       model.state AS model_state, model.usage_json,
+                       model.response_json, model.response_digest
                 FROM rlm_workbench_suspensions AS suspension
                 JOIN caller_work_tickets AS ticket
                   ON ticket.ticket_id = suspension.ticket_id
+                LEFT JOIN model_executions AS model
+                  ON model.operation_id = suspension.operation_id
+                 AND model.idempotency_key = ticket.external_idempotency_key
+                 AND model.request_digest = ticket.request_digest
                 WHERE suspension.operation_id = ?
                   AND suspension.cell_execution_id IS NULL
                 ORDER BY suspension.suspension_revision
@@ -1866,6 +1873,8 @@ class RlmWorkbenchCoordinator:
             directive_digests.append(digest)
         usage_receipt_digests: list[str] = []
         broker_trace: list[dict[str, Any]] = []
+        input_tokens = 0
+        output_tokens = 0
         for row in rows:
             if str(row["state"]) != "settled_success":
                 raise RlmWorkbenchConflict("planner trace includes a non-success settlement")
@@ -1891,6 +1900,28 @@ class RlmWorkbenchCoordinator:
                 isinstance(value, str) for value in required.values()
             ):
                 raise RlmWorkbenchConflict("planner trace model receipt is incomplete")
+            try:
+                usage = ModelUsageRecord.model_validate_json(str(row["usage_json"]), strict=True)
+                response = ModelResponse.model_validate_json(str(row["response_json"]), strict=True)
+                if (
+                    row["model_state"] != "result_committed"
+                    or response.usage != usage
+                    or canonical_sha256(usage) != required["usage_receipt_digest"]
+                    or canonical_sha256(response) != row["response_digest"]
+                    or row["response_digest"] != required["host_receipt_digest"]
+                    or response.route_receipt.receipt_digest != required["route_receipt_digest"]
+                    or "sha256:" + hashlib.sha256(response.output_text.encode()).hexdigest()
+                    != required["output_digest"]
+                ):
+                    raise ValueError("planner usage is not bound to its settled response")
+            except (ValueError, TypeError) as exc:
+                raise RlmWorkbenchConflict(
+                    "planner usage receipt does not match its model journal"
+                ) from exc
+            # Distinct tickets can legitimately have identical usage digests;
+            # count the exact committed execution for every settled ticket once.
+            input_tokens += usage.input_tokens
+            output_tokens += usage.output_tokens
             usage_receipt_digests.append(str(required["usage_receipt_digest"]))
             broker_trace.append(
                 {
@@ -1905,6 +1936,8 @@ class RlmWorkbenchCoordinator:
             tuple(directive_digests),
             tuple(usage_receipt_digests),
             tuple(broker_trace),
+            input_tokens,
+            output_tokens,
         )
 
     def run_claimed(
@@ -1984,6 +2017,8 @@ class RlmWorkbenchCoordinator:
                     planner_directive_digests,
                     planner_usage_receipt_digests,
                     planner_broker_trace,
+                    planner_input_tokens,
+                    planner_output_tokens,
                 ) = self._planner_trace(operation)
                 return self._finalize(
                     operation,
@@ -1995,6 +2030,8 @@ class RlmWorkbenchCoordinator:
                     directive_digests=planner_directive_digests,
                     usage_receipt_digests=planner_usage_receipt_digests,
                     broker_trace=planner_broker_trace,
+                    input_tokens=planner_input_tokens,
+                    output_tokens=planner_output_tokens,
                 )
             if kind != "execute_cell":
                 raise RlmWorkbenchUnsupported(
@@ -2968,6 +3005,8 @@ class RlmWorkbenchCoordinator:
         directive_digests: tuple[str, ...],
         usage_receipt_digests: tuple[str, ...] = (),
         broker_trace: tuple[dict[str, Any], ...] = (),
+        input_tokens: int = 0,
+        output_tokens: int = 0,
     ) -> RlmWorkbenchResult:
         output = directive.root["output"]
         contract = spec.root["completion"]["output_contract"]
@@ -3088,8 +3127,8 @@ class RlmWorkbenchCoordinator:
             "subagent_calls": 0,
             "python_cells": python_cells,
             "recovery_planner_calls": 0,
-            "input_tokens": 0,
-            "output_tokens": 0,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
             "step_trace_digest": canonical_sha256(
                 {"directives": directive_digests, "cell_manifests": manifest_digests}
             ),

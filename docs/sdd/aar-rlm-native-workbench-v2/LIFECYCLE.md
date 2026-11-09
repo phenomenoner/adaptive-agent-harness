@@ -227,6 +227,8 @@ Planner, correction, recovery and finalizer calls use the planner logical-owner 
 
 A malformed directive can consume a bounded correction call. The correction has a new logical owner step index. Exhaustion is a certain contract failure.
 
+For caller-delegated finalization, terminal `input_tokens` and `output_tokens` sum the exact committed model-journal usage for the settled planner tickets, including bounded correction calls. Each journal row must match the operation, ticket's external idempotency identity and request digest; its typed response and usage must match the settled host, route, output and usage digests before finalization. Missing or contradictory usage cannot be silently replaced with zero. Distinct tickets may have identical usage digests and still count separately; a replay of the same ticket is not another execution. These are receipt-scoped token counters, not evidence of physical sends, transport retries, billing, or activity performed outside AAR's journals. Service-managed injected planners do not acquire provider-usage evidence by returning a directive.
+
 ## 8. Subagent lifecycle
 
 `subagent.submit.v2` and `subagent.result.v2` are separate durable calls.
