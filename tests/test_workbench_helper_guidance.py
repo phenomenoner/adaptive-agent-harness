@@ -139,7 +139,13 @@ def test_planner_discloses_admitted_artifact_policy_without_granting_more(
         "max_artifact_count": max_count,
         "max_artifact_bytes": max_bytes,
     }
-    assert "helper default is not an authorization" in prompt["instructions"]
+    instructions = prompt["instructions"]
+    assert "helper default is not an authorization" in instructions
+    assert "cumulative across all cells" in instructions
+    assert "including failed-cell stages" in instructions
+    assert "Prepare and test drafts before staging final bytes" in instructions
+    assert "stage each logical name at most once" in instructions
+    assert "instead of restaging files" in instructions
     assert request["route_binding"] == before["model"]["route_binding"]
     assert request["max_output_bytes"] == before["budgets"]["max_result_bytes"]
     assert prompt["last_committed_cell"] == last_cell
