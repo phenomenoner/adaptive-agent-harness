@@ -923,11 +923,16 @@ class CallerWorkRepository:
             """,
             (row["ticket_id"], row["physical_attempt_id"]),
         ).fetchall()
-        receipt_digests = {
-            _candidate_receipt_digest(
-                CandidateReceipt.model_validate_json(str(item["receipt_json"]), strict=True)
-            )
+        receipts = tuple(
+            CandidateReceipt.model_validate_json(str(item["receipt_json"]), strict=True)
             for item in receipt_rows
+        )
+        # Uncertainty is retained evidence, not a competing terminal outcome.
+        # A later certain receipt may resolve it without erasing either record.
+        receipt_digests = {
+            _candidate_receipt_digest(receipt)
+            for receipt in receipts
+            if receipt.observation["outcome"] != "outcome_unknown"
         }
         now = self._now_ms()
         if len(receipt_digests) > 1:
@@ -950,6 +955,29 @@ class CallerWorkRepository:
             return self._get(connection, str(row["ticket_id"]))
 
         outcome = str(selected.observation["outcome"])
+        if outcome == "outcome_unknown":
+            connection.execute(
+                """
+                UPDATE caller_work_tickets
+                SET revision = revision + 1,
+                    state = CASE WHEN state = 'cancel_requested'
+                                 THEN 'cancel_requested' ELSE 'outcome_unknown' END,
+                    sent_at_unix_ms = COALESCE(sent_at_unix_ms, ?),
+                    provider_or_child_request_id = COALESCE(provider_or_child_request_id, ?),
+                    updated_at_unix_ms = ?
+                WHERE ticket_id = ? AND revision = ?
+                """,
+                (
+                    selected.sent_at_unix_ms,
+                    selected.provider_or_child_request_id,
+                    now,
+                    row["ticket_id"],
+                    row["revision"],
+                ),
+            )
+            # Keep the suspension pending: unknown is neither a failure nor
+            # authority for a successor, cancellation acknowledgement or resend.
+            return self._get(connection, str(row["ticket_id"]))
         if selected.observation["kind"] == "model" and outcome == "succeeded":
             self._require_model_settlement_authority(
                 connection,

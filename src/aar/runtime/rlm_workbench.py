@@ -3583,10 +3583,7 @@ class RlmWorkbenchCoordinator:
             ).fetchone()
             if row is None:
                 raise KeyError(operation.value)
-            if str(row["phase"]) in _TERMINAL_PHASES:
-                raise RlmWorkbenchConflict(
-                    f"cannot prepare workspace from terminal phase {row['phase']}"
-                )
+            self._require_preparation_authority(connection, row)
             if row["workspace_id"] is not None:
                 stored_handle = self._handle_from_row(row)
             elif row["phase"] == "accepted":
@@ -3598,17 +3595,22 @@ class RlmWorkbenchCoordinator:
                     SET phase = 'preparing_workspace', control_revision = ?,
                         updated_at_unix_ms = ?
                     WHERE operation_id = ? AND phase = 'accepted'
-                      AND control_revision = ?
+                      AND control_revision = ? AND cancellation_requested = 0
                     """,
                     (revision, now, operation.value, row["control_revision"]),
                 )
+                if connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise RlmWorkbenchConflict("workspace preparation lost its phase CAS")
                 connection.execute(
                     """
                     UPDATE operation_controls SET control_revision = ?
                     WHERE operation_id = ? AND control_revision = ?
+                      AND cancellation_requested = 0
                     """,
                     (revision, operation.value, row["control_revision"]),
                 )
+                if connection.execute("SELECT changes()").fetchone()[0] != 1:
+                    raise RlmWorkbenchConflict("workspace preparation lost its control CAS")
             elif row["phase"] != "preparing_workspace":
                 raise RlmWorkbenchConflict(f"cannot prepare workspace from phase {row['phase']}")
 
@@ -3624,6 +3626,9 @@ class RlmWorkbenchCoordinator:
             ).fetchone()
             if row is None:
                 raise KeyError(operation.value)
+            # Worker creation runs outside the transaction. A cancellation or
+            # terminal phase acquired in that interval wins over publication.
+            self._require_preparation_authority(connection, row)
             if row["workspace_id"] is not None:
                 stored = self._handle_from_row(row)
                 if stored != handle:
@@ -3641,6 +3646,7 @@ class RlmWorkbenchCoordinator:
                     updated_at_unix_ms = ?
                 WHERE operation_id = ? AND phase = 'preparing_workspace'
                   AND workspace_id IS NULL AND control_revision = ?
+                  AND cancellation_requested = 0
                 """,
                 (
                     handle.workspace.value,
@@ -3652,14 +3658,33 @@ class RlmWorkbenchCoordinator:
                     row["control_revision"],
                 ),
             )
+            if connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise RlmWorkbenchConflict("workspace publication lost its phase CAS")
             connection.execute(
                 """
                 UPDATE operation_controls SET control_revision = ?
                 WHERE operation_id = ? AND control_revision = ?
+                  AND cancellation_requested = 0
                 """,
                 (revision, operation.value, row["control_revision"]),
             )
+            if connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise RlmWorkbenchConflict("workspace publication lost its control CAS")
         return handle
+
+    @staticmethod
+    def _require_preparation_authority(connection: Any, row: Any) -> None:
+        if str(row["phase"]) in _TERMINAL_PHASES:
+            raise RlmWorkbenchConflict(
+                f"cannot prepare workspace from terminal phase {row['phase']}"
+            )
+        control = connection.execute(
+            "SELECT 1 FROM operation_controls "
+            "WHERE operation_id = ? AND control_revision = ? AND cancellation_requested = 0",
+            (row["operation_id"], row["control_revision"]),
+        ).fetchone()
+        if bool(row["cancellation_requested"]) or control is None:
+            raise RlmWorkbenchConflict("workspace preparation lost its control authority")
 
     @staticmethod
     def _assert_admission_binding(

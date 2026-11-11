@@ -324,8 +324,8 @@ class PlainPythonWorkspaceBackend:
             cancel_event = threading.Event()
             self._running[operation.value] = (handle.workspace.value, cancel_event)
 
-        state = self._state(handle.workspace)
         try:
+            state = self._state(handle.workspace)
             with state.lock:
                 self._check_handle(state, handle)
                 if state.closed:

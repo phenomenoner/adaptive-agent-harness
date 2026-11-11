@@ -179,13 +179,11 @@ class BrokerJournal:
         request_digest = canonical_sha256(request)
         sequence: int | None = None
         with self._lock, self._connection:
+            # Reserve the SQLite writer before reading admission state, including
+            # when another journal instance owns a connection to the same database.
+            self._connection.execute("UPDATE broker_calls SET sequence = sequence WHERE 0")
             if admission_check is not None:
-                # A no-op DML acquires the configured IMMEDIATE write reservation before
-                # authority is revalidated. The later intent insert therefore cannot trail
-                # a lock wait that outlived its admission authority.
-                self._connection.execute(
-                    "UPDATE broker_calls SET sequence = sequence WHERE 0"
-                )
+                # Revalidate after any write-reservation wait, not before it.
                 admission_check()
             if expected_control_revision is not None or require_not_cancelled:
                 self._connection.execute(
@@ -241,11 +239,30 @@ class BrokerJournal:
                     raise BrokerCallIndeterminate(
                         "broker call has no authoritative terminal receipt"
                     )
+            if usage != BrokerUsage():
+                unresolved = self._connection.execute(
+                    """
+                    SELECT 1 FROM broker_calls WHERE operation_id = ?
+                      AND reconciliation_action IN ('quarantine', 'compensation_proposed')
+                      AND state != 'succeeded'
+                    LIMIT 1
+                    """,
+                    (operation.value,),
+                ).fetchone()
+                if unresolved is not None:
+                    # Quarantine is not evidence of certain-zero consumption.
+                    # Retain committed-only usage reporting, but do not grant
+                    # another budgeted call while that authority is unresolved.
+                    raise BrokerCallIndeterminate(
+                        "quarantined broker work has unresolved budget authority"
+                    )
             current_usage = BrokerUsage()
+            # Started calls retain their admitted reservation until classified.
+            # They constrain new work without becoming committed usage()/billing.
             for usage_row in self._connection.execute(
                 """
                 SELECT usage_json FROM broker_calls
-                WHERE operation_id = ? AND state != 'started' AND usage_json IS NOT NULL
+                WHERE operation_id = ? AND usage_json IS NOT NULL
                 """,
                 (operation.value,),
             ).fetchall():
