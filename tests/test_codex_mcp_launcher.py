@@ -103,6 +103,11 @@ class _FakeChild:
         self.exact_wait_count = 0
         self.terminal_receipt_count = 0
         self._terminal_receipt: object | None = None
+        self.target = self
+        self.target_closed_count = 0
+
+    def close(self) -> None:
+        self.target_closed_count += 1
 
     def poll(self) -> int | None:
         return self.returncode
@@ -517,6 +522,7 @@ def test_launcher_accepts_late_ready_record_for_exact_child(
     assert codex_mcp.ensure_codex_supervisor(runtime_home, startup_timeout_sec=0.5) == discovery
     assert events == ["lock-enter", "lock-exit"]
     assert child.returncode is None
+    assert child.target_closed_count == 1
 
 
 def test_launcher_returns_foreign_ready_only_after_exact_child_is_terminal(

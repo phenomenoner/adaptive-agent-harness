@@ -7,7 +7,7 @@ import json
 import threading
 import time
 from collections.abc import Callable, Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -15,7 +15,6 @@ from typing import Any, Protocol
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
-from aar.broker_models import ModelResponse, ModelUsageRecord
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.continuity_models import OperationAttemptRefV1
 from aar.provider_ready_contract import (
@@ -35,8 +34,13 @@ from aar.rlm_workbench_models import (
     _contract_documents,
     derive_cumulative_deadline_unix_ms,
 )
-from aar.runtime.artifact_publication import ArtifactPublicationRepository
+from aar.runtime.artifact_publication import (
+    ArtifactPublicationConflict,
+    ArtifactPublicationRepository,
+    read_caller_planner_trace,
+)
 from aar.runtime.caller_work import CallerWorkConflict, CallerWorkRepository
+from aar.runtime.completion import workbench_result_document
 from aar.runtime.dispatcher import AttemptFence
 from aar.runtime.ipython_backend import (
     SupervisedIPythonWorkspaceBackend,
@@ -61,8 +65,11 @@ from aar.runtime.workspace_models import (
 from aar.schemas import (
     ArtifactIdRef,
     ArtifactReference,
+    FailureCategory,
+    FailureEnvelope,
     OperationRef,
     OperationState,
+    OutcomeCertainty,
     RequestEnvelope,
     SessionRef,
     WorkspaceRef,
@@ -80,12 +87,44 @@ class RlmWorkbenchConflict(RlmWorkbenchError):
     """Persisted workbench authority disagrees with the requested binding."""
 
 
+class _InvalidCompletionSelection(RlmWorkbenchError):
+    """A committed helper selected no artifacts despite the job contract."""
+
+    def __init__(self, cell_id: str, result_digest: str, manifest_digest: str) -> None:
+        self.proof = (cell_id, result_digest, manifest_digest)
+        super().__init__("completion requires named artifacts")
+
+
 class RlmWorkbenchDeadlineExceeded(RlmWorkbenchConflict):
     """The cumulative deadline fenced further workbench side effects."""
 
 
 class RlmWorkbenchModelCallBudgetExceeded(RlmWorkbenchConflict):
     """The root planner has no remaining model-call allowance."""
+
+
+class RlmWorkbenchCellBudgetExceeded(RlmWorkbenchConflict):
+    """A new cell was rejected before any preparation or execution."""
+
+
+class RlmWorkbenchPromptCapacityExceeded(RlmWorkbenchConflict):
+    """Mandatory context cannot fit before a planner ticket or send exists."""
+
+    def __init__(self, observed_characters: int, maximum_characters: int = 65_536) -> None:
+        self.observed_characters = observed_characters
+        self.maximum_characters = maximum_characters
+        # Never echo objective, output contract, source or model content.
+        super().__init__("mandatory workbench planner context exceeds request capacity")
+
+
+class RlmWorkbenchPlannerAbstained(RlmWorkbenchError):
+    """A validated planner directive deliberately declined further work."""
+
+    def __init__(self, reason: str) -> None:
+        # The native model journal retains the response. Public failures must
+        # not echo its arbitrary (potentially sensitive) reason text.
+        self.reason_digest = canonical_sha256(reason)
+        super().__init__("workbench planner abstained")
 
 
 class RlmWorkbenchUnsupported(RlmWorkbenchError):
@@ -201,58 +240,92 @@ def _cell_result_committable(
     )
 
 
+def _planner_prompt(document: dict[str, Any]) -> str:
+    """Fit optional source feedback without weakening mandatory context."""
+    prompt = canonical_json_bytes(document).decode("utf-8")
+    cell = document.get("last_committed_cell")
+    if len(prompt) > 65536 and cell is not None and "source" in cell:
+        cell.pop("source")
+        cell["source_omitted"] = (
+            "Full source omitted due to prompt capacity; source_digest "
+            "identifies the original directive."
+        )
+        prompt = canonical_json_bytes(document).decode("utf-8")
+    if len(prompt) > 65_536:
+        raise RlmWorkbenchPromptCapacityExceeded(len(prompt))
+    return prompt
+
+
 def _planner_request(
     spec: RlmWorkbenchJobSpec,
     *,
     owner: Mapping[str, Any],
     snapshot: RlmWorkbenchSnapshot,
     last_committed_cell: Mapping[str, Any] | None,
+    committed_artifacts: list[dict[str, str]] | None = None,
+    remaining_cells: int | None = None,
 ) -> dict[str, Any]:
     schema_document = _contract_documents()["aar-rlm-workbench-v1.schema.json"]
     response_schema = schema_document["$defs"]["RlmDirective"]
     route = dict(spec.root["model"]["route_binding"])
     prompt_document = {
         "objective": str(spec.root["objective"]),
+        "completion_contract": spec.root["completion"],
+        "committed_artifacts": committed_artifacts or [],
         "planner_owner": dict(owner),
         "workbench_snapshot": snapshot.root,
         "last_committed_cell": (None if last_committed_cell is None else dict(last_committed_cell)),
+        "execution_budget": {
+            **dict(spec.root["budgets"]),
+            "remaining_cells": int(spec.root["budgets"]["max_cells"])
+            if remaining_cells is None
+            else remaining_cells,
+            "remaining_model_calls": max(
+                0, int(spec.root["budgets"]["max_model_calls"]) - int(owner["step_index"])
+            ),
+        },
         "artifact_policy": {
             **dict(spec.root["artifacts"]),
             "max_artifact_count": int(spec.root["budgets"]["max_artifact_count"]),
             "max_artifact_bytes": int(spec.root["budgets"]["max_artifact_bytes"]),
         },
         "instructions": (
-            "Return exactly one JSON value matching response_contract. "
-            "Use execute_cell to compute or inspect the persistent IPython workspace; "
-            "a committed cell receipt can report result.status='failed'. In that case read "
-            "its source and exception feedback before choosing a new corrective cell or "
-            "abstaining within the existing budgets. The namespace may have changed and its "
-            "revision has advanced; do not assume rollback or replay external effects. "
+            "Return one directive per response, not the entire task in one response. "
+            "Match response_contract; use successive cells for multi-step tasks. "
+            "remaining_model_calls includes this request. "
+            "Abstain only if genuinely blocked. Choose one completion route: "
+            "inline aar_complete(output, named_artifacts={name: (content, media_type)}) "
+            "stages and selects final bytes in that cell; do not manually stage those files first. "
+            "Or manually aar_artifact, then return a root finalize directive with actual "
+            "committed stage IDs. aar_complete(output, None) selects no existing stages; "
+            "it cannot satisfy require_named_artifacts=True. "
+            "Completion takes effect only after the cell succeeds and commits. "
+            "Use execute_cell in persistent IPython. For result.status='failed', read source "
+            "and exception before correcting or abstaining; namespace and revision may change, "
+            "so do not assume rollback or replay external effects. "
             "Failed-cell artifact stages are not eligible for finalization. "
             "use finalize only when the output contract can be satisfied. "
-            "The workspace has injected global callables, not importable modules: "
+            "These are injected global callables, not importable modules: "
             "aar_artifact(name, content, media_type='application/octet-stream'), "
             "aar_display(value, media_type='application/json'), "
             "aar_progress(message, *, completed=None, total=None), and aar_broker(value). "
-            "Call these existing globals directly; ordinary library imports remain available. "
+            "Call directly; normal imports work. "
             "aar_artifact accepts str or bytes content and returns an artifact_index; "
             "follow artifact_policy and explicitly choose an allowed media_type. "
-            "The helper default is not an authorization, and filename extensions do not "
-            "expand the admitted media types. "
+            "A helper default is not an authorization; nor are filename extensions. "
             "Artifact count/byte budgets are cumulative across all cells, including failed-cell "
             "stages. Prepare and test drafts before staging final bytes; staging is not draft "
             "editing. Under duplicate_name_policy='reject', stage each logical name at most once. "
-            "After successful staging, finalize with the committed stage IDs "
-            "instead of restaging files. "
-            "artifact indices are not stage IDs. Committed stage IDs are supplied after a cell "
-            "in last_committed_cell.artifact_stage_ids; retain and use those IDs when finalizing "
-            "required artifacts. aar_broker requires a configured host broker and its authority."
+            "After staging, finalize with committed stage IDs instead of restaging files. "
+            "Indices are not stage IDs. See committed_artifacts and "
+            "last_committed_cell.artifact_stage_ids when finalizing. "
+            "aar_broker requires a configured host broker and its authority."
         ),
     }
     return {
         "method": "model.request",
         "contract_id": "aar.broker-contract.model-request.v2",
-        "prompt": canonical_json_bytes(prompt_document).decode("utf-8"),
+        "prompt": _planner_prompt(prompt_document),
         "max_output_bytes": int(spec.root["budgets"]["max_result_bytes"]),
         "response_contract": {
             "dialect": "https://json-schema.org/draft/2020-12/schema",
@@ -778,67 +851,153 @@ class RlmWorkbenchCoordinator:
     ) -> None:
         """CAS a running workbench to the known root-planner budget failure."""
 
-        now = self._now_ms()
-        with self._factory.transaction(write=True) as connection:
-            self._assert_attempt_fence(connection, operation, attempt, fence)
-            row = connection.execute(
-                """
-                SELECT phase, control_revision, cancellation_requested
-                FROM rlm_workbench_jobs WHERE operation_id = ?
-                """,
-                (operation.value,),
-            ).fetchone()
-            if row is None:
-                raise KeyError(operation.value)
-            phase = str(row["phase"])
-            if phase == "failed":
-                return
-            if phase != "running":
-                raise RlmWorkbenchConflict("model-call budget terminalization lost running phase")
-            if bool(row["cancellation_requested"]):
-                raise RlmWorkbenchConflict(
-                    "model-call budget terminalization lost cancellation authority"
+        self.mark_planner_failure_terminal(
+            operation,
+            attempt,
+            fence,
+            FailureEnvelope(
+                category=FailureCategory.BUDGET,
+                code="BUDGET_EXCEEDED",
+                message="workbench root planner model-call budget exhausted",
+                retryable=False,
+                certainty=OutcomeCertainty.CERTAIN,
+                operation=operation,
+            ),
+        )
+
+    def mark_planner_failure_terminal(
+        self,
+        operation: OperationRef,
+        attempt: OperationAttemptRefV1,
+        fence: AttemptFence,
+        failure: FailureEnvelope,
+        *,
+        connection: Any | None = None,
+        require_cell_budget: bool = False,
+        require_prompt_capacity: bool = False,
+        invalid_completion: _InvalidCompletionSelection | None = None,
+    ) -> None:
+        """Fence a known planner failure without erasing outstanding effects."""
+
+        if connection is None:
+            with self._factory.transaction(write=True) as owned_connection:
+                self.mark_planner_failure_terminal(
+                    operation,
+                    attempt,
+                    fence,
+                    failure,
+                    connection=owned_connection,
+                    require_cell_budget=require_cell_budget,
+                    require_prompt_capacity=require_prompt_capacity,
+                    invalid_completion=invalid_completion,
                 )
-            prior_revision = int(row["control_revision"])
-            next_revision = prior_revision + 1
-            failure = {
-                "schema_version": "aar.envelope.v1",
-                "category": "budget",
-                "code": "BUDGET_EXCEEDED",
-                "message": "workbench root planner model-call budget exhausted",
-                "retryable": False,
-                "certainty": "certain",
-                "operation": operation.model_dump(mode="json"),
-                "details": [],
-            }
-            connection.execute(
-                """
-                UPDATE rlm_workbench_jobs
-                SET phase = 'failed', control_revision = ?, certainty = 'certain',
-                    failure_json = ?, updated_at_unix_ms = ?
-                WHERE operation_id = ? AND phase = 'running' AND control_revision = ?
-                  AND cancellation_requested = 0
-                """,
-                (
-                    next_revision,
-                    canonical_json_bytes(failure).decode("utf-8"),
-                    now,
-                    operation.value,
-                    prior_revision,
-                ),
+            return
+
+        if failure.operation != operation or failure.certainty is not OutcomeCertainty.CERTAIN:
+            raise RlmWorkbenchConflict("planner failure is not bound to this certain outcome")
+        failure_json = canonical_json_bytes(failure.model_dump(mode="json")).decode("utf-8")
+        now = self._now_ms()
+        self._assert_attempt_fence(connection, operation, attempt, fence)
+        row = connection.execute(
+            """
+            SELECT phase, control_revision, cancellation_requested, failure_json,
+                   spec_json, cumulative_deadline_unix_ms
+            FROM rlm_workbench_jobs WHERE operation_id = ?
+            """,
+            (operation.value,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(operation.value)
+        phase = str(row["phase"])
+        if phase == "failed":
+            if row["failure_json"] != failure_json:
+                raise RlmWorkbenchConflict("planner terminalization cannot replace a failure")
+            return
+        if phase != "running":
+            raise RlmWorkbenchConflict("planner terminalization lost running phase")
+        if bool(row["cancellation_requested"]):
+            raise RlmWorkbenchConflict("planner terminalization lost cancellation authority")
+        unresolved_cell = connection.execute(
+            "SELECT 1 FROM rlm_workbench_cells WHERE operation_id = ? "
+            "AND state != 'committed' LIMIT 1",
+            (operation.value,),
+        ).fetchone()
+        unresolved_ticket = connection.execute(
+            "SELECT 1 FROM caller_work_tickets WHERE operation_id = ? "
+            "AND state NOT IN ('settled_success', 'settled_failure', "
+            "'cancelled_before_send', 'cancelled_certain') "
+            "LIMIT 1",
+            (operation.value,),
+        ).fetchone()
+        if unresolved_cell is not None or unresolved_ticket is not None:
+            raise RlmWorkbenchConflict("planner terminalization has unresolved work")
+        if invalid_completion is not None:
+            if failure.code != "WORKSPACE_FAILED" or failure.category is not FailureCategory.WORKER:
+                raise RlmWorkbenchConflict("invalid completion failure classification disagrees")
+            try:
+                self._completion_directive(operation, connection=connection)
+            except _InvalidCompletionSelection as verified:
+                if verified.proof != invalid_completion.proof:
+                    raise RlmWorkbenchConflict("invalid completion proof changed") from verified
+            else:
+                raise RlmWorkbenchConflict("invalid completion proof disappeared")
+        if require_prompt_capacity:
+            if (
+                failure.code != "BUDGET_EXCEEDED"
+                or failure.category is not FailureCategory.BUDGET
+                or not any(
+                    item.name == "budget_kind" and item.value == "planner_prompt_characters"
+                    for item in failure.details
+                )
+            ):
+                raise RlmWorkbenchConflict("planner capacity failure classification disagrees")
+            if now >= int(row["cumulative_deadline_unix_ms"]):
+                raise RlmWorkbenchConflict("planner capacity rejection lost its deadline")
+        if require_cell_budget:
+            # A typed pre-cell rejection is not proof that its predicates
+            # still hold. The caller's BEGIN IMMEDIATE spans this recheck and
+            # every inner/outer/ownership write in the terminal transaction.
+            spec = RlmWorkbenchJobSpec.model_validate_json(str(row["spec_json"]), strict=True)
+            cell_count = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM rlm_workbench_cells WHERE operation_id = ?",
+                    (operation.value,),
+                ).fetchone()[0]
             )
-            if connection.execute("SELECT changes()").fetchone()[0] != 1:
-                raise RlmWorkbenchConflict("model-call budget terminalization lost its job CAS")
-            connection.execute(
-                """
-                UPDATE operation_controls SET control_revision = ?
-                WHERE operation_id = ? AND control_revision = ?
-                  AND cancellation_requested = 0
-                """,
-                (next_revision, operation.value, prior_revision),
-            )
-            if connection.execute("SELECT changes()").fetchone()[0] != 1:
-                raise RlmWorkbenchConflict("model-call budget terminalization lost its control CAS")
+            if cell_count < int(spec.root["budgets"]["max_cells"]):
+                raise RlmWorkbenchConflict("planner cell budget is no longer exhausted")
+            if now >= int(row["cumulative_deadline_unix_ms"]):
+                raise RlmWorkbenchConflict("planner cell budget rejection lost its deadline")
+        prior_revision = int(row["control_revision"])
+        next_revision = prior_revision + 1
+        connection.execute(
+            """
+            UPDATE rlm_workbench_jobs
+            SET phase = 'failed', control_revision = ?, certainty = 'certain',
+                failure_json = ?, updated_at_unix_ms = ?
+            WHERE operation_id = ? AND phase = 'running' AND control_revision = ?
+              AND cancellation_requested = 0
+            """,
+            (
+                next_revision,
+                canonical_json_bytes(failure).decode("utf-8"),
+                now,
+                operation.value,
+                prior_revision,
+            ),
+        )
+        if connection.execute("SELECT changes()").fetchone()[0] != 1:
+            raise RlmWorkbenchConflict("planner terminalization lost its job CAS")
+        connection.execute(
+            """
+            UPDATE operation_controls SET control_revision = ?
+            WHERE operation_id = ? AND control_revision = ?
+              AND cancellation_requested = 0
+            """,
+            (next_revision, operation.value, prior_revision),
+        )
+        if connection.execute("SELECT changes()").fetchone()[0] != 1:
+            raise RlmWorkbenchConflict("planner terminalization lost its control CAS")
 
     def recover_indeterminate(self, runtime_generation: int) -> int:
         """Recover committed rebinds whose exact worker vanished with the supervisor."""
@@ -1197,7 +1356,7 @@ class RlmWorkbenchCoordinator:
         self,
         operation: OperationRef,
         token: Mapping[str, Any],
-    ) -> tuple[int, dict[str, Any]]:
+    ) -> tuple[int, int, dict[str, Any]]:
         ticket_id = str(token["ticket_id"])
         ticket = self._caller_work.get(ticket_id).model_dump(mode="json")
         if (
@@ -1230,30 +1389,51 @@ class RlmWorkbenchCoordinator:
                 raise RlmWorkbenchConflict("successor suspension does not exist")
             owner = json.loads(str(suspension["logical_owner_json"]))
             ordinal = int(owner["broker_call_ordinal"])
-            broker_call = connection.execute(
+            broker_calls = connection.execute(
                 """
-                SELECT request_json FROM broker_calls
-                WHERE operation_id = ? AND sequence = ?
+                SELECT sequence, request_json, request_digest FROM broker_calls
+                WHERE operation_id = ?
+                  AND json_extract(request_json, '$.cell_execution_id') = ?
+                  AND json_extract(request_json, '$.broker_call_ordinal') = ?
                 """,
-                (operation.value, ordinal),
-            ).fetchone()
-            if broker_call is None:
-                raise RlmWorkbenchConflict("successor broker call does not exist")
+                (operation.value, token["cell_execution_id"], ordinal),
+            ).fetchall()
+            if len(broker_calls) != 1:
+                raise RlmWorkbenchConflict("successor broker call is missing or ambiguous")
+            broker_call = broker_calls[0]
         request_frame = WorkspaceBrokerFrame.model_validate_json(
             str(broker_call["request_json"]), strict=True
         )
+        frame_document = request_frame.model_dump(mode="json")
+        if (
+            frame_document["operation"] != operation.model_dump(mode="json")
+            or frame_document["frame_sequence"] != broker_call["sequence"]
+            or canonical_sha256(frame_document) != broker_call["request_digest"]
+        ):
+            raise RlmWorkbenchConflict("successor broker frame binding is stale")
         request_payload = dict(request_frame.root["payload"])
         context = dict(request_payload["context"])
+        if (
+            request_payload["request_digest"] != suspension["request_digest"]
+            or request_payload["request_digest"] != ticket["request_digest"]
+            or context["cell_execution_id"] != token["cell_execution_id"]
+            or context["broker_call_ordinal"] != ordinal
+        ):
+            raise RlmWorkbenchConflict("successor broker request binding is stale")
         context["attempt_id"] = token["successor_attempt_id"]
         context["attempt_fence"] = token["successor_attempt_fence"]
         context["deadline_unix_ms"] = token["expected_cumulative_deadline_unix_ms"]
-        return ordinal, {
-            "context": context,
-            "contract_id": request_payload["contract_id"],
-            "observation": candidate["observation"],
-            "receipt_digest": ticket["settled_receipt_digest"],
-            "request_digest": str(suspension["request_digest"]),
-        }
+        return (
+            ordinal,
+            int(broker_call["sequence"]),
+            {
+                "context": context,
+                "contract_id": request_payload["contract_id"],
+                "observation": candidate["observation"],
+                "receipt_digest": ticket["settled_receipt_digest"],
+                "request_digest": str(suspension["request_digest"]),
+            },
+        )
 
     def admit(
         self,
@@ -1352,25 +1532,30 @@ class RlmWorkbenchCoordinator:
 
     def snapshot(self, operation: OperationRef) -> RlmWorkbenchSnapshot:
         with self._factory.transaction(write=False) as connection:
-            row = connection.execute(
-                "SELECT * FROM rlm_workbench_jobs WHERE operation_id = ?",
-                (operation.value,),
-            ).fetchone()
-            if row is None:
-                raise KeyError(operation.value)
-            pending_rows = connection.execute(
-                """
-                SELECT ticket.ticket_id, ticket.revision,
-                       ticket.ticket_digest, ticket.state
-                FROM rlm_workbench_suspensions AS suspension
-                JOIN caller_work_tickets AS ticket
-                  ON ticket.ticket_id = suspension.ticket_id
-                WHERE suspension.operation_id = ?
-                  AND suspension.state = 'pending'
-                ORDER BY suspension.suspension_revision
-                """,
-                (operation.value,),
-            ).fetchall()
+            return self._snapshot_with_connection(operation, connection)
+
+    def _snapshot_with_connection(
+        self, operation: OperationRef, connection: Any
+    ) -> RlmWorkbenchSnapshot:
+        row = connection.execute(
+            "SELECT * FROM rlm_workbench_jobs WHERE operation_id = ?",
+            (operation.value,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(operation.value)
+        pending_rows = connection.execute(
+            """
+            SELECT ticket.ticket_id, ticket.revision,
+                   ticket.ticket_digest, ticket.state
+            FROM rlm_workbench_suspensions AS suspension
+            JOIN caller_work_tickets AS ticket
+              ON ticket.ticket_id = suspension.ticket_id
+            WHERE suspension.operation_id = ?
+              AND suspension.state = 'pending'
+            ORDER BY suspension.suspension_revision
+            """,
+            (operation.value,),
+        ).fetchall()
         phase = str(row["phase"])
         workspace = None
         if row["workspace_id"] is not None:
@@ -1479,6 +1664,23 @@ class RlmWorkbenchCoordinator:
                 """,
                 (operation.value,),
             ).fetchone()
+            cell_count = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM rlm_workbench_cells WHERE operation_id = ?",
+                    (operation.value,),
+                ).fetchone()[0]
+            )
+            artifacts = []
+            if last_cell is not None:
+                artifacts = connection.execute(
+                    "SELECT s.stage_id, s.logical_name FROM rlm_workbench_artifact_stages AS s "
+                    "JOIN rlm_workbench_cells AS c ON c.operation_id = s.operation_id "
+                    "AND c.cell_execution_id = s.cell_execution_id "
+                    "WHERE s.operation_id = ? AND s.state = 'committed' AND c.state = 'committed' "
+                    "AND json_extract(c.result_json, '$.status') = 'succeeded' "
+                    "ORDER BY s.stage_id",
+                    (operation.value,),
+                ).fetchall()
         if row is None or prior is None:
             raise KeyError(operation.value)
         if int(prior["planner_steps"]) >= int(spec.root["budgets"]["max_model_calls"]):
@@ -1508,14 +1710,18 @@ class RlmWorkbenchCoordinator:
                 "post_checkpoint_digest": str(last_cell["post_checkpoint_digest"]),
                 "artifact_stage_ids": [str(item["stage_id"]) for item in stage_rows],
             }
-            if last_committed_cell["result"]["status"] == "failed":
-                last_committed_cell["source"] = json.loads(str(last_cell["source_json"]))
-                last_committed_cell["source_digest"] = str(last_cell["source_digest"])
+            last_committed_cell["source"] = json.loads(str(last_cell["source_json"]))
+            last_committed_cell["source_digest"] = str(last_cell["source_digest"])
         request = _planner_request(
             spec,
             owner=owner,
             snapshot=self.snapshot(operation),
             last_committed_cell=last_committed_cell,
+            committed_artifacts=[
+                {"stage_id": str(item["stage_id"]), "logical_name": str(item["logical_name"])}
+                for item in artifacts
+            ],
+            remaining_cells=max(0, int(spec.root["budgets"]["max_cells"]) - cell_count),
         )
         request_digest = canonical_sha256(request)
         ticket_material = {
@@ -1650,7 +1856,20 @@ class RlmWorkbenchCoordinator:
                     ).fetchone()[0]
                 )
             if cell_index >= int(spec.root["budgets"]["max_cells"]):
-                raise RlmWorkbenchConflict("workbench cell budget exhausted")
+                # Accepted caller successors have not entered the running
+                # phase. Consume the exact settled directive as a rejected
+                # cell in the existing registry transaction, not by loosening
+                # the running-only planner-failure fence.
+                self._registry.consume_planner_successor(
+                    attempt,
+                    fence.dispatcher_generation,
+                    fence.lease_epoch,
+                    fence.owner_digest,
+                    token=token,
+                    directive=directive.root,
+                    reject_cell_budget=True,
+                )
+                return self.snapshot(operation)
             handle = self.workspace_handle(operation)
             source_json = canonical_json_bytes(directive.root).decode("utf-8")
             source_digest = canonical_sha256(directive.root)
@@ -1785,13 +2004,17 @@ class RlmWorkbenchCoordinator:
             step_index=int(token["logical_owner"]["step_index"]) + 1,
         ).as_wire()
         prompt_document["planner_owner"] = owner
+        prompt_document["execution_budget"] = {
+            **prompt_document["execution_budget"],
+            "remaining_model_calls": max_model_calls - planner_call_count,
+        }
         prompt_document["correction"] = {
             "invalid_output_digest": observation["output_digest"],
             "errors": error_details,
         }
         request = {
             **prior_request,
-            "prompt": canonical_json_bytes(prompt_document).decode("utf-8"),
+            "prompt": _planner_prompt(prompt_document),
         }
         request_digest = canonical_sha256(request)
         ticket_material = {
@@ -1837,113 +2060,12 @@ class RlmWorkbenchCoordinator:
         self,
         operation: OperationRef,
     ) -> tuple[int, tuple[str, ...], tuple[str, ...], tuple[dict[str, Any], ...], int, int]:
-        """Read exact consumed planner directives and their durable model receipts."""
-
+        """Use the same exact journal projection enforced by native publication."""
         with self._factory.transaction(write=False) as connection:
-            rows = connection.execute(
-                """
-                SELECT suspension.suspension_revision, suspension.ticket_id,
-                       ticket.state, ticket.settled_receipt_digest,
-                       model.state AS model_state, model.usage_json,
-                       model.response_json, model.response_digest
-                FROM rlm_workbench_suspensions AS suspension
-                JOIN caller_work_tickets AS ticket
-                  ON ticket.ticket_id = suspension.ticket_id
-                LEFT JOIN model_executions AS model
-                  ON model.operation_id = suspension.operation_id
-                 AND model.idempotency_key = ticket.external_idempotency_key
-                 AND model.request_digest = ticket.request_digest
-                WHERE suspension.operation_id = ?
-                  AND suspension.cell_execution_id IS NULL
-                ORDER BY suspension.suspension_revision
-                """,
-                (operation.value,),
-            ).fetchall()
-            directive_rows = connection.execute(
-                """
-                SELECT payload_json FROM operation_events
-                WHERE operation_id = ? AND event_kind = 'planner_successor_consumed'
-                ORDER BY sequence
-                """,
-                (operation.value,),
-            ).fetchall()
-        if not rows:
-            raise RlmWorkbenchConflict("planner trace is incomplete")
-        directive_digests: list[str] = []
-        for row in directive_rows:
-            payload = json.loads(str(row["payload_json"]))
-            digest = payload.get("directive_digest")
-            if not isinstance(digest, str):
-                raise RlmWorkbenchConflict("planner directive digest is unavailable")
-            directive_digests.append(digest)
-        usage_receipt_digests: list[str] = []
-        broker_trace: list[dict[str, Any]] = []
-        input_tokens = 0
-        output_tokens = 0
-        for row in rows:
-            if str(row["state"]) != "settled_success":
-                raise RlmWorkbenchConflict("planner trace includes a non-success settlement")
-            settlement_digest = str(row["settled_receipt_digest"])
-            receipts = tuple(
-                receipt
-                for receipt in self._caller_work.candidate_receipts(str(row["ticket_id"]))
-                if receipt.receipt_digest == settlement_digest
-            )
-            if len(receipts) != 1:
-                raise RlmWorkbenchConflict("planner trace settlement receipt is not unique")
-            observation = dict(receipts[0].root["observation"])
-            required = {
-                name: observation.get(name)
-                for name in (
-                    "route_receipt_digest",
-                    "usage_receipt_digest",
-                    "host_receipt_digest",
-                    "output_digest",
-                )
-            }
-            if observation.get("kind") != "model" or not all(
-                isinstance(value, str) for value in required.values()
-            ):
-                raise RlmWorkbenchConflict("planner trace model receipt is incomplete")
             try:
-                usage = ModelUsageRecord.model_validate_json(str(row["usage_json"]), strict=True)
-                response = ModelResponse.model_validate_json(str(row["response_json"]), strict=True)
-                if (
-                    row["model_state"] != "result_committed"
-                    or response.usage != usage
-                    or canonical_sha256(usage) != required["usage_receipt_digest"]
-                    or canonical_sha256(response) != row["response_digest"]
-                    or row["response_digest"] != required["host_receipt_digest"]
-                    or response.route_receipt.receipt_digest != required["route_receipt_digest"]
-                    or "sha256:" + hashlib.sha256(response.output_text.encode()).hexdigest()
-                    != required["output_digest"]
-                ):
-                    raise ValueError("planner usage is not bound to its settled response")
-            except (ValueError, TypeError) as exc:
-                raise RlmWorkbenchConflict(
-                    "planner usage receipt does not match its model journal"
-                ) from exc
-            # Distinct tickets can legitimately have identical usage digests;
-            # count the exact committed execution for every settled ticket once.
-            input_tokens += usage.input_tokens
-            output_tokens += usage.output_tokens
-            usage_receipt_digests.append(str(required["usage_receipt_digest"]))
-            broker_trace.append(
-                {
-                    "suspension_revision": int(row["suspension_revision"]),
-                    "ticket_id": str(row["ticket_id"]),
-                    "settlement_digest": settlement_digest,
-                    **required,
-                }
-            )
-        return (
-            len(rows),
-            tuple(directive_digests),
-            tuple(usage_receipt_digests),
-            tuple(broker_trace),
-            input_tokens,
-            output_tokens,
-        )
+                return read_caller_planner_trace(connection, operation.value)
+            except ArtifactPublicationConflict as exc:
+                raise RlmWorkbenchConflict(str(exc)) from exc
 
     def run_claimed(
         self,
@@ -2012,6 +2134,43 @@ class RlmWorkbenchCoordinator:
             spec = self._begin_running(operation, attempt, fence)
             return self._suspend_root_planner(operation, attempt, fence, spec)
         if caller_delegated:
+            worker_token = self._registry.prepared_workbench_rebind(
+                attempt, fence.dispatcher_generation, fence.lease_epoch, fence.owner_digest
+            )
+            if worker_token is not None:
+                with self._active_lock:
+                    broker_session = WorkspaceBrokerSession(
+                        self.database_path,
+                        operation_id=operation.value,
+                        attempt_id=attempt.attempt_id,
+                        dispatch=self._dispatch_broker_payload,
+                    )
+                    self._broker_sessions[attempt.attempt_id] = broker_session
+                try:
+                    self._resume_successor_cell(
+                        operation, persisted_spec, attempt, fence, worker_token, broker_session
+                    )
+                except WorkspaceBrokerSuspended:
+                    return self.snapshot(operation)
+                self._require_deadline(operation)
+                completion = self._completion_directive(operation)
+                if completion is not None:
+                    calls, digests, usage, trace, inputs, outputs = self._planner_trace(operation)
+                    return self._finalize(
+                        operation,
+                        attempt,
+                        fence,
+                        persisted_spec,
+                        completion,
+                        model_calls=calls,
+                        directive_digests=digests,
+                        usage_receipt_digests=usage,
+                        broker_trace=trace,
+                        input_tokens=inputs,
+                        output_tokens=outputs,
+                    )
+                return self._suspend_root_planner(operation, attempt, fence, persisted_spec)
+        if caller_delegated:
             directive = self._consume_root_planner(attempt, fence)
             if isinstance(directive, RlmWorkbenchSnapshot):
                 return directive
@@ -2039,9 +2198,7 @@ class RlmWorkbenchCoordinator:
                     output_tokens=planner_output_tokens,
                 )
             if kind != "execute_cell":
-                raise RlmWorkbenchUnsupported(
-                    f"planner abstained: {directive.root.get('reason', 'unspecified')}"
-                )
+                raise RlmWorkbenchPlannerAbstained(str(directive.root["reason"]))
             with self._active_lock:
                 broker_session = WorkspaceBrokerSession(
                     self.database_path,
@@ -2060,6 +2217,22 @@ class RlmWorkbenchCoordinator:
             )
             if suspended:
                 return self.snapshot(operation)
+            completion = self._completion_directive(operation)
+            if completion is not None:
+                calls, digests, usage, trace, inputs, outputs = self._planner_trace(operation)
+                return self._finalize(
+                    operation,
+                    attempt,
+                    fence,
+                    persisted_spec,
+                    completion,
+                    model_calls=calls,
+                    directive_digests=digests,
+                    usage_receipt_digests=usage,
+                    broker_trace=trace,
+                    input_tokens=inputs,
+                    output_tokens=outputs,
+                )
             return self._suspend_root_planner(operation, attempt, fence, persisted_spec)
         if self._planner is None:
             raise RlmWorkbenchUnsupported("workbench planner is not configured")
@@ -2085,14 +2258,17 @@ class RlmWorkbenchCoordinator:
             spec = RlmWorkbenchJobSpec.model_validate_json(
                 str(self._job_row(operation)["spec_json"]), strict=True
             )
-            self._resume_successor_cell(
-                operation,
-                spec,
-                attempt,
-                fence,
-                successor_token,
-                broker_session,
-            )
+            try:
+                self._resume_successor_cell(
+                    operation,
+                    spec,
+                    attempt,
+                    fence,
+                    successor_token,
+                    broker_session,
+                )
+            except WorkspaceBrokerSuspended:
+                return self.snapshot(operation)
         self._require_deadline(operation)
         directive_digests: list[str] = []
         recovery = self._prepare_recovery_continuation(operation, attempt, fence, spec)
@@ -2141,6 +2317,29 @@ class RlmWorkbenchCoordinator:
             )
             if suspended:
                 return self.snapshot(operation)
+            completion = self._completion_directive(operation)
+            if completion is not None:
+                return self._finalize(
+                    operation,
+                    attempt,
+                    fence,
+                    spec,
+                    completion,
+                    model_calls=model_calls,
+                    directive_digests=tuple(directive_digests),
+                )
+        if successor_token is not None:
+            completion = self._completion_directive(operation)
+            if completion is not None:
+                return self._finalize(
+                    operation,
+                    attempt,
+                    fence,
+                    spec,
+                    completion,
+                    model_calls=model_calls,
+                    directive_digests=tuple(directive_digests),
+                )
         while True:
             self._require_deadline(operation)
             if model_calls >= max_model_calls:
@@ -2169,6 +2368,17 @@ class RlmWorkbenchCoordinator:
                 )
                 if suspended:
                     return self.snapshot(operation)
+                completion = self._completion_directive(operation)
+                if completion is not None:
+                    return self._finalize(
+                        operation,
+                        attempt,
+                        fence,
+                        spec,
+                        completion,
+                        model_calls=model_calls,
+                        directive_digests=tuple(directive_digests),
+                    )
                 continue
             if kind == "finalize":
                 self._require_deadline(operation)
@@ -2181,9 +2391,7 @@ class RlmWorkbenchCoordinator:
                     model_calls=model_calls,
                     directive_digests=tuple(directive_digests),
                 )
-            raise RlmWorkbenchUnsupported(
-                f"planner abstained: {directive.root.get('reason', 'unspecified')}"
-            )
+            raise RlmWorkbenchPlannerAbstained(str(directive.root["reason"]))
 
     def _prepare_recovery_continuation(
         self,
@@ -2360,7 +2568,9 @@ class RlmWorkbenchCoordinator:
             max_output_chars=int(budgets["max_output_chars_per_cell"]),
             max_events=int(budgets["max_events_per_cell"]),
         )
-        ordinal, receipt_payload = self._settled_broker_receipt_payload(operation, token)
+        ordinal, broker_sequence, receipt_payload = self._settled_broker_receipt_payload(
+            operation, token
+        )
         receipt_frame = self._supervisor_frame(
             kind="broker_receipt",
             operation=operation,
@@ -2371,6 +2581,61 @@ class RlmWorkbenchCoordinator:
         )
         result: WorkspaceProgramResult | None = None
         acknowledgement: WorkspaceBrokerFrame | None = None
+        acknowledged = False
+        receipt_document = receipt_frame.model_dump(mode="json")
+        receipt_json = canonical_json_bytes(receipt_document).decode("utf-8")
+        receipt_digest = canonical_sha256(receipt_document)
+
+        def acknowledge(frame: WorkspaceBrokerFrame) -> None:
+            nonlocal acknowledged
+            if applied is None:
+                self._barrier("rebind_delivered_before_ack")
+            document = frame.model_dump(mode="json")
+            if (
+                document["attempt_id"] != token["successor_attempt_id"]
+                or document["attempt_fence"] != _attempt_fence_digest(fence)
+                or document["cell_execution_id"] != token["cell_execution_id"]
+            ):
+                raise RlmWorkbenchConflict("successor worker acknowledgement changed authority")
+            self._registry.acknowledge_workbench_rebind(
+                attempt,
+                fence.dispatcher_generation,
+                fence.lease_epoch,
+                fence.owner_digest,
+                token_digest=str(token["token_digest"]),
+                acknowledgement=dict(document["payload"]),
+            )
+            # Consuming this settled broker receipt is separate from completing
+            # its cell: the same cell may now suspend at another broker call.
+            with self._factory.transaction(write=True) as connection:
+                self._assert_attempt_fence(connection, operation, attempt, fence)
+                broker_row = connection.execute(
+                    "SELECT state, response_digest, response_json FROM broker_calls "
+                    "WHERE operation_id = ? AND sequence = ?",
+                    (operation.value, broker_sequence),
+                ).fetchone()
+                if broker_row is None:
+                    raise RlmWorkbenchConflict("successor broker receipt lost commit authority")
+                if broker_row["state"] == "succeeded":
+                    if (
+                        broker_row["response_digest"] != receipt_digest
+                        or broker_row["response_json"] != receipt_json
+                    ):
+                        raise RlmWorkbenchConflict("successor broker receipt replay changed")
+                elif broker_row["state"] == "started":
+                    connection.execute(
+                        "UPDATE broker_calls SET state = 'succeeded', "
+                        "response_digest = ?, response_json = ? "
+                        "WHERE operation_id = ? AND sequence = ? AND state = 'started'",
+                        (receipt_digest, receipt_json, operation.value, broker_sequence),
+                    )
+                    if connection.execute("SELECT changes()").fetchone()[0] != 1:
+                        raise RlmWorkbenchConflict("successor broker receipt lost commit authority")
+                else:
+                    raise RlmWorkbenchConflict("successor broker receipt is not committable")
+            acknowledged = True
+            self._barrier("rebind_acked_before_cell_commit")
+
         with self._active_cell_binding(
             execution_operation,
             operation,
@@ -2425,27 +2690,13 @@ class RlmWorkbenchCoordinator:
                     program_spec,
                     receipt_frame,
                     commit_frame,
+                    on_acknowledgement=acknowledge,
                 )
-                self._barrier("rebind_delivered_before_ack")
         if result is None or acknowledgement is None:
             raise RlmWorkbenchConflict("successor rebind produced no committed worker result")
-        ack_document = acknowledgement.model_dump(mode="json")
-        if (
-            ack_document["attempt_id"] != token["successor_attempt_id"]
-            or ack_document["attempt_fence"] != _attempt_fence_digest(fence)
-            or ack_document["cell_execution_id"] != token["cell_execution_id"]
-        ):
-            raise RlmWorkbenchConflict("successor worker acknowledgement changed authority")
-        self._registry.acknowledge_workbench_rebind(
-            attempt,
-            fence.dispatcher_generation,
-            fence.lease_epoch,
-            fence.owner_digest,
-            token_digest=str(token["token_digest"]),
-            acknowledgement=dict(ack_document["payload"]),
-        )
-        self._barrier("rebind_acked_before_cell_commit")
-        result_digest = canonical_sha256(result.model_dump(mode="json"))
+        if not acknowledged:
+            acknowledge(acknowledgement)
+        result_digest = canonical_sha256(workbench_result_document(result))
         if not _cell_result_committable(result, handle, execution_operation):
             raise RlmWorkbenchConflict(self._failure_message_from_result(result))
         current_handle = handle.model_copy(update={"revision": result.revision_after})
@@ -2459,7 +2710,7 @@ class RlmWorkbenchCoordinator:
         post_checkpoint_json = canonical_json_bytes(post_checkpoint.model_dump(mode="json")).decode(
             "utf-8"
         )
-        result_json = canonical_json_bytes(result.model_dump(mode="json")).decode("utf-8")
+        result_json = canonical_json_bytes(workbench_result_document(result)).decode("utf-8")
         with self._factory.transaction(write=False) as connection:
             stage_ids = tuple(
                 str(row[0])
@@ -2487,32 +2738,9 @@ class RlmWorkbenchCoordinator:
         }
         cell_manifest_json = canonical_json_bytes(cell_manifest).decode("utf-8")
         cell_manifest_digest = canonical_sha256(cell_manifest)
-        receipt_json = canonical_json_bytes(receipt_frame.model_dump(mode="json")).decode("utf-8")
         with self._factory.transaction(write=True) as connection:
-            self._assert_attempt_fence(connection, operation, attempt, fence)
-            job_row = connection.execute(
-                "SELECT control_revision FROM rlm_workbench_jobs "
-                "WHERE operation_id = ? AND phase = 'running'",
-                (operation.value,),
-            ).fetchone()
-            if job_row is None:
-                raise RlmWorkbenchConflict("workbench left running phase during successor commit")
+            job_row = self._current_cell_commit_job(connection, operation, attempt, fence)
             control_revision = int(job_row["control_revision"]) + 1
-            connection.execute(
-                """
-                UPDATE broker_calls
-                SET state = 'succeeded', response_digest = ?, response_json = ?
-                WHERE operation_id = ? AND sequence = ? AND state = 'started'
-                """,
-                (
-                    canonical_sha256(receipt_frame.model_dump(mode="json")),
-                    receipt_json,
-                    operation.value,
-                    ordinal,
-                ),
-            )
-            if connection.execute("SELECT changes()").fetchone()[0] != 1:
-                raise RlmWorkbenchConflict("successor broker receipt lost commit authority")
             connection.execute(
                 """
                 INSERT INTO workspace_checkpoint_catalog(
@@ -2720,7 +2948,7 @@ class RlmWorkbenchCoordinator:
                     ).fetchone()[0]
                 )
             if cell_index >= int(spec.root["budgets"]["max_cells"]):
-                raise RlmWorkbenchConflict("workbench cell budget exhausted")
+                raise RlmWorkbenchCellBudgetExceeded("workbench cell budget exhausted")
             cell_execution_id = (
                 "cell-"
                 + hashlib.sha256(
@@ -2886,8 +3114,9 @@ class RlmWorkbenchCoordinator:
             trace_id=f"trace-post-{cell_execution_id}",
         )
         self._require_deadline(operation)
-        result_json = canonical_json_bytes(result).decode("utf-8")
-        result_digest = canonical_sha256(result)
+        result_document = workbench_result_document(result)
+        result_json = canonical_json_bytes(result_document).decode("utf-8")
+        result_digest = canonical_sha256(result_document)
         with self._factory.transaction(write=False) as connection:
             stage_ids = tuple(
                 str(row[0])
@@ -2922,14 +3151,7 @@ class RlmWorkbenchCoordinator:
         manifest_digest = manifest["manifest_digest"]
         now = self._now_ms()
         with self._factory.transaction(write=True) as connection:
-            self._assert_attempt_fence(connection, operation, attempt, fence)
-            row = connection.execute(
-                "SELECT control_revision FROM rlm_workbench_jobs "
-                "WHERE operation_id = ? AND phase = 'running'",
-                (operation.value,),
-            ).fetchone()
-            if row is None:
-                raise RlmWorkbenchConflict("workbench left running phase during cell commit")
+            row = self._current_cell_commit_job(connection, operation, attempt, fence)
             revision = int(row["control_revision"]) + 1
             connection.execute(
                 """
@@ -2997,6 +3219,138 @@ class RlmWorkbenchCoordinator:
                 (revision, operation.value),
             )
         return False
+
+    def _completion_directive(
+        self, operation: OperationRef, *, connection: Any | None = None
+    ) -> RlmDirective | None:
+        """Read only the latest committed, digest-bound worker helper projection."""
+        if connection is None:
+            with self._factory.transaction(write=False) as owned_connection:
+                return self._completion_directive(operation, connection=owned_connection)
+        with nullcontext(connection):
+            row = connection.execute(
+                "SELECT * FROM rlm_workbench_cells "
+                "WHERE operation_id=? ORDER BY cell_index DESC LIMIT 1",
+                (operation.value,),
+            ).fetchone()
+            if row is None or row["state"] != "committed":
+                return None
+            result = json.loads(str(row["result_json"]))
+            value = result.get("result")
+            if not isinstance(value, dict) or set(value) != {"__aar_completion_v1__"}:
+                return None
+            manifest_row = connection.execute(
+                "SELECT manifest_json, manifest_digest FROM rlm_workbench_cell_manifests "
+                "WHERE operation_id=? AND cell_execution_id=?",
+                (operation.value, row["cell_execution_id"]),
+            ).fetchone()
+            if manifest_row is None:
+                raise RlmWorkbenchConflict("completion cell manifest is unavailable")
+            row = {**dict(row), **dict(manifest_row)}
+            manifest = json.loads(str(row["manifest_json"]))
+            material = dict(manifest)
+            embedded = material.pop("manifest_digest", None)
+            if manifest.get("schema_version") == "aar.cell-commit-manifest.v1":
+                scope_matches = (
+                    manifest.get("workspace", {}).get("value") == row["workspace_id"]
+                    and manifest.get("workspace_generation") == row["workspace_generation"]
+                    and manifest.get("pre_revision") == row["pre_workspace_revision"]
+                    and manifest.get("post_revision") == row["post_workspace_revision"]
+                )
+            elif set(material) == {
+                "artifact_stage_ids",
+                "attempt_fence",
+                "attempt_id",
+                "cell_execution_id",
+                "cell_index",
+                "operation",
+                "post_checkpoint",
+                "post_checkpoint_digest",
+                "pre_checkpoint_digest",
+                "result_digest",
+                "source_digest",
+                "workspace",
+            }:
+                # Existing successor manifests retain a full handle/checkpoint,
+                # not the flat public CellCommitManifest shape. No new wire form.
+                handle = ProgrammableWorkspaceHandle.model_validate(
+                    manifest["workspace"], strict=True
+                )
+                checkpoint = WorkspaceCheckpointManifest.model_validate(
+                    manifest["post_checkpoint"], strict=True
+                )
+                scope_matches = (
+                    handle.workspace.value == row["workspace_id"]
+                    and handle.generation == row["workspace_generation"]
+                    and handle.revision == row["post_workspace_revision"]
+                    and checkpoint.source_handle == handle
+                    and manifest["pre_checkpoint_digest"] == row["pre_checkpoint_digest"]
+                    and manifest["post_checkpoint_digest"] == row["post_checkpoint_digest"]
+                    and checkpoint.content_digest == row["post_checkpoint_digest"]
+                    and manifest["cell_index"] == row["cell_index"]
+                )
+            else:
+                scope_matches = False
+            if (
+                canonical_sha256(result) != row["result_digest"]
+                or manifest.get("result_digest") != row["result_digest"]
+                or canonical_sha256(material) != row["manifest_digest"]
+                or (embedded is not None and embedded != row["manifest_digest"])
+                or manifest.get("cell_execution_id") != row["cell_execution_id"]
+                or manifest.get("operation", {}).get("value") != operation.value
+                or not scope_matches
+                or manifest.get("source_digest") != row["source_digest"]
+                or result.get("status") != "succeeded"
+                or result.get("operation", {}).get("value") != "exec-" + row["cell_execution_id"]
+                or result.get("workspace", {}).get("value") != row["workspace_id"]
+                or result.get("generation") != row["workspace_generation"]
+                or result.get("revision_before") != row["pre_workspace_revision"]
+                or result.get("revision_after") != row["post_workspace_revision"]
+            ):
+                raise RlmWorkbenchConflict("completion cell result or manifest identity changed")
+            intent = value["__aar_completion_v1__"]
+            if (
+                not isinstance(intent, dict)
+                or set(intent) != {"output", "names"}
+                or not isinstance(intent["names"], list)
+            ):
+                raise RlmWorkbenchConflict("invalid completion intent")
+            names = intent["names"]
+            if any(not isinstance(name, str) for name in names) or len(set(names)) != len(names):
+                raise RlmWorkbenchConflict("invalid completion artifact names")
+            stages = connection.execute(
+                "SELECT stage_id, logical_name FROM rlm_workbench_artifact_stages "
+                "WHERE operation_id=? AND cell_execution_id=? AND state='committed'",
+                (operation.value, row["cell_execution_id"]),
+            ).fetchall()
+            selected = [stage for stage in stages if stage["logical_name"] in names]
+            if len(selected) != len(names) or any(
+                stage["stage_id"] not in manifest["artifact_stage_ids"] for stage in selected
+            ):
+                raise RlmWorkbenchConflict(
+                    "completion artifacts are not in committed cell manifest"
+                )
+            spec_row = connection.execute(
+                "SELECT spec_json FROM rlm_workbench_jobs WHERE operation_id=?",
+                (operation.value,),
+            ).fetchone()
+            if spec_row is None:
+                raise RlmWorkbenchConflict("completion job disappeared")
+            spec = RlmWorkbenchJobSpec.model_validate_json(str(spec_row["spec_json"]), strict=True)
+            if not names and spec.root["completion"]["require_named_artifacts"]:
+                raise _InvalidCompletionSelection(
+                    str(row["cell_execution_id"]),
+                    str(row["result_digest"]),
+                    str(row["manifest_digest"]),
+                )
+            return RlmDirective.model_validate(
+                {
+                    "kind": "finalize",
+                    "output": intent["output"],
+                    "artifact_stage_ids": [str(stage["stage_id"]) for stage in selected],
+                },
+                strict=True,
+            )
 
     def _finalize(
         self,
@@ -3146,7 +3500,6 @@ class RlmWorkbenchCoordinator:
             {**result_payload, "result_digest": canonical_sha256(result_payload)},
             strict=True,
         )
-        result_json = canonical_json_bytes(result.root).decode("utf-8")
         proposal_digest = canonical_sha256(directive.root)
         fence_digest = _attempt_fence_digest(fence)
         manifest_payload = {
@@ -3174,70 +3527,17 @@ class RlmWorkbenchCoordinator:
             **manifest_payload,
             "manifest_digest": canonical_sha256(manifest_payload),
         }
-        manifest_json = canonical_json_bytes(manifest).decode("utf-8")
-        manifest_digest = manifest["manifest_digest"]
-        now = self._now_ms()
         with self._factory.transaction(write=True) as connection:
             self._assert_attempt_fence(connection, operation, attempt, fence)
-            row = connection.execute(
-                "SELECT * FROM rlm_workbench_jobs WHERE operation_id = ?",
-                (operation.value,),
-            ).fetchone()
-            if row is not None and self._now_ms() >= deadline:
+            if self._now_ms() >= deadline:
                 raise RlmWorkbenchDeadlineExceeded(
                     "workbench cumulative deadline expired before finalization commit"
                 )
-            if (
-                row is None
-                or row["phase"] != "finalizing"
-                or int(row["cancellation_revision"]) != prior_cancellation_revision
-                or int(row["cumulative_deadline_unix_ms"]) != deadline
-            ):
-                raise RlmWorkbenchConflict("finalization authority changed before commit")
-            revision = int(row["control_revision"]) + 1
-            connection.execute(
-                """
-                INSERT INTO rlm_workbench_finalization_manifests(
-                    operation_id, finalizer_attempt_id, finalizer_attempt_fence,
-                    expected_prior_phase, expected_cancellation_revision,
-                    expected_cumulative_deadline_unix_ms, control_revision,
-                    unresolved_required_ticket_count, proposal_digest, result_digest,
-                    manifest_json, manifest_digest, committed_at_unix_ms
-                ) VALUES (?, ?, ?, 'finalizing', ?, ?, ?, 0, ?, ?, ?, ?, ?)
-                """,
-                (
-                    operation.value,
-                    attempt.attempt_id,
-                    fence_digest,
-                    prior_cancellation_revision,
-                    deadline,
-                    revision,
-                    proposal_digest,
-                    result.root["result_digest"],
-                    manifest_json,
-                    manifest_digest,
-                    now,
-                ),
-            )
-            connection.execute(
-                """
-                UPDATE rlm_workbench_jobs
-                SET phase = 'succeeded', control_revision = ?, result_json = ?,
-                    result_digest = ?, checkpoint_digest = ?, updated_at_unix_ms = ?
-                WHERE operation_id = ? AND phase = 'finalizing'
-                """,
-                (
-                    revision,
-                    result_json,
-                    result.root["result_digest"],
-                    final_checkpoint.content_digest,
-                    now,
-                    operation.value,
-                ),
-            )
-            connection.execute(
-                "UPDATE operation_controls SET control_revision = ? WHERE operation_id = ?",
-                (revision, operation.value),
+            self._artifact_publications.finalize_in_transaction(
+                connection,
+                manifest,
+                result=result.root,
+                proposal_digest=proposal_digest,
             )
         return result
 
@@ -3480,6 +3780,13 @@ class RlmWorkbenchCoordinator:
                 {"name": "error.type", "value": type(error).__name__[:512]},
             ],
         }
+        if isinstance(error, RlmWorkbenchPlannerAbstained):
+            failure["details"].extend(
+                [
+                    {"name": "planner_decision", "value": "abstain"},
+                    {"name": "reason_digest", "value": error.reason_digest},
+                ]
+            )
         now = self._now_ms()
         with self._factory.transaction(write=True) as connection:
             self._assert_attempt_fence(connection, operation, attempt, fence)
@@ -3514,6 +3821,26 @@ class RlmWorkbenchCoordinator:
                 (revision, operation.value),
             )
         return self.snapshot(operation)
+
+    def _current_cell_commit_job(
+        self,
+        connection: Any,
+        operation: OperationRef,
+        attempt: OperationAttemptRefV1,
+        fence: AttemptFence,
+    ) -> Any:
+        self._assert_attempt_fence(connection, operation, attempt, fence)
+        try:
+            job, _ = ArtifactPublicationRepository.current_native_cell_authority(
+                connection,
+                operation.value,
+                attempt.attempt_id,
+                _attempt_fence_digest(fence),
+                now_unix_ms=self._now_ms(),
+            )
+        except ArtifactPublicationConflict as error:
+            raise RlmWorkbenchConflict(str(error)) from error
+        return job
 
     def _assert_attempt_fence(
         self,

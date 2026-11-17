@@ -111,6 +111,9 @@ class _Worker:
         events: list[dict[str, Any]] = []
         artifacts: list[dict[str, str]] = []
         dropped = False
+        completion = []
+        completion_invalid = [False]
+        active = [True]
 
         def add(event: dict[str, Any], *, force: bool = False) -> None:
             nonlocal dropped
@@ -285,7 +288,7 @@ class _Worker:
                         if outcome == "succeeded"
                         else (
                             "cancelled_certain"
-                            if outcome in {"cancelled", "canceled"}
+                            if outcome in {"cancelled", "canceled", "cancelled_certain"}
                             else "settled_failure"
                         )
                     )
@@ -306,6 +309,43 @@ class _Worker:
                 add({"kind": "progress", "data": {"phase": "broker_resumed"}})
                 return response["broker_response"]
 
+        @_host_callback
+        def complete(output: Any, named_artifacts: Any = None) -> None:
+            "Propose completion after commit; artifacts map names to (content, media type)."
+            if not active[0]:
+                raise RuntimeError("completion helper belongs to an earlier cell")
+            if completion or completion_invalid[0]:
+                completion_invalid[0] = True
+                raise RuntimeError("multiple completion requests in one cell")
+            completion_invalid[0] = True
+            value = _portable_value(output)
+            if len(canonical_json_bytes(value)) > 65_536:
+                raise RuntimeError("completion output exceeds portable result limit")
+            if named_artifacts is None:
+                named_artifacts = {}
+            if not isinstance(named_artifacts, dict):
+                raise TypeError("named_artifacts must be a mapping")
+            # Artifact intents cannot be silently discarded with optional events.
+            # Reserve every selection before appending any payload; retain the
+            # existing final-event slot and fail explicitly when it cannot fit.
+            if len(events) + len(named_artifacts) > max_events - 1:
+                raise RuntimeError("completion artifact event capacity exceeded")
+            names = []
+            for name, entry in named_artifacts.items():
+                if (
+                    not isinstance(name, str)
+                    or not isinstance(entry, (tuple, list))
+                    or len(entry) != 2
+                ):
+                    raise TypeError("artifact requires name and (content, media_type)")
+                content, media_type = entry
+                if not isinstance(content, (str, bytes)) or not isinstance(media_type, str):
+                    raise TypeError("artifact requires str or bytes and media type")
+                artifact(name, content, media_type)
+                names.append(name)
+            completion.append({"output": value, "names": names})
+            completion_invalid[0] = False
+
         def publish(data: Any = None, **_kwargs: Any) -> None:
             add(
                 {
@@ -316,6 +356,7 @@ class _Worker:
 
         reserved = {
             "aar_artifact": artifact,
+            "aar_complete": complete,
             "aar_broker": broker,
             "aar_display": display,
             "aar_progress": progress,
@@ -337,6 +378,7 @@ class _Worker:
                     silent=False,
                 )
         finally:
+            active[0] = False
             self.shell.display_pub.publish = original_publish
             for name, prior in previous.items():
                 if prior is sentinel:
@@ -353,6 +395,8 @@ class _Worker:
                 dropped = True
 
         error = result.error_before_exec or result.error_in_exec
+        if error is None and completion_invalid[0]:
+            error = _HostCallbackError("invalid or ambiguous completion request")
         status = "failed" if error is not None else "succeeded"
         if error is not None:
             add(
@@ -396,6 +440,9 @@ class _Worker:
             "result_excluded_reason": excluded_reason,
             "events": events,
             "artifacts": artifacts,
+            "completion": completion[0]
+            if status == "succeeded" and completion and not completion_invalid[0]
+            else None,
         }
 
     def inspect(self) -> list[dict[str, Any]]:

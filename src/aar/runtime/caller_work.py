@@ -173,9 +173,7 @@ class CallerWorkRepository:
             strict=True,
         )
         request_document = json.loads(str(row["request_json"]))
-        binding = ModelRouteBinding.model_validate(
-            request_document["route_binding"], strict=True
-        )
+        binding = ModelRouteBinding.model_validate(request_document["route_binding"], strict=True)
         self._require_response_matches_observation(response, observation)
         try:
             self._model_executions.record_caller_result_in_transaction(
@@ -199,11 +197,9 @@ class CallerWorkRepository:
     ) -> None:
         if (
             response.output_text != observation["output_text"]
-            or "sha256:"
-            + hashlib.sha256(response.output_text.encode("utf-8")).hexdigest()
+            or "sha256:" + hashlib.sha256(response.output_text.encode("utf-8")).hexdigest()
             != observation["output_digest"]
-            or response.route_receipt.receipt_digest
-            != observation["route_receipt_digest"]
+            or response.route_receipt.receipt_digest != observation["route_receipt_digest"]
             or canonical_sha256(response.usage) != observation["usage_receipt_digest"]
             or canonical_sha256(response) != observation["host_receipt_digest"]
         ):
@@ -218,9 +214,7 @@ class CallerWorkRepository:
         if self._model_executions is None:
             raise CallerWorkConflict("model execution journal is unavailable")
         request_document = json.loads(str(row["request_json"]))
-        binding = ModelRouteBinding.model_validate(
-            request_document["route_binding"], strict=True
-        )
+        binding = ModelRouteBinding.model_validate(request_document["route_binding"], strict=True)
         try:
             response = self._model_executions.require_caller_result_in_transaction(
                 connection,
@@ -986,7 +980,7 @@ class CallerWorkRepository:
             )
         if outcome == "succeeded":
             state = "settled_success"
-        elif outcome in {"cancelled", "canceled"}:
+        elif outcome in {"cancelled", "canceled", "cancelled_certain"}:
             state = "cancelled_certain"
         else:
             state = "settled_failure"
@@ -1080,9 +1074,8 @@ class CallerWorkRepository:
         ).fetchone()
         if job is None or control is None:
             raise CallerWorkConflict("caller settlement lost workbench control authority")
-        if (
-            str(row["state"]) == "outcome_unknown"
-            and projected_at_unix_ms >= int(job["cumulative_deadline_unix_ms"])
+        if str(row["state"]) == "outcome_unknown" and projected_at_unix_ms >= int(
+            job["cumulative_deadline_unix_ms"]
         ):
             # Startup already classified the physical send as reconcile-only.
             # Late certain evidence is retained, but it cannot revive a

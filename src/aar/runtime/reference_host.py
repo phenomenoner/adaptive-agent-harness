@@ -79,10 +79,14 @@ from aar.runtime.provider_ready_startup import ProviderReadyStartup
 from aar.runtime.registry import OperationRegistry, RegistryError, StaleRuntimeGeneration
 from aar.runtime.rlm import RlmEngine, RlmExecutionCancelled
 from aar.runtime.rlm_workbench import (
+    RlmWorkbenchCellBudgetExceeded,
     RlmWorkbenchCoordinator,
     RlmWorkbenchDeadlineExceeded,
     RlmWorkbenchModelCallBudgetExceeded,
     RlmWorkbenchPlanner,
+    RlmWorkbenchPlannerAbstained,
+    RlmWorkbenchPromptCapacityExceeded,
+    _InvalidCompletionSelection,
 )
 from aar.runtime.worker_manager import WorkerManager
 from aar.runtime.workspace import (
@@ -106,6 +110,7 @@ from aar.schemas import (
     CapabilityLimit,
     CapabilitySet,
     FailureCategory,
+    FailureDetail,
     FailureEnvelope,
     Grant,
     HostRef,
@@ -1200,28 +1205,131 @@ class ReferenceHost:
         if kind == "rlm.workbench.execute":
             if self.rlm_workbench is None:
                 raise ReferenceHostError("RLM workbench coordinator is unavailable")
-            if isinstance(error, RlmWorkbenchModelCallBudgetExceeded):
-                self.rlm_workbench.mark_model_call_budget_terminal(operation, attempt, fence)
-                snapshot = self.rlm_workbench.snapshot(operation)
+            if isinstance(
+                error,
+                (
+                    RlmWorkbenchPlannerAbstained,
+                    RlmWorkbenchModelCallBudgetExceeded,
+                    RlmWorkbenchCellBudgetExceeded,
+                    RlmWorkbenchPromptCapacityExceeded,
+                    _InvalidCompletionSelection,
+                ),
+            ):
+                abstained = isinstance(error, RlmWorkbenchPlannerAbstained)
+                cell_budget = isinstance(error, RlmWorkbenchCellBudgetExceeded)
+                prompt_capacity = isinstance(error, RlmWorkbenchPromptCapacityExceeded)
+                invalid_completion = isinstance(error, _InvalidCompletionSelection)
                 failure = FailureEnvelope(
-                    category=FailureCategory.BUDGET,
-                    code="BUDGET_EXCEEDED",
-                    message="workbench root planner model-call budget exhausted",
+                    category=FailureCategory.WORKER
+                    if abstained or invalid_completion
+                    else FailureCategory.BUDGET,
+                    code="WORKSPACE_FAILED"
+                    if abstained or invalid_completion
+                    else "BUDGET_EXCEEDED",
+                    message=(
+                        "completion requires named artifacts"
+                        if invalid_completion
+                        else "mandatory workbench planner context exceeds request capacity"
+                        if prompt_capacity
+                        else "workbench planner abstained"
+                        if abstained
+                        else (
+                            "workbench cell budget exhausted"
+                            if cell_budget
+                            else "workbench root planner model-call budget exhausted"
+                        )
+                    ),
                     retryable=False,
                     certainty=OutcomeCertainty.CERTAIN,
                     operation=operation,
+                    details=(
+                        (
+                            FailureDetail(name="completion_decision", value="invalid"),
+                            FailureDetail(
+                                name="completion_reason", value="missing_named_artifacts"
+                            ),
+                        )
+                        if invalid_completion
+                        else (
+                            FailureDetail(name="budget_kind", value="planner_prompt_characters"),
+                            FailureDetail(
+                                name="maximum_characters", value=error.maximum_characters
+                            ),
+                            FailureDetail(
+                                name="prompt_characters", value=error.observed_characters
+                            ),
+                        )
+                        if prompt_capacity
+                        else (
+                            FailureDetail(name="planner_decision", value="abstain"),
+                            FailureDetail(name="reason_digest", value=error.reason_digest),
+                        )
+                        if abstained
+                        else (
+                            (FailureDetail(name="budget_kind", value="cells"),)
+                            if cell_budget
+                            else ()
+                        )
+                    ),
                 )
-                return self.registry.transition_claimed(
-                    attempt,
-                    self.runtime_generation,
-                    fence.dispatcher_generation,
-                    fence.lease_epoch,
-                    fence.owner_digest,
-                    state=OperationState.FAILED,
-                    result_json=canonical_json_bytes(snapshot.root).decode(),
-                    failure=failure,
-                    note="workbench_model_call_budget_exhausted",
-                )
+                coordinator = self.rlm_workbench
+
+                def transition_inner(connection: Any) -> str:
+                    coordinator.mark_planner_failure_terminal(
+                        operation,
+                        attempt,
+                        fence,
+                        failure,
+                        connection=connection,
+                        require_cell_budget=cell_budget,
+                        require_prompt_capacity=prompt_capacity,
+                        invalid_completion=error if invalid_completion else None,
+                    )
+                    return canonical_json_bytes(
+                        coordinator._snapshot_with_connection(operation, connection).root
+                    ).decode()
+
+                try:
+                    return self.registry.transition_claimed(
+                        attempt,
+                        self.runtime_generation,
+                        fence.dispatcher_generation,
+                        fence.lease_epoch,
+                        fence.owner_digest,
+                        state=OperationState.FAILED,
+                        failure=failure,
+                        note=(
+                            "workbench_invalid_completion"
+                            if invalid_completion
+                            else "workbench_planner_context_too_large"
+                            if prompt_capacity
+                            else "workbench_planner_abstained"
+                            if abstained
+                            else (
+                                "workbench_cell_budget_exhausted"
+                                if cell_budget
+                                else "workbench_model_call_budget_exhausted"
+                            )
+                        ),
+                        inner_transition=transition_inner,
+                    )
+                except Exception:
+                    # A commit may have succeeded even if its readback failed.
+                    # Never downgrade a matching durable terminal result.
+                    record = self.registry.get(operation)
+                    if record.state is OperationState.FAILED and record.failure == failure:
+                        return record
+                    # Rollback or a lost/unsafe fence: preserve uncertainty, not a
+                    # fabricated terminal result. Existing fenced parking owns this.
+                    self.rlm_workbench.park_claimed(operation, attempt, fence, error)
+                    return self.registry.park_attempt(
+                        attempt,
+                        self.runtime_generation,
+                        fence.dispatcher_generation,
+                        fence.lease_epoch,
+                        fence.owner_digest,
+                        note=f"rlm_workbench_dispatch_exception:{type(error).__name__}",
+                    )
             if isinstance(error, RlmWorkbenchDeadlineExceeded):
                 self.rlm_workbench.mark_deadline_terminal(operation)
                 snapshot = self.rlm_workbench.snapshot(operation)

@@ -10,6 +10,7 @@ import queue
 import sqlite3
 import subprocess
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,6 +18,7 @@ from typing import Any, Literal, TextIO
 
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.rlm_workbench_models import WorkspaceBrokerFrame
+from aar.runtime.completion import project_worker_completion
 from aar.runtime.process_identity import (
     ExactChild,
     ProcessIdentityMismatch,
@@ -87,6 +89,13 @@ class _WorkerTimeout(TimeoutError):
 
 
 @dataclass(slots=True)
+class _OwnedStdioClose:
+    stream: TextIO
+    done: threading.Event = field(default_factory=threading.Event)
+    error: BaseException | None = None
+
+
+@dataclass(slots=True)
 class _WorkerState:
     session: SessionRef
     generation: int
@@ -104,6 +113,8 @@ class _WorkerState:
     cancel_requested: threading.Event = field(default_factory=threading.Event)
     lock: threading.RLock = field(default_factory=threading.RLock)
     io_lock: threading.Lock = field(default_factory=threading.Lock)
+    stdio_close_lock: threading.Lock = field(default_factory=threading.Lock)
+    stdio_close_attempts: dict[str, _OwnedStdioClose] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -327,6 +338,8 @@ class SupervisedIPythonWorkspaceBackend:
         spec: WorkspaceProgramSpec,
         receipt_frame: WorkspaceBrokerFrame,
         commit_frame: WorkspaceBrokerFrame,
+        *,
+        on_acknowledgement: Callable[[WorkspaceBrokerFrame], None] | None = None,
     ) -> tuple[WorkspaceProgramResult, WorkspaceBrokerFrame]:
         receipt_document = receipt_frame.model_dump(mode="json")
         commit_document = commit_frame.model_dump(mode="json")
@@ -359,6 +372,33 @@ class SupervisedIPythonWorkspaceBackend:
                             "worker rebind acknowledgement kind changed"
                         )
                     response = self._read_response(state, timeout_s=timeout_s)
+                    acknowledged_early = False
+                    while "broker_request" in response:
+                        if not acknowledged_early:
+                            if on_acknowledgement is None:
+                                raise WorkspaceWorkerProtocolError(
+                                    "resumed broker request requires authoritative acknowledgement"
+                                )
+                            try:
+                                on_acknowledgement(acknowledgement)
+                            except BaseException:
+                                # The next request left the pipe but has not
+                                # reached its durable broker owner. Do not send
+                                # this token's old receipt into that new call.
+                                # Fence before fallible exact-child cleanup.
+                                reason = (
+                                    "rebind acknowledgement interrupted after next broker request"
+                                )
+                                state.lost = True
+                                state.lost_reason = reason
+                                self._mark_lost(state, reason)
+                                raise
+                            acknowledged_early = True
+                        broker_reply = self._broker_reply(
+                            operation, handle, response["broker_request"]
+                        )
+                        self._write_worker_message(state, broker_reply)
+                        response = self._read_response(state, timeout_s=timeout_s)
                 if not response.get("ok"):
                     raise WorkspaceWorkerProtocolError(
                         f"worker rejected resumed command: {response.get('error_type')}: "
@@ -886,6 +926,38 @@ class SupervisedIPythonWorkspaceBackend:
         except (BrokenPipeError, OSError) as error:
             raise WorkspaceWorkerLost(f"worker input failed: {error}") from error
 
+    def _broker_reply(
+        self,
+        broker_operation: OperationRef | None,
+        broker_handle: ProgrammableWorkspaceHandle | None,
+        request: Any,
+    ) -> dict[str, Any]:
+        if (
+            self._broker_handler is None
+            or broker_operation is None
+            or broker_handle is None
+            or not isinstance(request, dict)
+        ):
+            return {
+                "broker_error": {
+                    "type": "WorkspaceWorkerProtocolError",
+                    "message": "worker broker request has no bound supervisor handler",
+                }
+            }
+        try:
+            return {
+                "broker_response": self._broker_handler(broker_operation, broker_handle, request)
+            }
+        except WorkspaceBrokerSuspended:
+            raise
+        except BaseException as error:
+            return {
+                "broker_error": {
+                    "type": type(error).__name__[:128],
+                    "message": (str(error) or type(error).__name__)[:512],
+                }
+            }
+
     def _request(
         self,
         state: _WorkerState,
@@ -909,35 +981,9 @@ class SupervisedIPythonWorkspaceBackend:
                 response = self._read_response(state, timeout_s=timeout_s)
                 if "broker_request" not in response:
                     break
-                request = response["broker_request"]
-                if (
-                    self._broker_handler is None
-                    or broker_operation is None
-                    or broker_handle is None
-                    or not isinstance(request, dict)
-                ):
-                    broker_reply = {
-                        "broker_error": {
-                            "type": "WorkspaceWorkerProtocolError",
-                            "message": "worker broker request has no bound supervisor handler",
-                        }
-                    }
-                else:
-                    try:
-                        broker_reply = {
-                            "broker_response": self._broker_handler(
-                                broker_operation, broker_handle, request
-                            )
-                        }
-                    except WorkspaceBrokerSuspended:
-                        raise
-                    except BaseException as error:
-                        broker_reply = {
-                            "broker_error": {
-                                "type": type(error).__name__[:128],
-                                "message": (str(error) or type(error).__name__)[:512],
-                            }
-                        }
+                broker_reply = self._broker_reply(
+                    broker_operation, broker_handle, response["broker_request"]
+                )
                 try:
                     stream.write(
                         json.dumps(
@@ -1067,7 +1113,7 @@ class SupervisedIPythonWorkspaceBackend:
                         data={"phase": "finished", "status": "failed"},
                     )
                 )
-        return WorkspaceProgramResult(
+        result = WorkspaceProgramResult(
             operation=operation,
             workspace=handle.workspace,
             backend=self.descriptor,
@@ -1081,6 +1127,7 @@ class SupervisedIPythonWorkspaceBackend:
             ),
             events=tuple(events),
         )
+        return project_worker_completion(result, response.get("completion"))
 
     def _lost_result(
         self,
@@ -1161,9 +1208,9 @@ class SupervisedIPythonWorkspaceBackend:
             raise WorkspaceWorkerLost(state.lost_reason or "workspace worker is lost")
 
     def _mark_lost(self, state: _WorkerState, reason: str) -> None:
-        self._terminate(state)
         state.lost = True
         state.lost_reason = reason
+        self._terminate(state)
         cancelled = state.cancel_requested.is_set()
         self._managed_finish(
             state,
@@ -1228,11 +1275,11 @@ class SupervisedIPythonWorkspaceBackend:
 
     @staticmethod
     def _stderr_tail(process: subprocess.Popen[str]) -> str:
-        if process.poll() is None or process.stderr is None:
+        if process.poll() is None or process.stderr is None or process.stderr.closed:
             return "no worker stderr available"
         try:
             return process.stderr.read()[-2_048:].strip()
-        except OSError:
+        except (OSError, ValueError):
             return "worker stderr read failed"
 
     @staticmethod
@@ -1243,6 +1290,46 @@ class SupervisedIPythonWorkspaceBackend:
             raise WorkspaceWorkerLost(
                 "IPython worker exact child could not reach a verified terminal state"
             ) from error
+        # A reaped child need not imply EOF: an inherited writer can keep a
+        # buffered reader locked. Start at most one close per exact owned stream,
+        # bound the caller's wait, and never report pending cleanup as closed.
+        attempts: list[_OwnedStdioClose] = []
+        close_errors: list[BaseException] = []
+        with state.stdio_close_lock:
+            for name in ("stdin", "stdout", "stderr"):
+                stream = getattr(state.process, name, None)
+                if stream is None or stream.closed:
+                    continue
+                attempt = state.stdio_close_attempts.get(name)
+                if attempt is not None and attempt.stream is not stream:
+                    close_errors.append(WorkspaceWorkerLost("owned stdio identity changed"))
+                    continue
+                if attempt is None:
+                    attempt = _OwnedStdioClose(stream)
+                    state.stdio_close_attempts[name] = attempt
+
+                    def close_owned(owned: _OwnedStdioClose = attempt) -> None:
+                        try:
+                            owned.stream.close()
+                        except BaseException as error:
+                            owned.error = error
+                        finally:
+                            owned.done.set()
+
+                    threading.Thread(target=close_owned, daemon=True).start()
+                attempts.append(attempt)
+        deadline = time.monotonic() + 0.5
+        for attempt in attempts:
+            if not attempt.done.wait(max(0.0, deadline - time.monotonic())):
+                close_errors.append(WorkspaceWorkerLost("owned stdio close remains pending"))
+            elif attempt.error is not None:
+                close_errors.append(attempt.error)
+            elif not attempt.stream.closed:
+                close_errors.append(WorkspaceWorkerLost("owned stdio did not close"))
+        if close_errors:
+            raise WorkspaceWorkerLost(
+                "IPython worker is terminal but owned stdio cleanup failed or remains pending"
+            ) from close_errors[0]
 
 
 class WorkerFrameError(RuntimeError):

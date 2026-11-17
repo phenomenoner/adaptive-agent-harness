@@ -3,17 +3,24 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from jsonschema import Draft202012Validator
+
+from aar.broker_models import ModelResponse, ModelUsageRecord
 from aar.canonical import canonical_json_bytes, canonical_sha256
 from aar.rlm_workbench_models import (
     ArtifactBinding,
     ArtifactStage,
+    CandidateReceipt,
     CellCommitManifest,
     FinalizationManifest,
+    RlmWorkbenchJobSpec,
+    RlmWorkbenchResult,
 )
 from aar.runtime.sqlite_repository import SQLiteConnectionFactory
 from aar.schemas import ArtifactIdRef, ArtifactReference
@@ -29,6 +36,124 @@ class ArtifactNotPublished(ArtifactPublicationError):
 
 class ArtifactPublicationConflict(ArtifactPublicationError):
     """A durable artifact identity was reused with different canonical bytes."""
+
+
+def read_caller_planner_trace(
+    connection: Any,
+    operation_id: str,
+) -> tuple[int, tuple[str, ...], tuple[str, ...], tuple[dict[str, Any], ...], int, int]:
+    """Existing exact planner accounting projection, under the caller's transaction."""
+    rows = connection.execute(
+        """
+        SELECT suspension.suspension_revision, suspension.ticket_id,
+               ticket.state, ticket.settled_receipt_digest,
+               model.state AS model_state, model.usage_json,
+               model.response_json, model.response_digest
+        FROM rlm_workbench_suspensions AS suspension
+        JOIN caller_work_tickets AS ticket ON ticket.ticket_id = suspension.ticket_id
+        LEFT JOIN model_executions AS model
+          ON model.operation_id = suspension.operation_id
+         AND model.idempotency_key = ticket.external_idempotency_key
+         AND model.request_digest = ticket.request_digest
+        WHERE suspension.operation_id = ? AND suspension.cell_execution_id IS NULL
+        ORDER BY suspension.suspension_revision
+        """,
+        (operation_id,),
+    ).fetchall()
+    directive_rows = connection.execute(
+        "SELECT payload_json FROM operation_events "
+        "WHERE operation_id=? AND event_kind='planner_successor_consumed' ORDER BY sequence",
+        (operation_id,),
+    ).fetchall()
+    if not rows:
+        raise ArtifactPublicationConflict("planner trace is incomplete")
+    directive_digests = []
+    for row in directive_rows:
+        digest = json.loads(str(row["payload_json"])).get("directive_digest")
+        if not isinstance(digest, str):
+            raise ArtifactPublicationConflict("planner directive digest is unavailable")
+        directive_digests.append(digest)
+    usage_receipt_digests = []
+    broker_trace = []
+    input_tokens = output_tokens = 0
+    for row in rows:
+        if str(row["state"]) != "settled_success":
+            raise ArtifactPublicationConflict("planner trace includes a non-success settlement")
+        settlement_digest = str(row["settled_receipt_digest"])
+        receipt_rows = connection.execute(
+            "SELECT receipt_json FROM caller_work_candidate_receipts "
+            "WHERE ticket_id=? ORDER BY observed_at_unix_ms, receipt_digest",
+            (str(row["ticket_id"]),),
+        ).fetchall()
+        try:
+            candidates = tuple(
+                CandidateReceipt.model_validate_json(str(item[0]), strict=True)
+                for item in receipt_rows
+            )
+        except (ValueError, TypeError) as exc:
+            raise ArtifactPublicationConflict(
+                "planner trace settlement receipt is malformed"
+            ) from exc
+        receipts = tuple(
+            receipt
+            for receipt in candidates
+            if receipt.receipt_digest == settlement_digest
+            and receipt.root["ticket_id"] == str(row["ticket_id"])
+        )
+        if len(receipts) != 1:
+            raise ArtifactPublicationConflict("planner trace settlement receipt is not unique")
+        observation = dict(receipts[0].root["observation"])
+        required = {
+            name: observation.get(name)
+            for name in (
+                "route_receipt_digest",
+                "usage_receipt_digest",
+                "host_receipt_digest",
+                "output_digest",
+            )
+        }
+        if observation.get("kind") != "model" or not all(
+            isinstance(v, str) for v in required.values()
+        ):
+            raise ArtifactPublicationConflict("planner trace model receipt is incomplete")
+        try:
+            usage = ModelUsageRecord.model_validate_json(str(row["usage_json"]), strict=True)
+            response = ModelResponse.model_validate_json(str(row["response_json"]), strict=True)
+            if (
+                row["model_state"] != "result_committed"
+                or response.usage != usage
+                or canonical_sha256(usage) != required["usage_receipt_digest"]
+                or canonical_sha256(response) != row["response_digest"]
+                or row["response_digest"] != required["host_receipt_digest"]
+                or response.route_receipt.receipt_digest != required["route_receipt_digest"]
+                or "sha256:" + hashlib.sha256(response.output_text.encode()).hexdigest()
+                != required["output_digest"]
+            ):
+                raise ValueError("planner usage is not bound to its settled response")
+        except (ValueError, TypeError) as exc:
+            raise ArtifactPublicationConflict(
+                "planner usage receipt does not match its model journal"
+            ) from exc
+        # Equal usage digests on distinct tickets remain distinct committed executions.
+        input_tokens += usage.input_tokens
+        output_tokens += usage.output_tokens
+        usage_receipt_digests.append(str(required["usage_receipt_digest"]))
+        broker_trace.append(
+            {
+                "suspension_revision": int(row["suspension_revision"]),
+                "ticket_id": str(row["ticket_id"]),
+                "settlement_digest": settlement_digest,
+                **required,
+            }
+        )
+    return (
+        len(rows),
+        tuple(directive_digests),
+        tuple(usage_receipt_digests),
+        tuple(broker_trace),
+        input_tokens,
+        output_tokens,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,8 +217,7 @@ class ArtifactPublicationRepository:
                 raise ArtifactPublicationConflict("artifact cell identity is unknown")
             if (
                 identity["workspace_id"] != binding_document["workspace"]["value"]
-                or identity["workspace_generation"]
-                != binding_document["workspace_generation"]
+                or identity["workspace_generation"] != binding_document["workspace_generation"]
             ):
                 raise ArtifactPublicationConflict("artifact workspace identity mismatch")
 
@@ -188,6 +312,25 @@ class ArtifactPublicationRepository:
             )
             if any(actual != wanted for actual, wanted in expected):
                 raise ArtifactPublicationConflict("cell manifest authority mismatch")
+            job = connection.execute(
+                "SELECT * FROM rlm_workbench_jobs WHERE operation_id=?", (operation_id,)
+            ).fetchone()
+            lease = None
+            if (
+                connection.execute(
+                    "SELECT 1 FROM operation_dispatch WHERE operation_id=?", (operation_id,)
+                ).fetchone()
+                is not None
+                or json.loads(str(job["spec_json"])).get("schema_version")
+                == "aar.rlm-workbench-job.v1"
+            ):
+                job, lease = self.current_native_cell_authority(
+                    connection,
+                    operation_id,
+                    document["attempt_id"],
+                    document["attempt_fence"],
+                    now_unix_ms=self._now_ms(),
+                )
 
             listed_stage_ids = tuple(document["artifact_stage_ids"])
             stage_rows = connection.execute(
@@ -205,7 +348,17 @@ class ArtifactPublicationRepository:
                     "cell manifest must bind the exact staged artifact set"
                 )
 
+            if lease is not None:
+                self._barrier("cell_commit_validated")
             now = self._now_ms()
+            if lease is not None:
+                self.current_native_cell_authority(
+                    connection,
+                    operation_id,
+                    document["attempt_id"],
+                    document["attempt_fence"],
+                    now_unix_ms=now,
+                )
             connection.execute(
                 """
                 INSERT INTO rlm_workbench_cell_manifests(
@@ -235,9 +388,9 @@ class ArtifactPublicationRepository:
                 (
                     document["post_revision"],
                     document["checkpoint_digest"],
-                    canonical_json_bytes(
-                        {"result_digest": document["result_digest"]}
-                    ).decode("utf-8"),
+                    canonical_json_bytes({"result_digest": document["result_digest"]}).decode(
+                        "utf-8"
+                    ),
                     document["result_digest"],
                     now,
                     operation_id,
@@ -267,6 +420,25 @@ class ArtifactPublicationRepository:
         *,
         result: dict[str, Any],
     ) -> PublicationReceipt:
+        with self._factory.transaction(write=True) as connection:
+            return self.finalize_in_transaction(connection, manifest, result=result)
+
+    def finalize_in_transaction(
+        self,
+        connection: Any,
+        manifest: dict[str, Any],
+        *,
+        result: dict[str, Any],
+        proposal_digest: str | None = None,
+    ) -> PublicationReceipt:
+        """One publication writer; an existing write transaction owns check and effect.
+
+        Native jobs are identified from their persisted job contract/dispatch, never
+        from a caller-selected mode. Their selected bindings remain distinct from
+        the standalone repository API's historical all-committed binding policy.
+        """
+        if not connection.in_transaction:
+            raise ArtifactPublicationConflict("finalization requires an owning transaction")
         value = FinalizationManifest.model_validate(manifest, strict=True)
         document = value.model_dump(mode="json")
         operation_id = document["operation"]["value"]
@@ -275,117 +447,289 @@ class ArtifactPublicationRepository:
         result_json = canonical_json_bytes(result).decode("utf-8")
         if result.get("result_digest") != document["result_digest"]:
             raise ArtifactPublicationConflict("result digest does not match finalization")
-
-        with self._factory.transaction(write=True) as connection:
-            existing = connection.execute(
-                """
-                SELECT manifest_json, manifest_digest
-                FROM rlm_workbench_finalization_manifests
-                WHERE operation_id=?
-                """,
-                (operation_id,),
-            ).fetchone()
-            if existing is not None:
-                if (
-                    str(existing["manifest_json"]) != manifest_json
-                    or str(existing["manifest_digest"]) != manifest_digest
-                ):
-                    raise ArtifactPublicationConflict(
-                        "finalization identity already binds different bytes"
-                    )
-                return PublicationReceipt(replayed=True, manifest_digest=manifest_digest)
-
-            job = connection.execute(
-                """
-                SELECT phase, control_revision, cancellation_revision,
-                       cumulative_deadline_unix_ms
-                FROM rlm_workbench_jobs WHERE operation_id=?
-                """,
-                (operation_id,),
-            ).fetchone()
-            if job is None or (
-                job["phase"] != document["expected_prior_phase"]
-                or job["control_revision"] != document["control_revision"]
-                or job["cancellation_revision"]
-                != document["expected_cancellation_revision"]
-                or job["cumulative_deadline_unix_ms"]
-                != document["expected_deadline_unix_ms"]
+        job = connection.execute(
+            "SELECT * FROM rlm_workbench_jobs WHERE operation_id=?", (operation_id,)
+        ).fetchone()
+        if job is None:
+            raise ArtifactPublicationConflict("finalization job is unknown")
+        spec = json.loads(str(job["spec_json"]))
+        dispatch = connection.execute(
+            "SELECT state, current_attempt_no FROM operation_dispatch WHERE operation_id=?",
+            (operation_id,),
+        ).fetchone()
+        native = dispatch is not None or spec.get("schema_version") == "aar.rlm-workbench-job.v1"
+        if native:
+            result = RlmWorkbenchResult.model_validate(result, strict=True).root
+            spec = RlmWorkbenchJobSpec.model_validate(spec, strict=True).root
+            if (
+                result["operation"] != document["operation"]
+                or canonical_sha256({k: v for k, v in result.items() if k != "result_digest"})
+                != document["result_digest"]
+                or canonical_sha256(result["output"]) != result["output_digest"]
+                or canonical_sha256(spec) != job["spec_digest"]
+                or document["usage_digest"] != canonical_sha256(result["usage_receipt_digests"])
+                or document["child_policy_digest"] != canonical_sha256(result["child_lineage"])
+                or document["workspace_disposition_digest"]
+                != canonical_sha256(
+                    {
+                        "workspace_disposition": result["workspace_disposition"],
+                        "checkpoint": result["final_checkpoint_digest"],
+                    }
+                )
+                or result["terminal_status"] != "succeeded"
+                or result["workspace_disposition"] != "closed"
+                or result["unresolved_required_children"] != 0
             ):
-                raise ArtifactPublicationConflict("finalization job authority mismatch")
+                raise ArtifactPublicationConflict("finalization result binding mismatch")
+            contract = spec["completion"]["output_contract"]
+            if len(canonical_json_bytes(result["output"])) > contract[
+                "max_instance_bytes"
+            ] or not Draft202012Validator(contract["schema"]).is_valid(result["output"]):
+                raise ArtifactPublicationConflict("finalization result output contract mismatch")
+            if spec["completion"]["require_named_artifacts"] and not result["artifact_bindings"]:
+                raise ArtifactPublicationConflict("finalization result requires named artifacts")
 
-            attempt = connection.execute(
-                "SELECT 1 FROM operation_attempts WHERE operation_id=? AND attempt_id=?",
-                (operation_id, document["finalizer_attempt_id"]),
-            ).fetchone()
-            if attempt is None:
-                raise ArtifactPublicationConflict("finalizer attempt is not authoritative")
-
-            unresolved = connection.execute(
-                """
-                SELECT COUNT(*) FROM caller_work_tickets
-                WHERE operation_id=? AND state NOT IN (
-                    'settled_success', 'settled_failure', 'cancelled_before_send',
-                    'cancelled_certain', 'quarantined'
+        existing = connection.execute(
+            "SELECT manifest_json, manifest_digest FROM rlm_workbench_finalization_manifests "
+            "WHERE operation_id=?",
+            (operation_id,),
+        ).fetchone()
+        if existing is not None:
+            if (
+                str(existing["manifest_json"]) != manifest_json
+                or str(existing["manifest_digest"]) != manifest_digest
+                or job["phase"] != "succeeded"
+                or job["result_json"] != result_json
+                or job["result_digest"] != document["result_digest"]
+            ):
+                raise ArtifactPublicationConflict(
+                    "finalization replay result or manifest bytes changed"
                 )
-                """,
+            return PublicationReceipt(replayed=True, manifest_digest=manifest_digest)
+
+        if (
+            job["phase"] != document["expected_prior_phase"]
+            or job["control_revision"] != document["control_revision"]
+            or job["cancellation_requested"]
+            or job["cancellation_revision"] != document["expected_cancellation_revision"]
+            or job["cumulative_deadline_unix_ms"] != document["expected_deadline_unix_ms"]
+        ):
+            raise ArtifactPublicationConflict("finalization job authority mismatch")
+        attempt = connection.execute(
+            "SELECT * FROM operation_attempts WHERE operation_id=? AND attempt_id=?",
+            (operation_id, document["finalizer_attempt_id"]),
+        ).fetchone()
+        if attempt is None:
+            raise ArtifactPublicationConflict("finalizer attempt is not authoritative")
+
+        unresolved = connection.execute(
+            "SELECT COUNT(*) FROM caller_work_tickets WHERE operation_id=? AND state NOT IN ("
+            "'settled_success','settled_failure','cancelled_before_send','cancelled_certain','quarantined')",
+            (operation_id,),
+        ).fetchone()[0]
+        pending = connection.execute(
+            "SELECT COUNT(*) FROM rlm_workbench_suspensions WHERE "
+            "operation_id=? AND state='pending'",
+            (operation_id,),
+        ).fetchone()[0]
+        if unresolved or pending or document["unresolved_required_ticket_count"]:
+            raise ArtifactPublicationConflict("finalization has unresolved required tickets")
+
+        bindings = self._committed_bindings(connection, operation_id)
+        all_digests = tuple(canonical_sha256(b.model_dump(mode="json")) for b in bindings)
+        listed = tuple(document["artifact_binding_digests"])
+        if native:
+            selected = tuple(canonical_sha256(b) for b in result["artifact_bindings"])
+            names = tuple(b["logical_name"] for b in result["artifact_bindings"])
+            valid_bindings = (
+                selected == listed
+                and len(selected) == len(set(selected))
+                and len(names) == len(set(names))
+                and all(d in all_digests for d in selected)
+            )
+        else:
+            valid_bindings = all_digests == listed
+        if not valid_bindings:
+            raise ArtifactPublicationConflict("finalization artifact binding set mismatch")
+
+        if native and spec["model"]["execution_mode"] == "caller_delegated":
+            calls, directives, usage, trace, inputs, outputs = read_caller_planner_trace(
+                connection, operation_id
+            )
+            cells = connection.execute(
+                "SELECT manifest_digest FROM rlm_workbench_cell_manifests "
+                "WHERE operation_id=? ORDER BY cell_execution_id",
                 (operation_id,),
-            ).fetchone()[0]
-            if unresolved != document["unresolved_required_ticket_count"]:
-                raise ArtifactPublicationConflict(
-                    "finalization unresolved caller-work count mismatch"
-                )
-
-            bindings = self._committed_bindings(connection, operation_id)
-            binding_digests = tuple(
-                canonical_sha256(binding.model_dump(mode="json")) for binding in bindings
-            )
-            if binding_digests != tuple(document["artifact_binding_digests"]):
-                raise ArtifactPublicationConflict(
-                    "finalization artifact binding set mismatch"
-                )
-
-            now = self._now_ms()
-            proposal_digest = canonical_sha256(
-                {"manifest_digest": manifest_digest, "result": result}
-            )
-            connection.execute(
-                """
-                INSERT INTO rlm_workbench_finalization_manifests(
-                    operation_id, finalizer_attempt_id, finalizer_attempt_fence,
-                    expected_prior_phase, expected_cancellation_revision,
-                    expected_cumulative_deadline_unix_ms, control_revision,
-                    unresolved_required_ticket_count, proposal_digest,
-                    result_digest, manifest_json, manifest_digest,
-                    committed_at_unix_ms
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    operation_id,
-                    document["finalizer_attempt_id"],
-                    document["finalizer_attempt_fence"],
-                    document["expected_prior_phase"],
-                    document["expected_cancellation_revision"],
-                    document["expected_deadline_unix_ms"],
-                    document["control_revision"],
-                    document["unresolved_required_ticket_count"],
-                    proposal_digest,
-                    document["result_digest"],
-                    manifest_json,
-                    manifest_digest,
-                    now,
+            ).fetchall()
+            expected_accounting = {
+                "model_calls": calls,
+                "input_tokens": inputs,
+                "output_tokens": outputs,
+                "usage_receipt_digests": list(usage),
+                "broker_trace_digest": canonical_sha256(trace),
+                "step_trace_digest": canonical_sha256(
+                    {
+                        "directives": directives,
+                        "cell_manifests": tuple(str(row[0]) for row in cells),
+                    }
                 ),
+            }
+            if any(result[key] != expected for key, expected in expected_accounting.items()):
+                raise ArtifactPublicationConflict(
+                    "native caller accounting differs from settled journal"
+                )
+
+        lease_expiry = None
+        if native:
+            lease = self._current_native_lease(
+                connection,
+                operation_id,
+                document["finalizer_attempt_id"],
+                document["finalizer_attempt_fence"],
             )
-            self._barrier("finalization_manifest_inserted")
-            connection.execute(
-                """
-                UPDATE rlm_workbench_jobs
-                SET phase='succeeded', result_json=?, result_digest=?,
-                    updated_at_unix_ms=?
-                WHERE operation_id=? AND phase='finalizing'
-                """,
-                (result_json, document["result_digest"], now, operation_id),
+            if (
+                lease["cancellation_requested"]
+                or lease["control_revision"] != document["control_revision"]
+            ):
+                raise ArtifactPublicationConflict("native finalizer control changed")
+            lease_expiry = int(lease["expires_at_unix_ms"])
+
+        self._barrier("finalization_validated")
+        now = self._now_ms()
+        if now >= document["expected_deadline_unix_ms"] or (
+            lease_expiry is not None and now >= lease_expiry
+        ):
+            raise ArtifactPublicationConflict(
+                "finalization deadline or lease expired before commit"
             )
+        revision = int(job["control_revision"]) + 1
+        connection.execute(
+            "INSERT INTO rlm_workbench_finalization_manifests("
+            "operation_id, finalizer_attempt_id, finalizer_attempt_fence, expected_prior_phase, "
+            "expected_cancellation_revision, "
+            "expected_cumulative_deadline_unix_ms, control_revision, "
+            "unresolved_required_ticket_count, proposal_digest, result_digest, manifest_json, "
+            "manifest_digest, committed_at_unix_ms) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                operation_id,
+                document["finalizer_attempt_id"],
+                document["finalizer_attempt_fence"],
+                document["expected_prior_phase"],
+                document["expected_cancellation_revision"],
+                document["expected_deadline_unix_ms"],
+                revision,
+                0,
+                proposal_digest
+                or canonical_sha256({"manifest_digest": manifest_digest, "result": result}),
+                document["result_digest"],
+                manifest_json,
+                manifest_digest,
+                now,
+            ),
+        )
+        self._barrier("finalization_manifest_inserted")
+        updated = connection.execute(
+            "UPDATE rlm_workbench_jobs SET phase='succeeded', control_revision=?, result_json=?, "
+            "result_digest=?, checkpoint_digest=COALESCE("
+            "?,checkpoint_digest), updated_at_unix_ms=? "
+            "WHERE operation_id=? AND phase='finalizing' AND control_revision=? "
+            "AND cancellation_requested=0 AND cancellation_revision=?",
+            (
+                revision,
+                result_json,
+                document["result_digest"],
+                result.get("final_checkpoint_digest"),
+                now,
+                operation_id,
+                document["control_revision"],
+                document["expected_cancellation_revision"],
+            ),
+        )
+        if updated.rowcount != 1:
+            raise ArtifactPublicationConflict("finalization job compare-and-set failed")
+        if native:
+            updated = connection.execute(
+                "UPDATE operation_controls SET control_revision=? WHERE operation_id=? "
+                "AND control_revision=? AND cancellation_requested=0",
+                (revision, operation_id, document["control_revision"]),
+            )
+            if updated.rowcount != 1:
+                raise ArtifactPublicationConflict("finalization control compare-and-set failed")
         return PublicationReceipt(replayed=False, manifest_digest=manifest_digest)
+
+    @staticmethod
+    def current_native_cell_authority(
+        connection: Any,
+        operation_id: str,
+        attempt_id: str,
+        fence_digest: str,
+        *,
+        now_unix_ms: int,
+    ) -> tuple[Any, Any]:
+        """Read existing native cell authority in the caller's write transaction.
+
+        No grant or write is produced here. The cell owner holds this same
+        transaction through promotion; resumed and ordinary native cells share
+        the publication repository's existing fence/control/deadline policy.
+        """
+        job = connection.execute(
+            "SELECT * FROM rlm_workbench_jobs WHERE operation_id=? AND phase='running'",
+            (operation_id,),
+        ).fetchone()
+        if job is None:
+            raise ArtifactPublicationConflict("native cell job is not running")
+        lease = ArtifactPublicationRepository._current_native_lease(
+            connection, operation_id, attempt_id, fence_digest
+        )
+        if (
+            job["cancellation_requested"]
+            or lease["cancellation_requested"]
+            or job["control_revision"] != lease["control_revision"]
+        ):
+            raise ArtifactPublicationConflict("native cell control changed or cancelled")
+        if (
+            now_unix_ms >= lease["expires_at_unix_ms"]
+            or now_unix_ms >= job["cumulative_deadline_unix_ms"]
+        ):
+            raise ArtifactPublicationConflict("native cell deadline or lease expired before commit")
+        return job, lease
+
+    @staticmethod
+    def _current_native_lease(
+        connection: Any,
+        operation_id: str,
+        attempt_id: str,
+        fence_digest: str,
+    ) -> Any:
+        row = connection.execute(
+            "SELECT lease.expires_at_unix_ms, lease.lease_epoch, lease.owner_digest, "
+            "attempt.dispatcher_generation, control.control_revision, "
+            "control.cancellation_requested "
+            "FROM operation_attempts AS attempt "
+            "JOIN operation_dispatch AS dispatch USING(operation_id) "
+            "JOIN operation_leases AS lease ON lease.operation_id=attempt.operation_id "
+            "AND lease.attempt_no=attempt.attempt_no "
+            "JOIN operation_controls AS control ON control.operation_id=attempt.operation_id "
+            "JOIN operations AS op ON op.operation_id=attempt.operation_id "
+            "WHERE attempt.operation_id=? AND attempt.attempt_id=? AND attempt.state='running' "
+            "AND dispatch.state='running' AND dispatch.current_attempt_no=attempt.attempt_no "
+            "AND op.state='running' AND op.runtime_generation=attempt.runtime_generation "
+            "AND lease.released_at_unix_ms IS NULL",
+            (operation_id, attempt_id),
+        ).fetchone()
+        if (
+            row is None
+            or canonical_sha256(
+                {
+                    "dispatcher_generation": row["dispatcher_generation"],
+                    "lease_epoch": row["lease_epoch"],
+                    "owner_digest": row["owner_digest"],
+                }
+            )
+            != fence_digest
+        ):
+            raise ArtifactPublicationConflict("native attempt fence or ownership is stale")
+        return row
 
     def finalization_manifest(self, operation_id: str) -> FinalizationManifest | None:
         with self._factory.transaction(write=False) as connection:
@@ -407,9 +751,7 @@ class ArtifactPublicationRepository:
             ).fetchone()
             if finalized is None:
                 return ()
-            manifest = FinalizationManifest.model_validate_json(
-                str(finalized[0]), strict=True
-            )
+            manifest = FinalizationManifest.model_validate_json(str(finalized[0]), strict=True)
             expected = set(manifest.artifact_binding_digests)
             bindings = self._committed_bindings(connection, operation_id)
             return tuple(

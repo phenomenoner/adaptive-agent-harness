@@ -61,9 +61,7 @@ def default_runtime_home() -> Path:
 def _default_programmable_backend() -> str:
     backend = os.environ.get(PROGRAMMABLE_BACKEND_ENV, "ipython")
     if backend not in {"ipython", "plain"}:
-        raise CodexMcpLauncherError(
-            f"{PROGRAMMABLE_BACKEND_ENV} must be 'ipython' or 'plain'"
-        )
+        raise CodexMcpLauncherError(f"{PROGRAMMABLE_BACKEND_ENV} must be 'ipython' or 'plain'")
     return backend
 
 
@@ -222,9 +220,7 @@ def _spawn_supervisor(
         "stderr": log,
     }
     if os.name == "nt":
-        options["creationflags"] = (
-            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
-        )
+        options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
     else:
         options["start_new_session"] = True
     try:
@@ -264,6 +260,8 @@ def _accept_discovery_after_spawn(
     cleanup_timeout_sec: float,
 ) -> SupervisorDiscoveryRecord:
     if discovery.process_identity == process.identity:
+        # Release startup-only ownership without signalling the accepted owner.
+        process.target.close()
         return discovery
     _reap_spawned_process(process, cleanup_timeout_sec)
     return discovery
@@ -341,9 +339,7 @@ def ensure_codex_supervisor(
                     process,
                     cleanup_timeout_sec=startup_timeout_sec,
                 )
-            raise CodexMcpLauncherError(
-                "Codex supervisor did not become Ready before timeout"
-            )
+            raise CodexMcpLauncherError("Codex supervisor did not become Ready before timeout")
         except BaseException as startup_error:
             try:
                 _reap_spawned_process(process, startup_timeout_sec)
@@ -364,18 +360,14 @@ def _shutdown_request_bytes(discovery: SupervisorDiscoveryRecord) -> bytes:
     )
 
 
-def _remove_stale_private_files(
-    runtime_home: Path, discovery: SupervisorDiscoveryRecord
-) -> None:
+def _remove_stale_private_files(runtime_home: Path, discovery: SupervisorDiscoveryRecord) -> None:
     del runtime_home, discovery
     # Generation artifacts are retained during normal lifecycle operation.  The stable
     # discovery pointer may be advanced atomically by a successor, but no predecessor deletes
     # a pathname that could have been republished after its last observation.
 
 
-def _write_shutdown_request(
-    runtime_home: Path, discovery: SupervisorDiscoveryRecord
-) -> None:
+def _write_shutdown_request(runtime_home: Path, discovery: SupervisorDiscoveryRecord) -> None:
     private = _private_dir(runtime_home)
     target = private / discovery.shutdown_request_file
     if _is_reparse_or_symlink(target):
@@ -477,9 +469,7 @@ def stop_codex_supervisor(runtime_home: Path, *, timeout_sec: float = 20.0) -> b
     with target:
         target.send_signal(signal.SIGTERM)
         if not target.wait(timeout_sec):
-            raise CodexMcpLauncherError(
-                "Codex supervisor did not stop after fallback termination"
-            )
+            raise CodexMcpLauncherError("Codex supervisor did not stop after fallback termination")
     _remove_stale_private_files(runtime_home, discovery)
     return True
 

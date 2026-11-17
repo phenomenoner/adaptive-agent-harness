@@ -91,7 +91,7 @@ def test_canonical_json_rejects_float_and_sorts_keys() -> None:
 def test_schema_bundle_digest_is_self_consistent() -> None:
     bundle = schema_bundle()
     digest = bundle.pop("bundle_digest")
-    assert PACKAGE_VERSION == "0.6.1a0"
+    assert PACKAGE_VERSION == "0.6.1a1"
     assert bundle["package_version"] == FROZEN_COMPATIBILITY_PACKAGE_VERSION == "0.5.0a0"
     assert digest == canonical_sha256(bundle)
 
@@ -187,8 +187,7 @@ def test_every_mutating_mcp_handler_reaches_current_authority_admission() -> Non
         for node in tree.body
         if isinstance(node, ast.Assign)
         and any(
-            isinstance(target, ast.Name)
-            and target.id == "CALLER_WORK_METHOD_CAPABILITIES"
+            isinstance(target, ast.Name) and target.id == "CALLER_WORK_METHOD_CAPABILITIES"
             for target in node.targets
         )
     )

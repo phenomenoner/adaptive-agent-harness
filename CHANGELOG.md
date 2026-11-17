@@ -2,6 +2,26 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
+## 0.6.1a1 — 2026-11-17 release-contract target
+
+`v0.6.1a1` targets complete native workbench delivery with clearer planner feedback,
+committed artifact selection and owned-process cleanup. This release-contract target
+publishes no evidence by itself: source text does not establish that the target tag,
+GitHub prerelease or `adaptive-agent-runtime-v0.6.1a1-release-receipt.json` exists.
+Read the external receipt for the exact source, artifacts, CI and qualification scope.
+
+- Return successful cell source and bounded committed-artifact context to the planner.
+- Finalize from committed named stages; reject missing, duplicate, foreign or changed bindings.
+- Keep planner/cell budget exhaustion, certain failures and unknown effects distinct.
+- Bound owned stdio-close waits and preserve incomplete cleanup as an explicit failure.
+- Refuse completion before staging when mandatory artifact events cannot fit.
+- Preserve fenced owners, atomic publication and cancellation receipt provenance.
+
+The public MCP surface remains v9 with 38 tools. Existing roots remain clean-install-only;
+provider credentials, physical calls, activation and delivery stay host-owned.
+See [the release notes](docs/RELEASE-v0.6.1a1.md). This alpha is not a general stability,
+hidden-correctness or full post-freeze host-acceptance claim.
+
 ## 0.6.1a0 — 2026-11-02 release-contract target
 
 `v0.6.1a0` targets reliable longer-running work under explicit host allowances. Its release contract
@@ -34,7 +54,7 @@ remain host-owned. Source-main publication and local activation are distinct fro
 GitHub prerelease, provider-backed qualification or formal evaluation. Official Plugin Directory
 publication and general production deployment are not established by this release contract.
 
-See [the current release notes](docs/RELEASE-v0.6.1a0.md) for compatibility and verification scope.
+See [the release notes](docs/RELEASE-v0.6.1a0.md) for compatibility and verification scope.
 
 ## 0.6.0a2 — 2026-09-01 release-contract target
 

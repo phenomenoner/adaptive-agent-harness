@@ -31,7 +31,12 @@ from aar.continuity_models import (
     OperationWorkspaceCheckpointBoundaryV1,
     OperationWorkspaceCheckpointSelectionV1,
 )
-from aar.rlm_workbench_models import CallerWorkTicket, CandidateReceipt, RlmDirective
+from aar.rlm_workbench_models import (
+    CallerWorkTicket,
+    CandidateReceipt,
+    RlmDirective,
+    RlmWorkbenchJobSpec,
+)
 from aar.runtime.models import OperationEvent, OperationRecord
 from aar.runtime.workspace_models import (
     ProgrammableWorkspaceHandle,
@@ -265,8 +270,10 @@ def sqlite_connection_path(database_path: Path | str) -> str:
     value = os.fspath(database_path)
     parts = Path(value).parts
     if parts[:4] == ("/", "proc", "self", "fd"):
-        if len(parts) < 6 or not parts[4].isdigit() or any(
-            part in {".", ".."} for part in parts[5:]
+        if (
+            len(parts) < 6
+            or not parts[4].isdigit()
+            or any(part in {".", ".."} for part in parts[5:])
         ):
             raise ValueError("invalid descriptor-bound SQLite path")
         return value
@@ -2214,8 +2221,7 @@ class OperationRegistry:
             or row["cell_execution_id"] is not None
             or int(row["job_control_revision"]) != int(row["operation_control_revision"])
             or bool(row["cancellation_requested"])
-            or int(row["suspension_control_revision"]) + 1
-            != int(row["job_control_revision"])
+            or int(row["suspension_control_revision"]) + 1 != int(row["job_control_revision"])
         ):
             raise InvalidTransition("planner successor control authority is stale")
         owner = json.loads(str(row["logical_owner_json"]))
@@ -2311,15 +2317,19 @@ class OperationRegistry:
                 """,
                 (operation_id, str(row["successor_attempt_id"])),
             ).fetchone()
-            if prior_successor is None or (
-                str(prior_successor["attempt_state"]) == "running"
-                and prior_successor["released_at_unix_ms"] is None
-                and prior_successor["expires_at_unix_ms"] is not None
-                and int(prior_successor["expires_at_unix_ms"]) > now
-            ) or (
-                str(prior_successor["dispatch_state"]) == _DISPATCH_RUNNING
-                and int(prior_successor["current_attempt_no"])
-                == int(prior_successor["attempt_no"])
+            if (
+                prior_successor is None
+                or (
+                    str(prior_successor["attempt_state"]) == "running"
+                    and prior_successor["released_at_unix_ms"] is None
+                    and prior_successor["expires_at_unix_ms"] is not None
+                    and int(prior_successor["expires_at_unix_ms"]) > now
+                )
+                or (
+                    str(prior_successor["dispatch_state"]) == _DISPATCH_RUNNING
+                    and int(prior_successor["current_attempt_no"])
+                    == int(prior_successor["attempt_no"])
+                )
             ):
                 raise StaleAttemptFence("prepared planner successor owner is still live")
         rebind_generation = int(row["rebind_generation"]) + 1
@@ -2403,7 +2413,6 @@ class OperationRegistry:
         )
         return str(row["outbox_digest"])
 
-
     def prepared_planner_successor(
         self,
         attempt_ref: OperationAttemptRefV1,
@@ -2470,8 +2479,7 @@ class OperationRegistry:
                     str(cell["attempt_fence"]) != expected_fence
                     or str(cell["authority_attempt_id"]) != attempt_id
                     or str(cell["authority_attempt_fence"]) != expected_fence
-                    or str(cell["authority_cell_execution_id"])
-                    != str(cell["cell_execution_id"])
+                    or str(cell["authority_cell_execution_id"]) != str(cell["cell_execution_id"])
                 ):
                     raise StaleAttemptFence("prepared planner cell recovery fence is stale")
                 directive = json.loads(str(cell["source_json"]))
@@ -2521,6 +2529,7 @@ class OperationRegistry:
         token: Mapping[str, Any],
         directive: Mapping[str, Any] | None = None,
         cell_projection: Mapping[str, Any] | None = None,
+        reject_cell_budget: bool = False,
         terminal_state: OperationState | None = None,
         failure: Mapping[str, Any] | None = None,
         correction_ticket: CallerWorkTicket | None = None,
@@ -2543,7 +2552,13 @@ class OperationRegistry:
         if (correction_ticket is None) != (ticket_writer is None):
             raise ValueError("planner correction requires both ticket and ticket writer")
         execute_cell = directive is not None and directive.get("kind") == "execute_cell"
-        if execute_cell != (cell_projection is not None):
+        if type(reject_cell_budget) is not bool:
+            raise ValueError("cell budget rejection must be boolean")
+        if reject_cell_budget and (
+            not execute_cell or cell_projection is not None or failure is not None
+        ):
+            raise ValueError("cell budget rejection requires an unprojected execute_cell")
+        if not reject_cell_budget and execute_cell != (cell_projection is not None):
             raise ValueError("execute_cell planner consumption requires one cell projection")
         if terminal_state is not None and terminal_state not in {
             OperationState.FAILED,
@@ -2553,6 +2568,11 @@ class OperationRegistry:
             raise ValueError("planner terminal state is unsupported")
 
         with self._lock, self._connection:
+            if reject_cell_budget:
+                # The rejected directive is still a real settled model result.
+                # Lock before reading its authority/budget/effect predicates;
+                # consuming the outbox and failing both owners share this TX.
+                self._connection.execute("BEGIN IMMEDIATE")
             operation, attempt_no, attempt_id = _attempt_identity(attempt_ref)
             runtime_generation = self._current_runtime_generation_unlocked()
             self._validate_fence_unlocked(
@@ -2569,6 +2589,7 @@ class OperationRegistry:
                 SELECT outbox.*, suspension.ticket_id, suspension.request_digest,
                        suspension.logical_owner_json,
                        job.phase AS job_phase, job.control_revision AS job_control_revision,
+                       job.spec_json, job.cancellation_requested AS job_cancellation_requested,
                        job.cumulative_deadline_unix_ms,
                        job.workspace_id, job.workspace_generation, job.workspace_revision,
                        control.control_revision AS operation_control_revision,
@@ -2615,19 +2636,16 @@ class OperationRegistry:
             if (
                 str(row["outbox_digest"]) != str(token["outbox_digest"])
                 or str(token.get("operation_id")) != operation.value
-                or int(token.get("suspension_revision", -1))
-                != int(row["suspension_revision"])
+                or int(token.get("suspension_revision", -1)) != int(row["suspension_revision"])
                 or str(token.get("ticket_id")) != str(row["ticket_id"])
                 or str(token.get("request_digest")) != str(row["request_digest"])
-                or token.get("logical_owner")
-                != json.loads(str(row["logical_owner_json"]))
+                or token.get("logical_owner") != json.loads(str(row["logical_owner_json"]))
                 or int(row["rebind_generation"]) != int(token["rebind_generation"])
                 or str(row["successor_attempt_fence"]) != expected_fence
                 or str(row["settlement_digest"]) != str(token["settlement_digest"])
                 or str(row["job_phase"]) != "accepted"
                 or (
-                    int(row["job_control_revision"])
-                    != int(row["operation_control_revision"])
+                    int(row["job_control_revision"]) != int(row["operation_control_revision"])
                     and not (
                         bool(row["cancellation_requested"])
                         and int(row["operation_control_revision"])
@@ -2662,9 +2680,7 @@ class OperationRegistry:
             if (directive is not None or correction_ticket is not None) and str(
                 row["ticket_state"]
             ) != "settled_success":
-                raise InvalidTransition(
-                    "planner directive or correction requires settled success"
-                )
+                raise InvalidTransition("planner directive or correction requires settled success")
             if directive is not None or correction_ticket is not None:
                 candidate_row = self._connection.execute(
                     """
@@ -2689,13 +2705,10 @@ class OperationRegistry:
                 observation = candidate["observation"]
                 if (
                     candidate["ticket_id"] != str(row["ticket_id"])
-                    or candidate["physical_attempt_id"]
-                    != str(row["physical_attempt_id"])
-                    or candidate["sent_request_digest"]
-                    != str(row["sent_request_digest"])
+                    or candidate["physical_attempt_id"] != str(row["physical_attempt_id"])
+                    or candidate["sent_request_digest"] != str(row["sent_request_digest"])
                     or candidate["callback_adapter_id"] != str(row["adapter_id"])
-                    or candidate["callback_adapter_generation"]
-                    != int(row["adapter_generation"])
+                    or candidate["callback_adapter_generation"] != int(row["adapter_generation"])
                     or observation["kind"] != "model"
                     or observation["outcome"] != "succeeded"
                 ):
@@ -2729,25 +2742,62 @@ class OperationRegistry:
                 usage_digest = canonical_sha256(usage)
                 if (
                     str(journal["request_digest"]) != str(row["ticket_request_digest"])
-                    or canonical_sha256(request_document)
-                    != str(row["ticket_request_digest"])
+                    or canonical_sha256(request_document) != str(row["ticket_request_digest"])
                     or request_document != ticket_request
                     or binding.model_dump(mode="json") != ticket_request["route_binding"]
                     or canonical_sha256(binding) != str(row["route_binding_digest"])
                     or response.route_receipt.requested != binding
                     or response.usage != usage
                     or str(journal["response_digest"]) != response_digest
-                    or observation["route_receipt_digest"]
-                    != response.route_receipt.receipt_digest
+                    or observation["route_receipt_digest"] != response.route_receipt.receipt_digest
                     or observation["usage_receipt_digest"] != usage_digest
                     or observation["host_receipt_digest"] != response_digest
                     or observation["output_text"] != response.output_text
                     or observation["output_digest"]
-                    != "sha256:"
-                    + hashlib.sha256(response.output_text.encode("utf-8")).hexdigest()
+                    != "sha256:" + hashlib.sha256(response.output_text.encode("utf-8")).hexdigest()
                 ):
                     raise InvalidTransition("planner model journal lineage is stale")
             now = self._now_ms()
+            if reject_cell_budget:
+                spec = RlmWorkbenchJobSpec.model_validate_json(str(row["spec_json"]), strict=True)
+                cell_count = int(
+                    self._connection.execute(
+                        "SELECT COUNT(*) FROM rlm_workbench_cells WHERE operation_id = ?",
+                        (operation.value,),
+                    ).fetchone()[0]
+                )
+                if cell_count < int(spec.root["budgets"]["max_cells"]):
+                    raise InvalidTransition("planner cell budget is not exhausted")
+                unresolved_cell = self._connection.execute(
+                    "SELECT 1 FROM rlm_workbench_cells WHERE operation_id = ? "
+                    "AND state != 'committed' LIMIT 1",
+                    (operation.value,),
+                ).fetchone()
+                unresolved_ticket = self._connection.execute(
+                    "SELECT 1 FROM caller_work_tickets WHERE operation_id = ? "
+                    "AND state NOT IN ('settled_success', 'settled_failure', "
+                    "'cancelled_before_send', 'cancelled_certain') LIMIT 1",
+                    (operation.value,),
+                ).fetchone()
+                if unresolved_cell is not None or unresolved_ticket is not None:
+                    raise InvalidTransition("planner cell budget rejection has unresolved work")
+                if (
+                    bool(row["cancellation_requested"])
+                    or bool(row["job_cancellation_requested"])
+                    or now >= int(row["cumulative_deadline_unix_ms"])
+                ):
+                    raise InvalidTransition("planner cell budget rejection lost control authority")
+                terminal_state = OperationState.FAILED
+                failure = {
+                    "schema_version": "aar.envelope.v1",
+                    "category": "budget",
+                    "code": "BUDGET_EXCEEDED",
+                    "message": "workbench cell budget exhausted",
+                    "retryable": False,
+                    "certainty": "certain",
+                    "operation": operation.model_dump(mode="json"),
+                    "details": [{"name": "budget_kind", "value": "cells"}],
+                }
             self._connection.execute(
                 """
                 UPDATE rlm_workbench_successor_outbox
@@ -2990,9 +3040,7 @@ class OperationRegistry:
                     self._connection, correction_ticket
                 )
                 if created != correction_ticket:
-                    raise IdempotencyConflict(
-                        "planner correction ticket changed during projection"
-                    )
+                    raise IdempotencyConflict("planner correction ticket changed during projection")
                 self._connection.execute(
                     """
                     UPDATE rlm_workbench_jobs
@@ -3153,9 +3201,12 @@ class OperationRegistry:
                     or canonical_json_bytes(source_document).decode("utf-8") != source_json
                 ):
                     raise InvalidTransition("planner cell source binding is stale")
-                expected_cell_id = "cell-" + hashlib.sha256(
-                    f"{operation.value}\0{cell_index}\0{source_digest}".encode()
-                ).hexdigest()[:32]
+                expected_cell_id = (
+                    "cell-"
+                    + hashlib.sha256(
+                        f"{operation.value}\0{cell_index}\0{source_digest}".encode()
+                    ).hexdigest()[:32]
+                )
                 projected_cell_id = str(cell_projection["cell_execution_id"])
                 projected_checkpoint_digest = str(cell_projection["pre_checkpoint_digest"])
                 if (
@@ -3168,9 +3219,9 @@ class OperationRegistry:
                     or int(row["workspace_generation"])
                     != int(cell_projection["workspace_generation"])
                     or int(row["workspace_revision"]) != int(cell_projection["workspace_revision"])
-                    or checkpoint_document.get("source_handle", {}).get("workspace", {}).get(
-                        "value"
-                    )
+                    or checkpoint_document.get("source_handle", {})
+                    .get("workspace", {})
+                    .get("value")
                     != str(cell_projection["workspace_id"])
                     or checkpoint_document.get("source_handle", {}).get("generation")
                     != int(cell_projection["workspace_generation"])
@@ -3831,17 +3882,26 @@ class OperationRegistry:
                         execution_mode = str(
                             json.loads(str(workbench_spec["spec_json"]))["model"]["execution_mode"]
                         )
-                    if execution_mode == "caller_delegated":
-                        successor_token_digest = (
-                            self._takeover_prepared_planner_cell_unlocked(
-                                operation_id=operation_id,
-                                successor_attempt_id=attempt_id,
-                                successor_attempt_no=attempt_no,
-                                dispatcher_generation=dispatcher_generation,
-                                lease_epoch=lease_epoch,
-                                owner_digest=str(owner_digest),
-                                now=now,
-                            )
+                    worker_suspension = self._connection.execute(
+                        """
+                        SELECT 1 FROM rlm_workbench_successor_outbox AS outbox
+                        JOIN rlm_workbench_suspensions AS suspension
+                          ON suspension.operation_id = outbox.operation_id
+                         AND suspension.suspension_revision = outbox.suspension_revision
+                        WHERE outbox.operation_id = ? AND outbox.state = 'pending'
+                          AND suspension.cell_execution_id IS NOT NULL
+                        """,
+                        (operation_id,),
+                    ).fetchone()
+                    if execution_mode == "caller_delegated" and worker_suspension is None:
+                        successor_token_digest = self._takeover_prepared_planner_cell_unlocked(
+                            operation_id=operation_id,
+                            successor_attempt_id=attempt_id,
+                            successor_attempt_no=attempt_no,
+                            dispatcher_generation=dispatcher_generation,
+                            lease_epoch=lease_epoch,
+                            owner_digest=str(owner_digest),
+                            now=now,
                         )
                         if successor_token_digest is None:
                             successor_token_digest = self._prepare_planner_successor_unlocked(
@@ -4290,6 +4350,7 @@ class OperationRegistry:
         result_json: str | None = None,
         failure: FailureEnvelope | None = None,
         note: str,
+        inner_transition: Callable[[sqlite3.Connection], str] | None = None,
     ) -> OperationRecord:
         """Atomically commit a fenced attempt outcome and release its ownership."""
 
@@ -4301,6 +4362,8 @@ class OperationRegistry:
             else OutcomeCertainty.CERTAIN
         )
         with self._lock, self._connection:
+            if inner_transition is not None:
+                self._connection.execute("BEGIN IMMEDIATE")
             operation, attempt_no, attempt_id = _attempt_identity(attempt_ref)
             self._validate_fence_unlocked(
                 operation,
@@ -4318,6 +4381,8 @@ class OperationRegistry:
             assert row is not None
             if OperationState(row["state"]) is not OperationState.RUNNING:
                 raise StaleAttemptFence("outer operation is no longer running")
+            if inner_transition is not None:
+                result_json = inner_transition(self._connection)
             revision = int(row["record_revision"]) + 1
             now = self._now_ms()
             failure_json = None if failure is None else canonical_json_bytes(failure).decode()
@@ -4362,6 +4427,8 @@ class OperationRegistry:
                     OperationState.RUNNING.value,
                 ),
             )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("attempt changed during claimed commit")
             self._connection.execute(
                 """
                 UPDATE operation_leases
@@ -4371,6 +4438,8 @@ class OperationRegistry:
                 """,
                 (now, operation.value, attempt_no, lease_epoch),
             )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("lease changed during claimed commit")
             dispatch_state = (
                 _DISPATCH_PARKED if state is OperationState.INDETERMINATE else _DISPATCH_COMPLETED
             )
@@ -4388,6 +4457,8 @@ class OperationRegistry:
                     attempt_no,
                 ),
             )
+            if self._connection.execute("SELECT changes()").fetchone()[0] != 1:
+                raise StaleAttemptFence("dispatch changed during claimed commit")
             self._insert_event(
                 operation.value,
                 state,
