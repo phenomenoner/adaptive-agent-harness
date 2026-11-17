@@ -259,6 +259,18 @@ uv run pytest -q
 4. Read status/events from a fresh authorized connection when needed.
 5. Reconcile uncertainty before retrying any effect-shaped work.
 
+#### Keep typed callers in sync
+
+Use matching, verified SDK artifacts for the server and its typed caller. Workbench capability
+validation binds the reply to the reader's installed tool-surface, broker-catalog, planner and
+method-contract projections. Matching model source, JSON schema or package-version labels alone
+do not establish that two installations have compatible projections.
+
+Before issuing grants or starting model work, fetch the real `aar_rlm_workbench_capabilities`
+reply and validate it with the caller's `RlmWorkbenchCapability` model in strict mode. Keep the
+server's returned digests unchanged and retain semantic validation. A pure capability-builder
+check is useful for local contract tests, but does not prove live backend readiness or task delivery.
+
 Detailed install and host notes:
 
 - [Codex installation](docs/CODEX-INSTALL.md)
