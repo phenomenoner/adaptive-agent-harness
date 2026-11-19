@@ -2,6 +2,14 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
+## Unreleased
+
+- The caller-delegated workbench keeps one bounded summary of an unresolved cell failure across
+  later inspections and format corrections. Only a committed success of the identical directive
+  in the same workspace generation clears that failure. The summary never repeats exception
+  messages, source, or streams, and yields to the existing prompt capacity. It does not retry a
+  cell or change publication rules.
+
 ## 0.6.1a1 — 2026-11-17 release-contract target
 
 `v0.6.1a1` targets complete native workbench delivery with clearer planner feedback,

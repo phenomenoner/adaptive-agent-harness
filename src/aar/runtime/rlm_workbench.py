@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import hashlib
 import json
 import threading
@@ -240,11 +241,66 @@ def _cell_result_committable(
     )
 
 
+def _first_unresolved_cell_failure(
+    connection: Any,
+    operation: OperationRef,
+    *,
+    workspace_id: str,
+    workspace_generation: int,
+) -> dict[str, Any] | None:
+    """Derive feedback from committed receipts, never from planner assertions."""
+    rows = connection.execute(
+        """
+        SELECT cell_index, source_digest, result_digest,
+               json_extract(result_json, '$.status') AS result_status
+        FROM rlm_workbench_cells
+        WHERE operation_id = ? AND workspace_id = ? AND workspace_generation = ?
+          AND state = 'committed'
+        ORDER BY cell_index
+        """,
+        (operation.value, workspace_id, workspace_generation),
+    )
+    unresolved: dict[str, Any] = {}
+    for row in rows:
+        source_digest = str(row["source_digest"])
+        if row["result_status"] == "failed":
+            unresolved.setdefault(source_digest, row)
+        elif row["result_status"] == "succeeded":
+            unresolved.pop(source_digest, None)
+    first = next(iter(unresolved.values()), None)
+    if first is None:
+        return None
+
+    index = int(first["cell_index"])
+    (result_json,) = connection.execute(
+        "SELECT result_json FROM rlm_workbench_cells WHERE operation_id = ? AND cell_index = ?",
+        (operation.value, index),
+    ).fetchone()
+    exception_type = "Exception"
+    for event in json.loads(result_json)["events"]:
+        data = event["data"]
+        if event["kind"] == "exception" and isinstance(data, dict):
+            name = data.get("type")
+            kind = getattr(builtins, name, None) if isinstance(name, str) else None
+            if isinstance(kind, type) and issubclass(kind, Exception):
+                exception_type = kind.__name__
+            break
+    return {
+        "cell_index": index,
+        "source_digest": str(first["source_digest"]),
+        "result_digest": str(first["result_digest"]),
+        "exception_type": exception_type,
+    }
+
+
 def _planner_prompt(document: dict[str, Any]) -> str:
-    """Fit optional source feedback without weakening mandatory context."""
+    """Fit optional history without displacing the original planner context."""
+    document = document.copy()
+    failure = document.pop("unresolved_cell_failure", None)
     prompt = canonical_json_bytes(document).decode("utf-8")
     cell = document.get("last_committed_cell")
-    if len(prompt) > 65536 and cell is not None and "source" in cell:
+    if len(prompt) > 65_536 and cell is not None and "source" in cell:
+        cell = document["last_committed_cell"] = dict(cell)
         cell.pop("source")
         cell["source_omitted"] = (
             "Full source omitted due to prompt capacity; source_digest "
@@ -253,6 +309,12 @@ def _planner_prompt(document: dict[str, Any]) -> str:
         prompt = canonical_json_bytes(document).decode("utf-8")
     if len(prompt) > 65_536:
         raise RlmWorkbenchPromptCapacityExceeded(len(prompt))
+    if failure is not None:
+        with_failure = canonical_json_bytes(
+            {**document, "unresolved_cell_failure": failure}
+        ).decode("utf-8")
+        if len(with_failure) <= 65_536:
+            return with_failure
     return prompt
 
 
@@ -262,6 +324,7 @@ def _planner_request(
     owner: Mapping[str, Any],
     snapshot: RlmWorkbenchSnapshot,
     last_committed_cell: Mapping[str, Any] | None,
+    unresolved_cell_failure: Mapping[str, Any] | None = None,
     committed_artifacts: list[dict[str, str]] | None = None,
     remaining_cells: int | None = None,
 ) -> dict[str, Any]:
@@ -322,6 +385,8 @@ def _planner_request(
             "aar_broker requires a configured host broker and its authority."
         ),
     }
+    if unresolved_cell_failure is not None:
+        prompt_document["unresolved_cell_failure"] = dict(unresolved_cell_failure)
     return {
         "method": "model.request",
         "contract_id": "aar.broker-contract.model-request.v2",
@@ -1639,7 +1704,7 @@ class RlmWorkbenchCoordinator:
         with self._factory.transaction(write=False) as connection:
             row = connection.execute(
                 """
-                SELECT cumulative_deadline_unix_ms
+                SELECT cumulative_deadline_unix_ms, workspace_id, workspace_generation
                 FROM rlm_workbench_jobs WHERE operation_id = ?
                 """,
                 (operation.value,),
@@ -1653,6 +1718,12 @@ class RlmWorkbenchCoordinator:
                 """,
                 (operation.value,),
             ).fetchone()
+            if row is None or prior is None:
+                raise KeyError(operation.value)
+            if int(prior["planner_steps"]) >= int(spec.root["budgets"]["max_model_calls"]):
+                raise RlmWorkbenchModelCallBudgetExceeded(
+                    "workbench root planner model-call budget exhausted"
+                )
             last_cell = connection.execute(
                 """
                 SELECT cell_index, cell_execution_id, source_json, source_digest,
@@ -1671,7 +1742,15 @@ class RlmWorkbenchCoordinator:
                 ).fetchone()[0]
             )
             artifacts = []
+            unresolved_cell_failure = None
             if last_cell is not None:
+                if row["workspace_id"] is not None and row["workspace_generation"] is not None:
+                    unresolved_cell_failure = _first_unresolved_cell_failure(
+                        connection,
+                        operation,
+                        workspace_id=str(row["workspace_id"]),
+                        workspace_generation=int(row["workspace_generation"]),
+                    )
                 artifacts = connection.execute(
                     "SELECT s.stage_id, s.logical_name FROM rlm_workbench_artifact_stages AS s "
                     "JOIN rlm_workbench_cells AS c ON c.operation_id = s.operation_id "
@@ -1681,12 +1760,6 @@ class RlmWorkbenchCoordinator:
                     "ORDER BY s.stage_id",
                     (operation.value,),
                 ).fetchall()
-        if row is None or prior is None:
-            raise KeyError(operation.value)
-        if int(prior["planner_steps"]) >= int(spec.root["budgets"]["max_model_calls"]):
-            raise RlmWorkbenchModelCallBudgetExceeded(
-                "workbench root planner model-call budget exhausted"
-            )
         suspension_revision = int(prior["value"]) + 1
         owner = PlannerOwner(
             phase="initial" if int(prior["planner_steps"]) == 0 else "finalizer",
@@ -1717,6 +1790,7 @@ class RlmWorkbenchCoordinator:
             owner=owner,
             snapshot=self.snapshot(operation),
             last_committed_cell=last_committed_cell,
+            unresolved_cell_failure=unresolved_cell_failure,
             committed_artifacts=[
                 {"stage_id": str(item["stage_id"]), "logical_name": str(item["logical_name"])}
                 for item in artifacts

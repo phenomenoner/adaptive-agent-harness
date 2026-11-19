@@ -194,6 +194,87 @@ def test_known_failure_still_consumes_the_existing_model_call_budget(tmp_path: P
         case.host.close()
 
 
+def test_unresolved_failure_survives_inspection_until_same_check_succeeds(tmp_path: Path):
+    case = CallerCase(tmp_path, max_calls=8)
+
+    def execute(code):
+        directive = {"kind": "execute_cell", "code": code, "expected_result_hint": None}
+        assert case.send(directive).phase == "waiting_external"
+        return json.loads(case.pending().root["request"]["prompt"])
+
+    failed_check = "assert globals().get('ready', False), 'do-not-repeat-this-message'"
+    try:
+        assert case.run().phase == "waiting_external"
+        initial = json.loads(case.pending().root["request"]["prompt"])
+        assert "unresolved_cell_failure" not in initial
+        first = execute(failed_check)["last_committed_cell"]
+        assert first["result"]["status"] == "failed"
+
+        after_inspection = execute("print('inspection only')")
+        assert after_inspection["last_committed_cell"]["result"]["status"] == "succeeded"
+        expected_failure = {
+            "cell_index": first["cell_index"],
+            "source_digest": first["source_digest"],
+            "result_digest": first["result_digest"],
+            "exception_type": "AssertionError",
+        }
+        assert after_inspection["unresolved_cell_failure"] == expected_failure
+        assert "do-not-repeat-this-message" not in json.dumps(after_inspection)
+
+        assert case.send({"kind": "not-a-directive"}).phase == "waiting_external"
+        correction = json.loads(case.pending().root["request"]["prompt"])
+        assert "correction" in correction
+        assert correction["unresolved_cell_failure"] == expected_failure
+        assert correction["last_committed_cell"] == after_inspection["last_committed_cell"]
+
+        # Another failed check does not replace the first unresolved one.
+        later = execute("raise RuntimeError('second failure')")
+        second = later["last_committed_cell"]
+        assert later["unresolved_cell_failure"] == expected_failure
+        followup = execute("ready = True")
+        assert followup["unresolved_cell_failure"] == expected_failure
+
+        after_same_check = execute(failed_check)
+        assert after_same_check["last_committed_cell"]["result"]["status"] == "succeeded"
+        assert after_same_check["unresolved_cell_failure"] == {
+            "cell_index": second["cell_index"],
+            "source_digest": second["source_digest"],
+            "result_digest": second["result_digest"],
+            "exception_type": "RuntimeError",
+        }
+
+        # The remaining diagnostic is advisory, not a new publication gate.
+        ready = execute("assert ready\naar_artifact('result.txt', b'ready', 'text/plain')")
+        assert ready["unresolved_cell_failure"] == after_same_check["unresolved_cell_failure"]
+        stage_ids = ready["last_committed_cell"]["artifact_stage_ids"]
+        assert len(stage_ids) == 1
+        result = case.send(
+            {
+                "kind": "finalize",
+                "output": {"answer": "ready", "artifacts": []},
+                "artifact_stage_ids": stage_ids,
+            }
+        )
+        assert result.model_calls == 8 and result.python_cells == 6
+        assert len(result.artifact_bindings) == 1
+    finally:
+        case.host.close()
+
+
+def test_unresolved_failure_yields_to_existing_prompt_context_at_capacity():
+    document = {"objective": "", "last_committed_cell": {"source": {"code": "x = 42"}}}
+    capacity = 65_536
+    document["objective"] = "x" * (capacity - len(canonical_json_bytes(document)))
+    baseline = workbench._planner_prompt(document)
+    assert len(baseline) == capacity
+
+    failure = {"cell_index": 0, "exception_type": "AssertionError"}
+    assert workbench._planner_prompt({**document, "unresolved_cell_failure": failure}) == baseline
+    document["objective"] = "x"
+    rendered = workbench._planner_prompt({**document, "unresolved_cell_failure": failure})
+    assert json.loads(rendered)["unresolved_cell_failure"] == failure
+
+
 class BrokerFailurePlanner(BrokerRoundTripPlanner):
     def plan(self, _operation, _spec, _snapshot):
         self.calls += 1
