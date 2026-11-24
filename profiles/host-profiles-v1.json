@@ -8,7 +8,7 @@
       "2025-03-26",
       "2024-11-05"
     ],
-    "tool_surface_digest": "sha256:a362b8e761f77afe6605966f9fa260406336f12e2a5125109f9c63b38449876e",
+    "tool_surface_digest": "sha256:43c67266c956b026382c02843f43087612fa1f05826ba9b726a9fb68b85a8c5c",
     "tool_surface_version": "aar.mcp-tools.v9",
     "transport": "stdio"
   },
@@ -21,7 +21,7 @@
     "command": "aar-mcp",
     "name": "adaptive-agent-runtime",
     "python_requires": ">=3.11,<3.15",
-    "version": "0.6.1a1"
+    "version": "0.6.1a2.dev20261119"
   },
   "profiles": {
     "codex": {

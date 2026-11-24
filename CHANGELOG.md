@@ -2,7 +2,13 @@
 
 All notable public changes are documented here. The project is in public alpha; interfaces may change before a stable release.
 
-## Unreleased
+## 0.6.1a2.dev20261119 — 2026-11-24 release-contract target
+
+This development alpha retains the verified workbench runtime and binds its public
+release contract to `v0.6.1a2.dev20261119`. Source text does not establish publication, exact
+release-asset qualification, or production readiness; those require external readback.
+The in-tree release contract is `profiles/release-status-v1.json`; exact evidence
+belongs in `adaptive-agent-runtime-v0.6.1a2.dev20261119-release-receipt.json`.
 
 - The caller-delegated workbench keeps one bounded summary of an unresolved cell failure across
   later inspections and format corrections. Only a committed success of the identical directive

@@ -15,7 +15,7 @@ resolution-markers = [
 
 [[package]]
 name = "adaptive-agent-runtime"
-version = "0.6.1a1"
+version = "0.6.1a2.dev20261119"
 source = { editable = "." }
 dependencies = [
     { name = "ipython" },
